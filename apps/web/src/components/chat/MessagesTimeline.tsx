@@ -808,16 +808,81 @@ function workToneClass(tone: "thinking" | "tool" | "info" | "error"): string {
 }
 
 function workEntryPreview(
-  workEntry: Pick<TimelineWorkEntry, "detail" | "command" | "changedFiles">,
+  workEntry: Pick<TimelineWorkEntry, "detail" | "command" | "changedFiles" | "data">,
 ) {
   if (workEntry.command) return workEntry.command;
-  if (workEntry.detail) return workEntry.detail;
+
+  // Try to extract a human-readable preview from structured data input
+  const input = workEntry.data?.input;
+  if (input) {
+    const friendly = friendlyInputPreview(input);
+    if (friendly) return friendly;
+  }
+
+  // Strip "ToolName: " prefix from detail since the heading already shows it
+  if (workEntry.detail) {
+    const stripped = workEntry.detail.replace(/^\w+:\s*/, "");
+    // If the remaining string looks like raw JSON, try to pull out key values
+    if (stripped.startsWith("{")) {
+      const readable = friendlyJsonPreview(stripped);
+      if (readable) return readable;
+    }
+    return stripped;
+  }
+
   if ((workEntry.changedFiles?.length ?? 0) === 0) return null;
   const [firstPath] = workEntry.changedFiles ?? [];
   if (!firstPath) return null;
   return workEntry.changedFiles!.length === 1
     ? firstPath
     : `${firstPath} +${workEntry.changedFiles!.length - 1} more`;
+}
+
+/** Extract a short readable preview from tool input params. */
+function friendlyInputPreview(input: Record<string, unknown>): string | null {
+  // Read / Write — show file path (basename)
+  const filePath = input.file_path ?? input.path;
+  if (typeof filePath === "string" && filePath.length > 0) {
+    const name = filePath.replace(/\\/g, "/").split("/").pop() ?? filePath;
+    // For Grep-like tools that also have a pattern
+    if (typeof input.pattern === "string") {
+      return `${name}  /${input.pattern}/`;
+    }
+    return name;
+  }
+
+  // Grep / search — show pattern
+  if (typeof input.pattern === "string") {
+    return `/${input.pattern}/`;
+  }
+
+  // Glob — show the glob pattern
+  if (typeof input.glob === "string") {
+    return input.glob;
+  }
+
+  return null;
+}
+
+/** Try to pull human-readable values from a raw JSON detail string. */
+function friendlyJsonPreview(json: string): string | null {
+  try {
+    const obj = JSON.parse(json) as Record<string, unknown>;
+    // file_path is the most common key
+    if (typeof obj.file_path === "string") {
+      const name = obj.file_path.replace(/\\/g, "/").split("/").pop() ?? obj.file_path;
+      if (typeof obj.pattern === "string") return `${name}  /${obj.pattern}/`;
+      return name;
+    }
+    if (typeof obj.pattern === "string") return `/${obj.pattern}/`;
+    if (typeof obj.path === "string") {
+      return obj.path.replace(/\\/g, "/").split("/").pop() ?? obj.path;
+    }
+    if (typeof obj.glob === "string") return obj.glob;
+  } catch {
+    // Not valid JSON, return null
+  }
+  return null;
 }
 
 function workEntryIcon(workEntry: TimelineWorkEntry): LucideIcon {
@@ -854,10 +919,21 @@ function capitalizePhrase(value: string): string {
 }
 
 function toolWorkEntryHeading(workEntry: TimelineWorkEntry): string {
-  if (!workEntry.toolTitle) {
-    return capitalizePhrase(normalizeCompactToolLabel(workEntry.label));
+  // Prefer the specific tool name (e.g. "Read", "Grep") over the generic "Tool call" title
+  if (workEntry.data?.toolName) {
+    return capitalizePhrase(workEntry.data.toolName);
   }
-  return capitalizePhrase(normalizeCompactToolLabel(workEntry.toolTitle));
+  const title = workEntry.toolTitle
+    ? normalizeCompactToolLabel(workEntry.toolTitle)
+    : normalizeCompactToolLabel(workEntry.label);
+  // If title is just "Tool call" but detail has "ToolName: ..." prefix, extract it
+  if (/^tool\s*call$/i.test(title) && workEntry.detail) {
+    const match = /^(\w+):\s/.exec(workEntry.detail);
+    if (match) {
+      return capitalizePhrase(match[1]!);
+    }
+  }
+  return capitalizePhrase(title);
 }
 
 const SimpleWorkEntryRow = memo(function SimpleWorkEntryRow(props: {
