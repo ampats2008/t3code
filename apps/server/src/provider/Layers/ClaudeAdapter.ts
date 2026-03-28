@@ -571,14 +571,6 @@ const buildUserMessageEffect = Effect.fn("buildUserMessageEffect")(function* (
       continue;
     }
 
-    if (!SUPPORTED_CLAUDE_IMAGE_MIME_TYPES.has(attachment.mimeType)) {
-      return yield* new ProviderAdapterRequestError({
-        provider: PROVIDER,
-        method: "turn/start",
-        detail: `Unsupported Claude image attachment type '${attachment.mimeType}'.`,
-      });
-    }
-
     const attachmentPath = resolveAttachmentPath({
       attachmentsDir: dependencies.attachmentsDir,
       attachment,
@@ -588,6 +580,33 @@ const buildUserMessageEffect = Effect.fn("buildUserMessageEffect")(function* (
         provider: PROVIDER,
         method: "turn/start",
         detail: `Invalid attachment id '${attachment.id}'.`,
+      });
+    }
+
+    // SVGs are code, not raster images — send as text so Claude can read them
+    if (attachment.mimeType === "image/svg+xml") {
+      const svgBytes = yield* dependencies.fileSystem.readFile(attachmentPath).pipe(
+        Effect.mapError(
+          (cause) =>
+            new ProviderAdapterRequestError({
+              provider: PROVIDER,
+              method: "turn/start",
+              detail: toMessage(cause, "Failed to read SVG attachment file."),
+              cause,
+            }),
+        ),
+      );
+      const svgText = new TextDecoder().decode(svgBytes);
+      const label = attachment.name ? `[SVG: ${attachment.name}]` : "[SVG attachment]";
+      sdkContent.push({ type: "text", text: `${label}\n\`\`\`svg\n${svgText}\n\`\`\`` });
+      continue;
+    }
+
+    if (!SUPPORTED_CLAUDE_IMAGE_MIME_TYPES.has(attachment.mimeType)) {
+      return yield* new ProviderAdapterRequestError({
+        provider: PROVIDER,
+        method: "turn/start",
+        detail: `Unsupported Claude image attachment type '${attachment.mimeType}'.`,
       });
     }
 
