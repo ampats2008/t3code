@@ -919,6 +919,155 @@ describe("deriveWorkLogEntries", () => {
     expect(entries).toHaveLength(1);
     expect(entries[0]?.id).toBe("a-complete-same-timestamp");
   });
+
+  it("extracts data.input and data.toolName from tool.completed payload", () => {
+    const activities: OrchestrationThreadActivity[] = [
+      makeActivity({
+        id: "agent-tool",
+        kind: "tool.completed",
+        summary: "Agent task",
+        payload: {
+          itemType: "collab_agent_tool_call",
+          title: "Agent",
+          data: {
+            toolName: "Agent",
+            item: {
+              input: {
+                subagent_type: "Explore",
+                description: "Find diff view components",
+                prompt: "Search the codebase for diff rendering",
+              },
+            },
+          },
+        },
+      }),
+    ];
+
+    const [entry] = deriveWorkLogEntries(activities, undefined);
+    expect(entry?.data).toMatchObject({
+      toolName: "Agent",
+      input: {
+        subagent_type: "Explore",
+        description: "Find diff view components",
+        prompt: "Search the codebase for diff rendering",
+      },
+    });
+  });
+
+  it("extracts status from tool.updated payload", () => {
+    const activities: OrchestrationThreadActivity[] = [
+      makeActivity({
+        id: "tool-in-progress",
+        kind: "tool.updated",
+        summary: "Tool call",
+        payload: {
+          itemType: "command_execution",
+          title: "Bash",
+          status: "inProgress",
+        },
+      }),
+    ];
+
+    const [entry] = deriveWorkLogEntries(activities, undefined);
+    expect(entry?.status).toBe("inProgress");
+  });
+
+  it("merges data from updated and completed events during collapse", () => {
+    const activities: OrchestrationThreadActivity[] = [
+      makeActivity({
+        id: "tool-update",
+        createdAt: "2026-02-23T00:00:01.000Z",
+        kind: "tool.updated",
+        summary: "Tool call",
+        payload: {
+          itemType: "collab_agent_tool_call",
+          title: "Agent",
+          status: "inProgress",
+          data: {
+            toolName: "Agent",
+            item: {
+              input: {
+                subagent_type: "Explore",
+                description: "Find files",
+                prompt: "Search for *.tsx files",
+              },
+            },
+          },
+        },
+      }),
+      makeActivity({
+        id: "tool-complete",
+        createdAt: "2026-02-23T00:00:02.000Z",
+        kind: "tool.completed",
+        summary: "Tool call completed",
+        payload: {
+          itemType: "collab_agent_tool_call",
+          title: "Agent",
+          status: "completed",
+          data: {
+            item: {
+              result: "Found 3 matching files",
+            },
+          },
+        },
+      }),
+    ];
+
+    const entries = deriveWorkLogEntries(activities, undefined);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.data).toMatchObject({
+      toolName: "Agent",
+      input: {
+        subagent_type: "Explore",
+        description: "Find files",
+        prompt: "Search for *.tsx files",
+      },
+      result: "Found 3 matching files",
+    });
+    expect(entries[0]?.status).toBe("completed");
+  });
+
+  it("truncates very large result strings in data to 10KB", () => {
+    const longResult = "x".repeat(15_000);
+    const activities: OrchestrationThreadActivity[] = [
+      makeActivity({
+        id: "big-result",
+        kind: "tool.completed",
+        summary: "Bash",
+        payload: {
+          itemType: "command_execution",
+          title: "Bash",
+          data: {
+            item: {
+              result: longResult,
+            },
+          },
+        },
+      }),
+    ];
+
+    const [entry] = deriveWorkLogEntries(activities, undefined);
+    expect(typeof entry?.data?.result).toBe("string");
+    expect((entry?.data?.result as string).length).toBe(10_000);
+  });
+
+  it("returns undefined data when payload.data has no relevant fields", () => {
+    const activities: OrchestrationThreadActivity[] = [
+      makeActivity({
+        id: "empty-data",
+        kind: "tool.completed",
+        summary: "Tool",
+        payload: {
+          itemType: "command_execution",
+          title: "Bash",
+          data: { irrelevant: true },
+        },
+      }),
+    ];
+
+    const [entry] = deriveWorkLogEntries(activities, undefined);
+    expect(entry?.data).toBeUndefined();
+  });
 });
 
 describe("deriveTimelineEntries", () => {

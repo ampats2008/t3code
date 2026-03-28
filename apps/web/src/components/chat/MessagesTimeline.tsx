@@ -55,6 +55,8 @@ import {
   formatInlineTerminalContextLabel,
   textContainsInlineTerminalContextLabels,
 } from "./userMessageTerminalContexts";
+import { classifyToolDisplayMode } from "./toolCallClassification";
+import { RichToolCallRow } from "./RichToolCallRow";
 
 const MAX_VISIBLE_WORK_LOG_ENTRIES = 6;
 const ALWAYS_UNVIRTUALIZED_TAIL_ROWS = 8;
@@ -344,9 +346,14 @@ export const MessagesTimeline = memo(function MessagesTimeline({
                 </div>
               )}
               <div className="space-y-0.5">
-                {visibleEntries.map((workEntry) => (
-                  <SimpleWorkEntryRow key={`work-row:${workEntry.id}`} workEntry={workEntry} />
-                ))}
+                {visibleEntries.map((workEntry) => {
+                  const displayMode = classifyToolDisplayMode(workEntry);
+                  return displayMode === "simple" ? (
+                    <SimpleWorkEntryRow key={`work-row:${workEntry.id}`} workEntry={workEntry} />
+                  ) : (
+                    <RichToolCallRow key={`work-row:${workEntry.id}`} workEntry={workEntry} displayMode={displayMode} />
+                  );
+                })}
               </div>
             </div>
           );

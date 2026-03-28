@@ -43,6 +43,8 @@ export interface WorkLogEntry {
   toolTitle?: string;
   itemType?: ToolLifecycleItemType;
   requestKind?: PendingApproval["requestKind"];
+  data?: { toolName?: string; input?: Record<string, unknown>; result?: unknown };
+  status?: "inProgress" | "completed" | "failed";
 }
 
 interface DerivedWorkLogEntry extends WorkLogEntry {
@@ -522,6 +524,14 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
   if (requestKind) {
     entry.requestKind = requestKind;
   }
+  const toolData = extractToolData(payload);
+  if (toolData) {
+    entry.data = toolData;
+  }
+  const statusValue = extractToolStatus(payload);
+  if (statusValue) {
+    entry.status = statusValue;
+  }
   const collapseKey = deriveToolLifecycleCollapseKey(entry);
   if (collapseKey) {
     entry.collapseKey = collapseKey;
@@ -571,6 +581,8 @@ function mergeDerivedWorkLogEntries(
   const itemType = next.itemType ?? previous.itemType;
   const requestKind = next.requestKind ?? previous.requestKind;
   const collapseKey = next.collapseKey ?? previous.collapseKey;
+  const data = mergeToolData(previous.data, next.data);
+  const status = next.status ?? previous.status;
   return {
     ...previous,
     ...next,
@@ -581,6 +593,8 @@ function mergeDerivedWorkLogEntries(
     ...(itemType ? { itemType } : {}),
     ...(requestKind ? { requestKind } : {}),
     ...(collapseKey ? { collapseKey } : {}),
+    ...(data ? { data } : {}),
+    ...(status ? { status } : {}),
   };
 }
 
@@ -593,6 +607,29 @@ function mergeChangedFiles(
     return [];
   }
   return [...new Set(merged)];
+}
+
+function mergeToolData(
+  previous: WorkLogEntry["data"],
+  next: WorkLogEntry["data"],
+): WorkLogEntry["data"] | undefined {
+  if (!previous && !next) {
+    return undefined;
+  }
+  if (!previous) {
+    return next;
+  }
+  if (!next) {
+    return previous;
+  }
+  const toolName = next.toolName ?? previous.toolName;
+  const input = next.input ?? previous.input;
+  const result = next.result !== undefined ? next.result : previous.result;
+  return {
+    ...(toolName ? { toolName } : {}),
+    ...(input ? { input } : {}),
+    ...(result !== undefined ? { result } : {}),
+  };
 }
 
 function deriveToolLifecycleCollapseKey(entry: DerivedWorkLogEntry): string | undefined {
@@ -709,6 +746,42 @@ function extractWorkLogRequestKind(
     return payload.requestKind;
   }
   return requestKindFromRequestType(payload?.requestType) ?? undefined;
+}
+
+function extractToolData(
+  payload: Record<string, unknown> | null,
+): WorkLogEntry["data"] | undefined {
+  const data = asRecord(payload?.data);
+  if (!data) {
+    return undefined;
+  }
+  const item = asRecord(data.item);
+  const input = asRecord(item?.input) ?? asRecord(data.input);
+  const result = item?.result ?? data.result;
+  const toolName = asTrimmedString(data.toolName) ?? asTrimmedString(item?.toolName);
+
+  if (!toolName && !input && result === undefined) {
+    return undefined;
+  }
+
+  const truncatedResult =
+    typeof result === "string" && result.length > 10_000 ? result.slice(0, 10_000) : result;
+
+  return {
+    ...(toolName ? { toolName } : {}),
+    ...(input ? { input } : {}),
+    ...(truncatedResult !== undefined ? { result: truncatedResult } : {}),
+  };
+}
+
+function extractToolStatus(
+  payload: Record<string, unknown> | null,
+): WorkLogEntry["status"] | undefined {
+  const status = payload?.status;
+  if (status === "inProgress" || status === "completed" || status === "failed") {
+    return status;
+  }
+  return undefined;
 }
 
 function pushChangedFile(target: string[], seen: Set<string>, value: unknown) {
