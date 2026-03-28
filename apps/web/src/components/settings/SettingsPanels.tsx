@@ -25,7 +25,7 @@ import { APP_VERSION } from "../../branding";
 import { ProviderModelPicker } from "../chat/ProviderModelPicker";
 import { TraitsPicker } from "../chat/TraitsPicker";
 import { resolveAndPersistPreferredEditor } from "../../editorPreferences";
-import { useTheme } from "../../hooks/useTheme";
+import { useTheme, type Theme } from "../../hooks/useTheme";
 import { useSettings, useUpdateSettings } from "../../hooks/useSettings";
 import { useThreadActions } from "../../hooks/useThreadActions";
 import { serverConfigQueryOptions, serverQueryKeys } from "../../lib/serverReactQuery";
@@ -48,20 +48,125 @@ import { toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { ProjectFavicon } from "../ProjectFavicon";
 
-const THEME_OPTIONS = [
+type ThemeOption = {
+  value: Theme;
+  label: string;
+  /** Preview swatches: [background, card, primary, accent/muted] */
+  swatches: [string, string, string, string];
+};
+
+const THEME_OPTIONS: readonly ThemeOption[] = [
   {
     value: "system",
     label: "System",
+    swatches: ["#1a1a1a", "#222", "#7c6cef", "#333"],
   },
   {
     value: "light",
     label: "Light",
+    swatches: ["#ffffff", "#f8f8f8", "#6336e4", "#e8e8e8"],
   },
   {
     value: "dark",
     label: "Dark",
+    swatches: ["#111113", "#161618", "#7c6cef", "#222225"],
+  },
+  {
+    value: "midnight",
+    label: "Midnight",
+    swatches: ["#0f1729", "#131d33", "#5b8af5", "#1a2744"],
+  },
+  {
+    value: "dracula",
+    label: "Dracula",
+    swatches: ["#1a1028", "#1f1430", "#d26cd9", "#271a38"],
+  },
+  {
+    value: "cyberpunk",
+    label: "Cyberpunk",
+    swatches: ["#08120e", "#0c1812", "#39ff8e", "#122218"],
+  },
+  {
+    value: "nord",
+    label: "Nord",
+    swatches: ["#242933", "#2e3440", "#6498c0", "#3b4252"],
+  },
+  {
+    value: "monokai",
+    label: "Monokai",
+    swatches: ["#1e1c18", "#25231e", "#e8944a", "#302e28"],
+  },
+  {
+    value: "solarized",
+    label: "Solarized",
+    swatches: ["#002b36", "#073642", "#2aa198", "#0a3f4a"],
   },
 ] as const;
+
+function ThemePreviewCard({
+  option,
+  isActive,
+  onClick,
+}: {
+  option: ThemeOption;
+  isActive: boolean;
+  onClick: () => void;
+}) {
+  const [bg, card, primary, muted] = option.swatches;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group relative flex flex-col gap-1.5 rounded-lg border-2 p-2 text-left transition-colors"
+      style={{
+        borderColor: isActive ? primary : "var(--border)",
+        boxShadow: isActive ? `0 0 0 2px ${primary}33` : "none",
+      }}
+    >
+      {/* Active checkmark */}
+      {isActive && (
+        <div
+          className="absolute -top-1.5 -right-1.5 z-10 flex size-4 items-center justify-center rounded-full"
+          style={{ background: primary }}
+        >
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+            <path d="M2 5.5L4 7.5L8 3" stroke={bg} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
+      )}
+      {/* Mini preview */}
+      <div
+        className="flex h-16 w-full overflow-hidden rounded-md border border-black/10"
+        style={{ background: bg }}
+      >
+        {/* Sidebar mock */}
+        <div
+          className="flex w-6 shrink-0 flex-col gap-1 border-r p-1"
+          style={{ borderColor: `${muted}88`, background: card }}
+        >
+          <div className="h-1 w-full rounded-full" style={{ background: primary, opacity: 0.8 }} />
+          <div className="h-1 w-full rounded-full" style={{ background: muted }} />
+          <div className="h-1 w-full rounded-full" style={{ background: muted }} />
+        </div>
+        {/* Main content mock */}
+        <div className="flex flex-1 flex-col gap-1 p-1.5">
+          <div className="h-1.5 w-3/4 rounded-full" style={{ background: muted }} />
+          <div className="h-1.5 w-1/2 rounded-full" style={{ background: muted, opacity: 0.6 }} />
+          <div className="mt-auto flex items-center gap-1">
+            <div className="h-2 w-6 rounded-sm" style={{ background: primary }} />
+            <div className="h-1 w-4 rounded-full" style={{ background: muted, opacity: 0.5 }} />
+          </div>
+        </div>
+      </div>
+      <span
+        className="text-[11px] font-medium"
+        style={{ color: isActive ? primary : "var(--muted-foreground)" }}
+      >
+        {option.label}
+      </span>
+    </button>
+  );
+}
 
 const TIMESTAMP_FORMAT_LABELS = {
   locale: "System default",
@@ -607,30 +712,18 @@ export function GeneralSettingsPanel() {
               <SettingResetButton label="theme" onClick={() => setTheme("system")} />
             ) : null
           }
-          control={
-            <Select
-              value={theme}
-              onValueChange={(value) => {
-                if (value === "system" || value === "light" || value === "dark") {
-                  setTheme(value);
-                }
-              }}
-            >
-              <SelectTrigger className="w-full sm:w-40" aria-label="Theme preference">
-                <SelectValue>
-                  {THEME_OPTIONS.find((option) => option.value === theme)?.label ?? "System"}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectPopup align="end" alignItemWithTrigger={false}>
-                {THEME_OPTIONS.map((option) => (
-                  <SelectItem hideIndicator key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectPopup>
-            </Select>
-          }
-        />
+        >
+          <div className="grid grid-cols-3 gap-2 pt-3 sm:grid-cols-4 lg:grid-cols-5">
+            {THEME_OPTIONS.map((option) => (
+              <ThemePreviewCard
+                key={option.value}
+                option={option}
+                isActive={theme === option.value}
+                onClick={() => setTheme(option.value)}
+              />
+            ))}
+          </div>
+        </SettingsRow>
 
         <SettingsRow
           title="Time format"

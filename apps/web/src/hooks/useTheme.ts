@@ -1,6 +1,43 @@
 import { useCallback, useEffect, useSyncExternalStore } from "react";
 
-type Theme = "light" | "dark" | "system";
+export type Theme =
+  | "light"
+  | "dark"
+  | "system"
+  | "midnight"
+  | "dracula"
+  | "cyberpunk"
+  | "nord"
+  | "monokai"
+  | "solarized";
+
+export const NAMED_DARK_THEMES = [
+  "dark",
+  "midnight",
+  "dracula",
+  "cyberpunk",
+  "nord",
+  "monokai",
+  "solarized",
+] as const;
+
+const ALL_THEMES: readonly Theme[] = [
+  "system",
+  "light",
+  ...NAMED_DARK_THEMES,
+];
+
+function isValidTheme(value: string): value is Theme {
+  return (ALL_THEMES as readonly string[]).includes(value);
+}
+
+/** True for any theme that resolves to a dark color scheme */
+export function isDarkTheme(theme: Theme): boolean {
+  if (theme === "light") return false;
+  if (theme === "system") return getSystemDark();
+  return true; // "dark" and all named dark themes
+}
+
 type ThemeSnapshot = {
   theme: Theme;
   systemDark: boolean;
@@ -22,7 +59,7 @@ function getSystemDark(): boolean {
 
 function getStored(): Theme {
   const raw = localStorage.getItem(STORAGE_KEY);
-  if (raw === "light" || raw === "dark" || raw === "system") return raw;
+  if (raw && isValidTheme(raw)) return raw;
   return "system";
 }
 
@@ -30,8 +67,16 @@ function applyTheme(theme: Theme, suppressTransitions = false) {
   if (suppressTransitions) {
     document.documentElement.classList.add("no-transitions");
   }
-  const isDark = theme === "dark" || (theme === "system" && getSystemDark());
-  document.documentElement.classList.toggle("dark", isDark);
+  const dark = isDarkTheme(theme);
+  document.documentElement.classList.toggle("dark", dark);
+
+  // Set data-theme for named theme CSS overrides; remove for base themes
+  if (theme !== "light" && theme !== "dark" && theme !== "system") {
+    document.documentElement.setAttribute("data-theme", theme);
+  } else {
+    document.documentElement.removeAttribute("data-theme");
+  }
+
   syncDesktopTheme(theme);
   if (suppressTransitions) {
     // Force a reflow so the no-transitions class takes effect before removal
@@ -45,13 +90,15 @@ function applyTheme(theme: Theme, suppressTransitions = false) {
 
 function syncDesktopTheme(theme: Theme) {
   const bridge = window.desktopBridge;
-  if (!bridge || lastDesktopTheme === theme) {
+  // Desktop bridge only understands light/dark/system, so map named themes to "dark"
+  const desktopTheme = theme === "light" || theme === "dark" || theme === "system" ? theme : "dark";
+  if (!bridge || lastDesktopTheme === desktopTheme) {
     return;
   }
 
-  lastDesktopTheme = theme;
-  void bridge.setTheme(theme).catch(() => {
-    if (lastDesktopTheme === theme) {
+  lastDesktopTheme = desktopTheme;
+  void bridge.setTheme(desktopTheme).catch(() => {
+    if (lastDesktopTheme === desktopTheme) {
       lastDesktopTheme = null;
     }
   });
@@ -103,8 +150,7 @@ export function useTheme() {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot);
   const theme = snapshot.theme;
 
-  const resolvedTheme: "light" | "dark" =
-    theme === "system" ? (snapshot.systemDark ? "dark" : "light") : theme;
+  const resolvedTheme: "light" | "dark" = isDarkTheme(theme) ? "dark" : "light";
 
   const setTheme = useCallback((next: Theme) => {
     localStorage.setItem(STORAGE_KEY, next);
