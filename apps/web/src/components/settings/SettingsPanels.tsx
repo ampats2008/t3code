@@ -101,6 +101,11 @@ const THEME_OPTIONS: readonly ThemeOption[] = [
     label: "Solarized",
     swatches: ["#002b36", "#073642", "#2aa198", "#0a3f4a"],
   },
+  {
+    value: "2am",
+    label: "2AM",
+    swatches: ["#001726", "#021e30", "#08d49a", "#0a2e45"],
+  },
 ] as const;
 
 function ThemePreviewCard({

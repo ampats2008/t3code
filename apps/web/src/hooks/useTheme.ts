@@ -9,7 +9,8 @@ export type Theme =
   | "cyberpunk"
   | "nord"
   | "monokai"
-  | "solarized";
+  | "solarized"
+  | "2am";
 
 export const NAMED_DARK_THEMES = [
   "dark",
@@ -19,6 +20,7 @@ export const NAMED_DARK_THEMES = [
   "nord",
   "monokai",
   "solarized",
+  "2am",
 ] as const;
 
 const ALL_THEMES: readonly Theme[] = [
