@@ -92,6 +92,15 @@ type SerializedComposerTerminalContextNode = Spread<
   SerializedLexicalNode
 >;
 
+type SerializedComposerElementRefNode = Spread<
+  {
+    text: string;
+    type: "composer-element-ref";
+    version: 1;
+  },
+  SerializedLexicalNode
+>;
+
 const ComposerTerminalContextActionsContext = createContext<{
   onRemoveTerminalContext: (contextId: string) => void;
 }>({
@@ -170,6 +179,104 @@ function $createComposerMentionNode(path: string): ComposerMentionNode {
   return $applyNodeReplacement(new ComposerMentionNode(path));
 }
 
+// ---------------------------------------------------------------------------
+// ComposerElementRefNode — dev-only inspector chip
+// ---------------------------------------------------------------------------
+
+/** Extract a short display label from the full formatted element ref text. */
+function elementRefChipLabel(text: string): string {
+  const inner = text.slice(1, -1); // strip surrounding [ ]
+  const tagMatch = inner.match(/^<(\w+)/);
+  const tag = tagMatch ? `<${tagMatch[1]}>` : "?";
+  const compMatch = inner.match(/·\s*(\w+)/);
+  if (compMatch) return `${tag} ${compMatch[1]}`;
+  const ancestorMatch = inner.match(/↑\s*<(\w+)/);
+  if (ancestorMatch) return `${tag} ↑ <${ancestorMatch[1]}>`;
+  return tag;
+}
+
+function ComposerElementRefDecorator({ text }: { text: string }) {
+  return (
+    <span className={COMPOSER_INLINE_CHIP_CLASS_NAME} contentEditable={false} spellCheck={false}>
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+        className={COMPOSER_INLINE_CHIP_ICON_CLASS_NAME}
+      >
+        <circle cx="12" cy="12" r="10" />
+        <line x1="22" y1="12" x2="18" y2="12" />
+        <line x1="6" y1="12" x2="2" y2="12" />
+        <line x1="12" y1="6" x2="12" y2="2" />
+        <line x1="12" y1="22" x2="12" y2="18" />
+      </svg>
+      <span className={COMPOSER_INLINE_CHIP_LABEL_CLASS_NAME}>{elementRefChipLabel(text)}</span>
+    </span>
+  );
+}
+
+class ComposerElementRefNode extends DecoratorNode<ReactElement> {
+  __text: string;
+
+  static override getType(): string {
+    return "composer-element-ref";
+  }
+
+  static override clone(node: ComposerElementRefNode): ComposerElementRefNode {
+    return new ComposerElementRefNode(node.__text, node.__key);
+  }
+
+  static override importJSON(
+    serializedNode: SerializedComposerElementRefNode,
+  ): ComposerElementRefNode {
+    return $createComposerElementRefNode(serializedNode.text);
+  }
+
+  constructor(text: string, key?: NodeKey) {
+    super(key);
+    this.__text = text;
+  }
+
+  override exportJSON(): SerializedComposerElementRefNode {
+    return {
+      ...super.exportJSON(),
+      text: this.__text,
+      type: "composer-element-ref",
+      version: 1,
+    };
+  }
+
+  override createDOM(): HTMLElement {
+    const span = document.createElement("span");
+    span.className = "inline-flex align-middle leading-none";
+    return span;
+  }
+
+  override updateDOM(): false {
+    return false;
+  }
+
+  override getTextContent(): string {
+    return this.__text;
+  }
+
+  override isInline(): true {
+    return true;
+  }
+
+  override decorate(): ReactElement {
+    return <ComposerElementRefDecorator text={this.__text} />;
+  }
+}
+
+function $createComposerElementRefNode(text: string): ComposerElementRefNode {
+  return $applyNodeReplacement(new ComposerElementRefNode(text));
+}
+
 function ComposerTerminalContextDecorator(props: { context: TerminalContextDraft }) {
   return <ComposerPendingTerminalContextChip context={props.context} />;
 }
@@ -234,11 +341,13 @@ function $createComposerTerminalContextNode(
   return $applyNodeReplacement(new ComposerTerminalContextNode(context));
 }
 
-type ComposerInlineTokenNode = ComposerMentionNode | ComposerTerminalContextNode;
+type ComposerInlineTokenNode = ComposerMentionNode | ComposerTerminalContextNode | ComposerElementRefNode;
 
 function isComposerInlineTokenNode(candidate: unknown): candidate is ComposerInlineTokenNode {
   return (
-    candidate instanceof ComposerMentionNode || candidate instanceof ComposerTerminalContextNode
+    candidate instanceof ComposerMentionNode ||
+    candidate instanceof ComposerTerminalContextNode ||
+    candidate instanceof ComposerElementRefNode
   );
 }
 
@@ -399,6 +508,9 @@ function getAbsoluteOffsetForPoint(node: LexicalNode, pointOffset: number): numb
   if (node instanceof ComposerTerminalContextNode) {
     return getAbsoluteOffsetForInlineTokenPoint(node, offset, pointOffset);
   }
+  if (node instanceof ComposerElementRefNode) {
+    return getAbsoluteOffsetForInlineTokenPoint(node, offset, pointOffset);
+  }
 
   if ($isLineBreakNode(node)) {
     return offset + Math.min(pointOffset, 1);
@@ -446,6 +558,9 @@ function getExpandedAbsoluteOffsetForPoint(node: LexicalNode, pointOffset: numbe
   if (node instanceof ComposerTerminalContextNode) {
     return getExpandedAbsoluteOffsetForInlineTokenPoint(node, offset, pointOffset);
   }
+  if (node instanceof ComposerElementRefNode) {
+    return getExpandedAbsoluteOffsetForInlineTokenPoint(node, offset, pointOffset);
+  }
 
   if ($isLineBreakNode(node)) {
     return offset + Math.min(pointOffset, 1);
@@ -473,6 +588,9 @@ function findSelectionPointAtOffset(
     return findSelectionPointForInlineToken(node, remainingRef);
   }
   if (node instanceof ComposerTerminalContextNode) {
+    return findSelectionPointForInlineToken(node, remainingRef);
+  }
+  if (node instanceof ComposerElementRefNode) {
     return findSelectionPointForInlineToken(node, remainingRef);
   }
 
@@ -633,6 +751,8 @@ export interface ComposerPromptEditorHandle {
     expandedCursor: number;
     terminalContextIds: string[];
   };
+  /** Dev-only: insert an element inspector chip at the current cursor position. */
+  insertElementRef: (text: string) => void;
 }
 
 interface ComposerPromptEditorProps {
@@ -1017,6 +1137,33 @@ function ComposerPromptEditorInner({
     return snapshot;
   }, [editor]);
 
+  const insertElementRef = useCallback(
+    (text: string) => {
+      const rootElement = editor.getRootElement();
+      if (!rootElement) return;
+      rootElement.focus();
+      editor.update(() => {
+        const cursor = snapshotRef.current.cursor;
+        $setSelectionAtComposerOffset(cursor);
+        const selection = $getSelection();
+        if (!$isRangeSelection(selection)) return;
+        // Ensure a space before the chip when not at the start of input
+        const currentText = snapshotRef.current.value;
+        if (cursor > 0 && currentText[cursor - 1] !== " ") {
+          selection.insertText(" ");
+        }
+        const chipNode = $createComposerElementRefNode(text);
+        selection.insertNodes([chipNode]);
+        // Insert trailing space so the cursor lands after the chip
+        const afterSelection = $getSelection();
+        if ($isRangeSelection(afterSelection)) {
+          afterSelection.insertText(" ");
+        }
+      });
+    },
+    [editor],
+  );
+
   useImperativeHandle(
     editorRef,
     () => ({
@@ -1033,8 +1180,9 @@ function ComposerPromptEditorInner({
         );
       },
       readSnapshot,
+      insertElementRef,
     }),
-    [focusAt, readSnapshot],
+    [focusAt, readSnapshot, insertElementRef],
   );
 
   const handleEditorChange = useCallback((editorState: EditorState) => {
@@ -1146,7 +1294,7 @@ export const ComposerPromptEditor = forwardRef<
     () => ({
       namespace: "t3tools-composer-editor",
       editable: true,
-      nodes: [ComposerMentionNode, ComposerTerminalContextNode],
+      nodes: [ComposerMentionNode, ComposerTerminalContextNode, ComposerElementRefNode],
       editorState: () => {
         $setComposerEditorPrompt(initialValueRef.current, initialTerminalContextsRef.current);
       },

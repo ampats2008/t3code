@@ -3380,17 +3380,15 @@ export default function ChatView({ threadId }: ChatViewProps) {
     [activePendingProgress?.activeQuestion, activePendingUserInput, setPrompt],
   );
 
-  // Element inspector insertion bridge (dev-only)
+  // Element inspector insertion bridge (dev-only) — inserts a chip node
   useEffect(() => {
     const handler = (event: Event) => {
       const { text } = (event as CustomEvent<{ text: string }>).detail;
-      const snapshot = composerEditorRef.current?.readSnapshot();
-      const cursor = snapshot?.cursor ?? promptRef.current.length;
-      applyPromptReplacement(cursor, cursor, ` ${text}`);
+      composerEditorRef.current?.insertElementRef(text);
     };
     window.addEventListener("element-inspector:insert", handler);
     return () => window.removeEventListener("element-inspector:insert", handler);
-  }, [applyPromptReplacement]);
+  }, []);
 
   const readComposerSnapshot = useCallback((): {
     value: string;
