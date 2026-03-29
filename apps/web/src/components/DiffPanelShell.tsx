@@ -10,8 +10,8 @@ export type DiffPanelMode = "inline" | "sheet" | "sidebar";
 function getDiffPanelHeaderRowClassName(mode: DiffPanelMode) {
   const shouldUseDragRegion = isElectron && mode !== "sheet";
   return cn(
-    "flex items-center justify-between gap-2 px-4",
-    shouldUseDragRegion ? "drag-region h-[52px] border-b border-border" : "h-12",
+    "flex items-center justify-between gap-2 pl-4",
+    shouldUseDragRegion ? "drag-region h-[52px] border-b border-border" : "h-12 pr-4",
   );
 }
 
@@ -32,7 +32,12 @@ export function DiffPanelShell(props: {
       )}
     >
       {shouldUseDragRegion ? (
-        <div className={getDiffPanelHeaderRowClassName(props.mode)}>{props.header}</div>
+        <div
+          className={getDiffPanelHeaderRowClassName(props.mode)}
+          style={{ paddingRight: "calc(max(1.5rem, 100vw - env(titlebar-area-width, 100vw) + 0.75rem))" }}
+        >
+          {props.header}
+        </div>
       ) : (
         <div className="border-b border-border">
           <div className={getDiffPanelHeaderRowClassName(props.mode)}>{props.header}</div>

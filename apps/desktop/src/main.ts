@@ -49,6 +49,7 @@ syncShellEnvironment();
 const PICK_FOLDER_CHANNEL = "desktop:pick-folder";
 const CONFIRM_CHANNEL = "desktop:confirm";
 const SET_THEME_CHANNEL = "desktop:set-theme";
+const SET_TITLE_BAR_COLOR_CHANNEL = "desktop:set-title-bar-color";
 const CONTEXT_MENU_CHANNEL = "desktop:context-menu";
 const OPEN_EXTERNAL_CHANNEL = "desktop:open-external";
 const MENU_ACTION_CHANNEL = "desktop:menu-action";
@@ -62,7 +63,7 @@ const STATE_DIR = Path.join(BASE_DIR, "userdata");
 const DESKTOP_SCHEME = "t3";
 const ROOT_DIR = Path.resolve(__dirname, "../../..");
 const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL);
-const APP_DISPLAY_NAME = isDevelopment ? "T3 Code (Dev)" : "T3 Code (Alpha)";
+const APP_DISPLAY_NAME = isDevelopment ? "2AM Code (Dev)" : "2AM Code (Alpha)";
 const APP_USER_MODEL_ID = "com.t3tools.t3code";
 const USER_DATA_DIR_NAME = isDevelopment ? "t3code-dev" : "t3code";
 const LEGACY_USER_DATA_DIR_NAME = isDevelopment ? "T3 Code (Dev)" : "T3 Code (Alpha)";
@@ -1131,6 +1132,17 @@ function registerIpcHandlers(): void {
     nativeTheme.themeSource = theme;
   });
 
+  ipcMain.removeHandler(SET_TITLE_BAR_COLOR_CHANNEL);
+  ipcMain.handle(
+    SET_TITLE_BAR_COLOR_CHANNEL,
+    (_event, rawColor: unknown, rawSymbolColor: unknown) => {
+      if (process.platform !== "win32") return;
+      if (typeof rawColor !== "string" || typeof rawSymbolColor !== "string") return;
+      const win = BrowserWindow.fromWebContents(_event.sender);
+      win?.setTitleBarOverlay({ color: rawColor, symbolColor: rawSymbolColor });
+    },
+  );
+
   ipcMain.removeHandler(CONTEXT_MENU_CHANNEL);
   ipcMain.handle(
     CONTEXT_MENU_CHANNEL,
@@ -1248,6 +1260,7 @@ function getIconOption(): { icon: string } | Record<string, never> {
 }
 
 function createWindow(): BrowserWindow {
+  const isWindows = process.platform === "win32";
   const window = new BrowserWindow({
     width: 1100,
     height: 780,
@@ -1257,8 +1270,19 @@ function createWindow(): BrowserWindow {
     autoHideMenuBar: true,
     ...getIconOption(),
     title: APP_DISPLAY_NAME,
-    titleBarStyle: "hiddenInset",
-    trafficLightPosition: { x: 16, y: 18 },
+    backgroundColor: "#111113",
+    titleBarStyle: isWindows ? "hidden" : "hiddenInset",
+    ...(isWindows
+      ? {
+          titleBarOverlay: {
+            color: "#111113",
+            symbolColor: "#ffffff",
+            height: 32,
+          },
+        }
+      : {
+          trafficLightPosition: { x: 16, y: 18 },
+        }),
     webPreferences: {
       preload: Path.join(__dirname, "preload.js"),
       contextIsolation: true,

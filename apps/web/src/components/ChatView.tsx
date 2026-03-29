@@ -3685,7 +3685,10 @@ export default function ChatView({ threadId }: ChatViewProps) {
           </header>
         )}
         {isElectron && (
-          <div className="drag-region flex h-[52px] shrink-0 items-center border-b border-border px-5">
+          <div
+            className="drag-region flex h-[52px] shrink-0 items-center border-b border-border pl-5"
+            style={{ paddingRight: "calc(max(1.75rem, 100vw - env(titlebar-area-width, 100vw)))" }}
+          >
             <span className="text-xs text-muted-foreground/50">No active thread</span>
           </div>
         )}
@@ -3703,9 +3706,21 @@ export default function ChatView({ threadId }: ChatViewProps) {
       {/* Top bar */}
       <header
         className={cn(
-          "border-b border-border px-3 sm:px-5",
-          isElectron ? "drag-region flex h-[52px] items-center" : "py-2 sm:py-3",
+          "border-b border-border pl-3 sm:pl-5",
+          isElectron
+            ? "drag-region flex h-[52px] items-center"
+            : "py-2 sm:py-3 pr-3 sm:pr-5",
         )}
+        style={
+          isElectron && !diffOpen
+            ? {
+                paddingRight:
+                  "calc(max(1.75rem, 100vw - env(titlebar-area-width, 100vw) + 0.75rem))",
+              }
+            : {
+                paddingRight: "1rem",
+              }
+        }
       >
         <ChatHeader
           activeThreadId={activeThread.id}
