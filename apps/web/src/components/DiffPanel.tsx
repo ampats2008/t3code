@@ -18,6 +18,7 @@ import {
   type WheelEvent as ReactWheelEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -384,7 +385,8 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
   // Apply default collapsed state when the file list changes (turn switch, initial load).
   // When a specific file was selected (e.g. clicked from the conversation changed-files list),
   // keep that file expanded so the user sees its diff immediately.
-  useEffect(() => {
+  // useLayoutEffect prevents a flash of all-expanded before the collapsed preference applies.
+  useLayoutEffect(() => {
     const filePaths = renderableFiles.map((f) => resolveFileDiffPath(f));
     setCollapsedFiles(
       computeDefaultCollapsedFiles(filePaths, settings.diffDefaultCollapsed, selectedFilePath),
