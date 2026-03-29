@@ -77,7 +77,17 @@ export const makeCoalescingDrainableWorker = <K, V, E, R>(options: {
           ] as const;
         }).pipe(Effect.tx),
       ),
-      Effect.flatMap((item) => (item === null ? Effect.void : processKey(item.key, item.value))),
+      Effect.flatMap((item) =>
+        item === null
+          ? Effect.void
+          : Effect.onError(processKey(item.key, item.value), () =>
+              TxRef.update(stateRef, (state) => {
+                const activeKeys = new Set(state.activeKeys);
+                activeKeys.delete(item.key);
+                return { ...state, activeKeys };
+              }),
+            ),
+      ),
       Effect.forever,
       Effect.forkScoped,
     );
