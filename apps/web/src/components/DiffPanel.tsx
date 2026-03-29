@@ -41,6 +41,7 @@ import { DiffPanelFileTree } from "./DiffPanelFileTree";
 import { VscodeEntryIcon } from "./chat/VscodeEntryIcon";
 import { DiffStatLabel, hasNonZeroStat } from "./chat/DiffStatLabel";
 import { ToggleGroup, Toggle } from "./ui/toggle-group";
+import { computeDefaultCollapsedFiles } from "./DiffPanel.logic";
 
 type DiffRenderMode = "stacked" | "split";
 type DiffThemeType = "light" | "dark";
@@ -381,13 +382,14 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
   }, [diffOpen, settings.diffDefaultView, settings.diffWordWrap]);
 
   // Apply default collapsed state when the file list changes (turn switch, initial load).
+  // When a specific file was selected (e.g. clicked from the conversation changed-files list),
+  // keep that file expanded so the user sees its diff immediately.
   useEffect(() => {
-    if (settings.diffDefaultCollapsed && renderableFiles.length > 0) {
-      setCollapsedFiles(new Set(renderableFiles.map((f) => resolveFileDiffPath(f))));
-    } else {
-      setCollapsedFiles(new Set());
-    }
-  }, [renderableFiles, settings.diffDefaultCollapsed]);
+    const filePaths = renderableFiles.map((f) => resolveFileDiffPath(f));
+    setCollapsedFiles(
+      computeDefaultCollapsedFiles(filePaths, settings.diffDefaultCollapsed, selectedFilePath),
+    );
+  }, [renderableFiles, settings.diffDefaultCollapsed, selectedFilePath]);
 
   useEffect(() => {
     if (!selectedFilePath || !patchViewportRef.current) {
