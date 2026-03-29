@@ -1290,11 +1290,22 @@ export const makeGitManager = Effect.gen(function* () {
       ),
     );
 
+    // Force low effort — thread title generation is a trivial task and
+    // should not spend time on heavy reasoning.
+    const titleModelSelection: ModelSelection = {
+      ...modelSelection,
+      options: {
+        ...modelSelection.options,
+        ...(modelSelection.provider === "claudeAgent" ? { effort: "low" as const } : {}),
+        ...(modelSelection.provider === "codex" ? { reasoningEffort: "low" as const } : {}),
+      },
+    };
+
     const result = yield* textGeneration
       .generateThreadTitle({
         cwd: ".",
         messages: input.messages,
-        modelSelection,
+        modelSelection: titleModelSelection,
       })
       .pipe(
         Effect.mapError((cause) =>

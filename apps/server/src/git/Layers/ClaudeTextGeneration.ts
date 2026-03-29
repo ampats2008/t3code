@@ -95,6 +95,8 @@ const makeClaudeTextGeneration = Effect.gen(function* () {
         (settings) => settings.providers.claudeAgent,
       ).pipe(Effect.catch(() => Effect.undefined));
 
+      const hasSettings = Object.keys(settings).length > 0;
+
       const runClaudeCommand = Effect.gen(function* () {
         const command = ChildProcess.make(
           claudeSettings?.binaryPath || "claude",
@@ -107,12 +109,15 @@ const makeClaudeTextGeneration = Effect.gen(function* () {
             "--model",
             resolveApiModelId(modelSelection),
             ...(normalizedOptions?.effort ? ["--effort", normalizedOptions.effort] : []),
-            ...(Object.keys(settings).length > 0 ? ["--settings", JSON.stringify(settings)] : []),
+            ...(hasSettings ? ["--settings", JSON.stringify(settings)] : []),
             "--dangerously-skip-permissions",
           ],
           {
             cwd,
-            shell: process.platform === "win32",
+            // Avoid shell: true on Windows — cmd.exe mangles JSON double
+            // quotes in arguments like --settings and --json-schema.
+            // The claude binary is a native .exe and doesn't need a shell.
+            shell: false,
             stdin: {
               stream: Stream.encodeText(Stream.make(prompt)),
             },
