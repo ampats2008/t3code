@@ -131,6 +131,7 @@ function AgentDetail(props: { workEntry: WorkLogEntry }) {
   ].filter(([, v]) => v !== undefined && v !== null) as [string, unknown][];
 
   const prompt = input?.prompt as string | undefined;
+  const output = extractToolResultText(result);
 
   return (
     <div className="space-y-2 pb-1">
@@ -145,11 +146,41 @@ function AgentDetail(props: { workEntry: WorkLogEntry }) {
         </div>
       )}
       {prompt && <TruncatedBlock label="Prompt" text={prompt} />}
-      {result !== undefined && (
-        <TruncatedBlock label="Result" text={typeof result === "string" ? result : JSON.stringify(result, null, 2)} />
+      {output !== undefined && (
+        <div>
+          <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/50">Result</p>
+          <pre className="max-h-[300px] overflow-y-auto whitespace-pre-wrap rounded-md border border-border/50 bg-muted/30 p-2 font-mono text-[10px] leading-relaxed text-foreground/75">
+            {output}
+          </pre>
+        </div>
       )}
     </div>
   );
+}
+
+/* ---------- Shared result extractor ---------- */
+
+/**
+ * Unwraps a tool_result envelope into a plain display string.
+ * Handles: plain string, { content: string }, { content: [{type,text},...] }
+ */
+function extractToolResultText(result: unknown): string | undefined {
+  if (result === undefined || result === null) return undefined;
+  if (typeof result === "string") return result;
+  if (typeof result === "object" && result !== null) {
+    const r = result as Record<string, unknown>;
+    const content = r.content;
+    if (typeof content === "string") return content;
+    if (Array.isArray(content)) {
+      return content
+        .filter((block): block is { type: string; text: string } =>
+          typeof block === "object" && block !== null && (block as Record<string, unknown>).type === "text",
+        )
+        .map((block) => block.text)
+        .join("\n\n");
+    }
+  }
+  return JSON.stringify(result, null, 2);
 }
 
 /* ---------- Bash ---------- */
@@ -168,20 +199,16 @@ function BashSummary(props: { workEntry: WorkLogEntry }) {
 
 function BashDetail(props: { workEntry: WorkLogEntry }) {
   const { workEntry } = props;
-  const command = workEntry.command ?? "";
-  const output = workEntry.detail ?? "";
+  const output = extractToolResultText(workEntry.data?.result);
 
   return (
-    <div className="space-y-2 pb-1">
-      {command && (
-        <pre className="rounded-md border border-border/50 bg-muted/30 p-2 font-mono text-[11px] leading-relaxed text-foreground/80">
-          {command}
-        </pre>
-      )}
-      {output && (
-        <pre className="max-h-[200px] overflow-y-auto rounded-md border border-border/50 bg-muted/30 p-2 font-mono text-[10px] leading-relaxed text-muted-foreground/70">
+    <div className="pb-1">
+      {output ? (
+        <pre className="max-h-[300px] overflow-y-auto whitespace-pre-wrap rounded-md border border-border/50 bg-muted/30 p-2 font-mono text-[10px] leading-relaxed text-foreground/75">
           {output}
         </pre>
+      ) : (
+        <p className="text-[10px] text-muted-foreground/40 italic">No output</p>
       )}
     </div>
   );
