@@ -271,8 +271,8 @@ function EventRouter() {
 
       if (!subscribed) return;
 
-      // Only show keybindings toasts for keybindings changes (no settings in payload)
-      if (payload.settings) return;
+      // Only show keybindings toasts when the push originates from keybindings changes.
+      if (!payload.keybindingsChanged) return;
 
       const issue = payload.issues.find((entry) => entry.kind.startsWith("keybindings."));
       if (!issue) {

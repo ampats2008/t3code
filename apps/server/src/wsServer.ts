@@ -628,6 +628,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   yield* Stream.runForEach(keybindingsManager.streamChanges, (event) =>
     pushBus.publishAll(WS_CHANNELS.serverConfigUpdated, {
       issues: event.issues,
+      keybindingsChanged: true,
     }),
   ).pipe(Effect.forkIn(subscriptionsScope));
 
@@ -849,6 +850,11 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       case WS_METHODS.gitPreparePullRequestThread: {
         const body = stripRequestTag(request.body);
         return yield* gitManager.preparePullRequestThread(body);
+      }
+
+      case WS_METHODS.threadGenerateTitle: {
+        const body = stripRequestTag(request.body);
+        return yield* gitManager.generateThreadTitle(body);
       }
 
       case WS_METHODS.gitListBranches: {

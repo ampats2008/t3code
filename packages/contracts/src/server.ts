@@ -89,6 +89,7 @@ export type ServerUpsertKeybindingResult = typeof ServerUpsertKeybindingResult.T
 export const ServerConfigUpdatedPayload = Schema.Struct({
   issues: ServerConfigIssues,
   settings: Schema.optional(ServerSettings),
+  keybindingsChanged: Schema.optional(Schema.Boolean),
 });
 export type ServerConfigUpdatedPayload = typeof ServerConfigUpdatedPayload.Type;
 
