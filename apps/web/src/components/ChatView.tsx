@@ -2038,6 +2038,12 @@ export default function ChatView({ threadId }: ChatViewProps) {
   }, [threadId]);
 
   useEffect(() => {
+    if (phase === "running") {
+      sendStartedAtRef.current = null;
+    }
+  }, [phase]);
+
+  useEffect(() => {
     let cancelled = false;
     void (async () => {
       if (composerImages.length === 0) {
