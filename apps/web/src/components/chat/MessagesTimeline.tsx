@@ -68,6 +68,7 @@ interface MessagesTimelineProps {
   activeTurnInProgress: boolean;
   activeTurnStartedAt: string | null;
   scrollContainer: HTMLDivElement | null;
+  isUserScrollingRef?: React.MutableRefObject<boolean>;
   timelineEntries: ReturnType<typeof deriveTimelineEntries>;
   completionDividerBeforeEntryId: string | null;
   completionSummary: string | null;
@@ -92,6 +93,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   activeTurnInProgress,
   activeTurnStartedAt,
   scrollContainer,
+  isUserScrollingRef,
   timelineEntries,
   completionDividerBeforeEntryId,
   completionSummary,
@@ -269,6 +271,19 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   }, [rowVirtualizer, timelineWidthPx, scrollContainer]);
   useEffect(() => {
     rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, delta, instance) => {
+      // Suppress scroll position adjustments while user is actively scrolling.
+      // This prevents jarring jumps when the virtualizer re-measures items during scroll gestures.
+      const isUserScrolling = isUserScrollingRef?.current ?? false;
+      if (isUserScrolling) {
+        logVirtualizerAdjust(false, {
+          reason: "suppressed-during-scroll",
+          itemIndex: item.index,
+          itemKey: item.key,
+          sizeDelta: delta,
+        }, scrollContainer ? { scrollTop: scrollContainer.scrollTop, scrollHeight: scrollContainer.scrollHeight, clientHeight: scrollContainer.clientHeight } : null);
+        return false;
+      }
+
       const viewportHeight = instance.scrollRect?.height ?? 0;
       const scrollOffset = instance.scrollOffset ?? 0;
       const remainingDistance = instance.getTotalSize() - (scrollOffset + viewportHeight);
@@ -286,7 +301,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     return () => {
       rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange = undefined;
     };
-  }, [rowVirtualizer, scrollContainer]);
+  }, [rowVirtualizer, scrollContainer, isUserScrollingRef]);
   const pendingMeasureFrameRef = useRef<number | null>(null);
   const onTimelineImageLoad = useCallback(() => {
     if (pendingMeasureFrameRef.current !== null) return;

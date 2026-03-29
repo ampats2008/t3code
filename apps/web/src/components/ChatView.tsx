@@ -380,6 +380,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const isPointerScrollActiveRef = useRef(false);
   const lastTouchClientYRef = useRef<number | null>(null);
   const pendingUserScrollUpIntentRef = useRef(false);
+  const isUserScrollingRef = useRef(false);
+  const userScrollingTimeoutRef = useRef<number | null>(null);
   const pendingAutoScrollFrameRef = useRef<number | null>(null);
   const pendingInteractionAnchorRef = useRef<{
     element: HTMLElement;
@@ -1858,6 +1860,18 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const onMessagesScroll = useCallback(() => {
     const scrollContainer = messagesScrollRef.current;
     if (!scrollContainer) return;
+
+    // Mark scrolling active; clear after 150ms idle so the virtualizer
+    // doesn't adjust scroll position mid-gesture.
+    isUserScrollingRef.current = true;
+    if (userScrollingTimeoutRef.current !== null) {
+      window.clearTimeout(userScrollingTimeoutRef.current);
+    }
+    userScrollingTimeoutRef.current = window.setTimeout(() => {
+      isUserScrollingRef.current = false;
+      userScrollingTimeoutRef.current = null;
+    }, 150);
+
     const currentScrollTop = scrollContainer.scrollTop;
     const isNearBottom = isScrollContainerNearBottom(scrollContainer);
     logScroll("user-scroll", scrollContainer, {
@@ -1929,6 +1943,9 @@ export default function ChatView({ threadId }: ChatViewProps) {
     const stopWatcher = watchScrollHeight(() => messagesScrollRef.current);
     return () => {
       stopWatcher();
+      if (userScrollingTimeoutRef.current !== null) {
+        window.clearTimeout(userScrollingTimeoutRef.current);
+      }
       cancelPendingStickToBottom();
       cancelPendingInteractionAnchorAdjustment();
     };
@@ -3754,6 +3771,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
                 activeTurnInProgress={isWorking || !latestTurnSettled}
                 activeTurnStartedAt={activeWorkStartedAt}
                 scrollContainer={messagesScrollElement}
+                isUserScrollingRef={isUserScrollingRef}
                 timelineEntries={timelineEntries}
                 completionDividerBeforeEntryId={completionDividerBeforeEntryId}
                 completionSummary={completionSummary}
