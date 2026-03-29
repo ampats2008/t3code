@@ -16,7 +16,6 @@ import {
 } from "@tanstack/react-virtual";
 import { deriveTimelineEntries, formatElapsed } from "../../session-logic";
 import { AUTO_SCROLL_BOTTOM_THRESHOLD_PX } from "../../chat-scroll";
-import { logScroll, logVirtualizerAdjust } from "../../debug/scroll-debug";
 import { type TurnDiffSummary } from "../../types";
 import { summarizeTurnDiffStats } from "../../lib/turnDiffTree";
 import ChatMarkdown from "../ChatMarkdown";
@@ -266,51 +265,34 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   });
   useEffect(() => {
     if (timelineWidthPx === null) return;
-    if (scrollContainer) logScroll("virtualizer-measure", scrollContainer, { trigger: "width-change", timelineWidthPx });
     rowVirtualizer.measure();
-  }, [rowVirtualizer, timelineWidthPx, scrollContainer]);
+  }, [rowVirtualizer, timelineWidthPx]);
   useEffect(() => {
     rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, delta, instance) => {
       // Suppress scroll position adjustments while user is actively scrolling.
       // This prevents jarring jumps when the virtualizer re-measures items during scroll gestures.
       const isUserScrolling = isUserScrollingRef?.current ?? false;
       if (isUserScrolling) {
-        logVirtualizerAdjust(false, {
-          reason: "suppressed-during-scroll",
-          itemIndex: item.index,
-          itemKey: item.key,
-          sizeDelta: delta,
-        }, scrollContainer ? { scrollTop: scrollContainer.scrollTop, scrollHeight: scrollContainer.scrollHeight, clientHeight: scrollContainer.clientHeight } : null);
         return false;
       }
 
       const viewportHeight = instance.scrollRect?.height ?? 0;
       const scrollOffset = instance.scrollOffset ?? 0;
       const remainingDistance = instance.getTotalSize() - (scrollOffset + viewportHeight);
-      const decision = remainingDistance > AUTO_SCROLL_BOTTOM_THRESHOLD_PX;
-      logVirtualizerAdjust(decision, {
-        itemIndex: item.index,
-        itemKey: item.key,
-        sizeDelta: delta,
-        remainingDistance: Math.round(remainingDistance),
-        totalSize: instance.getTotalSize(),
-        scrollOffset: Math.round(scrollOffset),
-      }, scrollContainer ? { scrollTop: scrollContainer.scrollTop, scrollHeight: scrollContainer.scrollHeight, clientHeight: scrollContainer.clientHeight } : null);
-      return decision;
+      return remainingDistance > AUTO_SCROLL_BOTTOM_THRESHOLD_PX;
     };
     return () => {
       rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange = undefined;
     };
-  }, [rowVirtualizer, scrollContainer, isUserScrollingRef]);
+  }, [rowVirtualizer, isUserScrollingRef]);
   const pendingMeasureFrameRef = useRef<number | null>(null);
   const onTimelineImageLoad = useCallback(() => {
     if (pendingMeasureFrameRef.current !== null) return;
     pendingMeasureFrameRef.current = window.requestAnimationFrame(() => {
       pendingMeasureFrameRef.current = null;
-      if (scrollContainer) logScroll("image-load-measure", scrollContainer, { trigger: "image-load" });
       rowVirtualizer.measure();
     });
-  }, [rowVirtualizer, scrollContainer]);
+  }, [rowVirtualizer]);
   useEffect(() => {
     return () => {
       const frame = pendingMeasureFrameRef.current;
