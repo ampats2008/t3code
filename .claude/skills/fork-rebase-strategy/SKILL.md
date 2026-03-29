@@ -51,14 +51,44 @@ upstream/main  ──●──●──●──●──●   (their updates)
 
 ---
 
-## Before Writing Any Code: Commit Hygiene Rules
+## Commit Message Convention
+
+All 2AM-Code commits **must** follow this format — enforced by a pre-tool-use hook:
+
+```
+2AM: <type>(<slug>): <message>
+```
+
+| Part | Rules |
+|------|-------|
+| `2AM:` | Literal prefix — marks the commit as belonging to this fork |
+| `<type>` | One of: `feat`, `fix`, `chore`, `refactor`, `docs`, `test`, `style` |
+| `<slug>` | Short kebab-case identifier for the **feature/area** (e.g. `context-meter`, `diff-panel`) — use the **same slug for all commits belonging to the same feature** so they group together in the log |
+| `<message>` | Imperative, lowercase, no trailing period |
+
+### Examples
+
+```
+2AM: feat(context-meter): add token usage progress bar
+2AM: feat(context-meter): wire up live token count from provider
+2AM: fix(context-meter): clamp value to 0-100 range
+2AM: chore(fork-tooling): add rebase strategy skill
+2AM: refactor(diff-panel): extract file tree into separate component
+```
+
+Scanning all commits for a feature:
+```powershell
+git log --oneline --grep="2AM: .*(<slug>)"
+# e.g.
+git log --oneline --grep="2AM: .*(context-meter)"
+```
+
+### Commit Hygiene Rules
 
 1. **Atomic commits** — each commit does exactly one logical thing.
 2. **No "WIP" or catch-all commits** — squash those before rebasing.
-3. **Prefix commits clearly** so it's obvious which commits are ours vs. upstream:
-   - `feat(2am): ...`
-   - `fix(2am): ...`
-   - `chore(2am): ...`
+3. **Use the same `<slug>` across all commits for a feature** — this is how you
+   trace a feature's full history in the log.
 4. **Touch upstream files as little as possible.** If a feature can live in a new
    file rather than modifying an existing one, prefer the new file.
 
@@ -79,7 +109,7 @@ git checkout -b feat/2am-<feature-name>
 
 ```powershell
 git add <specific files>
-git commit -m "feat(2am): add <what it does>"
+git commit -m "2AM: feat(<feature-slug>): add <what it does>"
 ```
 
 ### 3. Before opening a PR (or periodically during work): clean your commits
