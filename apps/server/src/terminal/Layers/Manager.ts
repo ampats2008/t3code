@@ -837,15 +837,21 @@ export const makeTerminalManagerWithOptions = Effect.fn("makeTerminalManagerWith
         });
 
         if (!startState) {
-          yield* modifyManagerState((state) => {
+          const hasPending = yield* modifyManagerState((state) => {
             const existing = state.persistStates.get(sessionKey);
-            if (!existing || existing.pendingHistory !== null) {
-              return [undefined, state] as const;
+            if (!existing) {
+              return [false, state] as const;
+            }
+            if (existing.pendingHistory !== null) {
+              return [true, state] as const;
             }
             const persistStates = new Map(state.persistStates);
             persistStates.delete(sessionKey);
-            return [undefined, { ...state, persistStates }] as const;
+            return [false, { ...state, persistStates }] as const;
           });
+          if (hasPending) {
+            continue;
+          }
           return;
         }
 
