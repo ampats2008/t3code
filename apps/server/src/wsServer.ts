@@ -79,6 +79,7 @@ import { expandHomePath } from "./os-jank.ts";
 import { makeServerPushBus } from "./wsServer/pushBus.ts";
 import { makeServerReadiness } from "./wsServer/readiness.ts";
 import { decodeJsonResult, formatSchemaError } from "@t3tools/shared/schemaJson";
+import { getCachedCodexSkills } from "./codexAppServerManager";
 
 /**
  * ServerShape - Service API for server lifecycle control.
@@ -913,6 +914,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
           providers,
           availableEditors,
           settings,
+          skills: getCachedCodexSkills(),
         };
       }
 

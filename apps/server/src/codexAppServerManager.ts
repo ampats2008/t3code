@@ -96,6 +96,19 @@ interface JsonRpcNotification {
   params?: unknown;
 }
 
+interface CachedSkill {
+  name: string;
+  description: string;
+  argumentHint: string;
+}
+
+let _cachedSkills: CachedSkill[] = [];
+
+/** Read the skills discovered from the last codex `initialize` response. */
+export function getCachedCodexSkills(): ReadonlyArray<CachedSkill> {
+  return _cachedSkills;
+}
+
 type CodexPlanType =
   | "free"
   | "go"
@@ -581,7 +594,14 @@ export class CodexAppServerManager extends EventEmitter<CodexAppServerManagerEve
 
       this.emitLifecycleEvent(context, "session/connecting", "Starting codex app-server");
 
-      await this.sendRequest(context, "initialize", buildCodexInitializeParams());
+      const initResponse = await this.sendRequest(context, "initialize", buildCodexInitializeParams());
+      if (Array.isArray((initResponse as any)?.commands)) {
+        _cachedSkills = (initResponse as any).commands.map((cmd: any) => ({
+          name: typeof cmd.name === "string" ? cmd.name : "",
+          description: typeof cmd.description === "string" ? cmd.description : "",
+          argumentHint: typeof cmd.argumentHint === "string" ? cmd.argumentHint : "",
+        }));
+      }
 
       this.writeMessage(context, { method: "initialized" });
       try {

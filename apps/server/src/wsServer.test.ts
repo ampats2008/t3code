@@ -871,6 +871,7 @@ describe("WebSocket Server", () => {
       providers: defaultProviderStatuses,
       availableEditors: expect.any(Array),
       settings: defaultServerSettings,
+      skills: [],
     });
     expectAvailableEditors((response.result as { availableEditors: unknown }).availableEditors);
   });
@@ -897,6 +898,7 @@ describe("WebSocket Server", () => {
       providers: defaultProviderStatuses,
       availableEditors: expect.any(Array),
       settings: defaultServerSettings,
+      skills: [],
     });
     expectAvailableEditors((response.result as { availableEditors: unknown }).availableEditors);
 
@@ -934,6 +936,7 @@ describe("WebSocket Server", () => {
       providers: defaultProviderStatuses,
       availableEditors: expect.any(Array),
       settings: defaultServerSettings,
+      skills: [],
     });
     expectAvailableEditors((response.result as { availableEditors: unknown }).availableEditors);
     expect(fs.readFileSync(keybindingsPath, "utf8")).toBe("{ not-json");
@@ -1084,6 +1087,7 @@ describe("WebSocket Server", () => {
       providers: defaultProviderStatuses,
       availableEditors: expect.any(Array),
       settings: defaultServerSettings,
+      skills: [],
     });
     expectAvailableEditors((response.result as { availableEditors: unknown }).availableEditors);
   });
@@ -1133,6 +1137,7 @@ describe("WebSocket Server", () => {
       providers: defaultProviderStatuses,
       availableEditors: expect.any(Array),
       settings: defaultServerSettings,
+      skills: [],
     });
     expectAvailableEditors(
       (configResponse.result as { availableEditors: unknown }).availableEditors,

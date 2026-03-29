@@ -58,6 +58,13 @@ export type ServerProvider = typeof ServerProvider.Type;
 
 const ServerProviders = Schema.Array(ServerProvider);
 
+export const ServerSkill = Schema.Struct({
+  name: Schema.String,
+  description: Schema.String,
+  argumentHint: Schema.String,
+});
+export type ServerSkill = typeof ServerSkill.Type;
+
 export const ServerConfig = Schema.Struct({
   cwd: TrimmedNonEmptyString,
   keybindingsConfigPath: TrimmedNonEmptyString,
@@ -66,6 +73,7 @@ export const ServerConfig = Schema.Struct({
   providers: ServerProviders,
   availableEditors: Schema.Array(EditorId),
   settings: ServerSettings,
+  skills: Schema.optional(Schema.Array(ServerSkill)),
 });
 export type ServerConfig = typeof ServerConfig.Type;
 

@@ -1104,12 +1104,25 @@ export default function ChatView({ threadId }: ChatViewProps) {
           description: "Switch this thread back to normal chat mode",
         },
       ] satisfies ReadonlyArray<Extract<ComposerCommandItem, { type: "slash-command" }>>;
+      const skillItems: ComposerCommandItem[] = (serverConfigQuery.data?.skills ?? []).map(
+        (skill) => ({
+          id: `skill:${skill.name}`,
+          type: "skill" as const,
+          name: skill.name,
+          label: `/${skill.name}`,
+          description: skill.description,
+          argumentHint: skill.argumentHint,
+        }),
+      );
+      const allItems = [...slashCommandItems, ...skillItems];
       const query = composerTrigger.query.trim().toLowerCase();
       if (!query) {
-        return [...slashCommandItems];
+        return allItems;
       }
-      return slashCommandItems.filter(
-        (item) => item.command.includes(query) || item.label.slice(1).includes(query),
+      return allItems.filter(
+        (item) =>
+          item.label.slice(1).toLowerCase().includes(query) ||
+          item.description.toLowerCase().includes(query),
       );
     }
 
@@ -1129,7 +1142,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
         label: name,
         description: `${providerLabel} · ${slug}`,
       }));
-  }, [composerTrigger, searchableModelOptions, workspaceEntries]);
+  }, [composerTrigger, searchableModelOptions, workspaceEntries, serverConfigQuery.data?.skills]);
   const composerMenuOpen = Boolean(composerTrigger);
   const activeComposerMenuItem = useMemo(
     () =>
@@ -3368,6 +3381,38 @@ export default function ChatView({ threadId }: ChatViewProps) {
         }
         return;
       }
+      if (item.type === "skill") {
+        if (item.argumentHint) {
+          const replacement = `/${item.name} `;
+          const replacementRangeEnd = extendReplacementRangeForTrailingSpace(
+            snapshot.value,
+            trigger.rangeEnd,
+            replacement,
+          );
+          const applied = applyPromptReplacement(
+            trigger.rangeStart,
+            replacementRangeEnd,
+            replacement,
+            { expectedText: snapshot.value.slice(trigger.rangeStart, replacementRangeEnd) },
+          );
+          if (applied) {
+            setComposerHighlightedItemId(null);
+          }
+        } else {
+          const replacement = `/${item.name}`;
+          const applied = applyPromptReplacement(
+            trigger.rangeStart,
+            trigger.rangeEnd,
+            replacement,
+            { expectedText: snapshot.value.slice(trigger.rangeStart, trigger.rangeEnd) },
+          );
+          if (applied) {
+            setComposerHighlightedItemId(null);
+            queueMicrotask(() => void onSend());
+          }
+        }
+        return;
+      }
       onProviderModelSelect(item.provider, item.model);
       const applied = applyPromptReplacement(trigger.rangeStart, trigger.rangeEnd, "", {
         expectedText: snapshot.value.slice(trigger.rangeStart, trigger.rangeEnd),
@@ -3380,6 +3425,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
       applyPromptReplacement,
       handleInteractionModeChange,
       onProviderModelSelect,
+      onSend,
       resolveActiveComposerTrigger,
     ],
   );

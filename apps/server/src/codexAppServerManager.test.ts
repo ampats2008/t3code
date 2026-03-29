@@ -11,6 +11,7 @@ import {
   CODEX_PLAN_MODE_DEVELOPER_INSTRUCTIONS,
   CodexAppServerManager,
   classifyCodexStderrLine,
+  getCachedCodexSkills,
   isRecoverableThreadResumeError,
   normalizeCodexModelSlug,
   readCodexAccountSnapshot,
@@ -1044,4 +1045,11 @@ describe.skipIf(!process.env.CODEX_BINARY_PATH)("startSession live Codex resume"
       rmSync(workspaceDir, { recursive: true, force: true });
     }
   }, 180_000);
+});
+
+describe("getCachedCodexSkills", () => {
+  it("returns an array (empty before any session has started)", () => {
+    const skills = getCachedCodexSkills();
+    expect(Array.isArray(skills)).toBe(true);
+  });
 });

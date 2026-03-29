@@ -60,6 +60,42 @@ describe("detectComposerTrigger", () => {
     });
   });
 
+  it("detects unknown slash commands (skills) as slash-command triggers", () => {
+    const text = "/commit";
+    const trigger = detectComposerTrigger(text, text.length);
+
+    expect(trigger).toEqual({
+      kind: "slash-command",
+      query: "commit",
+      rangeStart: 0,
+      rangeEnd: text.length,
+    });
+  });
+
+  it("detects partial unknown slash commands for skill filtering", () => {
+    const text = "/rev";
+    const trigger = detectComposerTrigger(text, text.length);
+
+    expect(trigger).toEqual({
+      kind: "slash-command",
+      query: "rev",
+      rangeStart: 0,
+      rangeEnd: text.length,
+    });
+  });
+
+  it("detects bare slash as slash-command trigger", () => {
+    const text = "/";
+    const trigger = detectComposerTrigger(text, text.length);
+
+    expect(trigger).toEqual({
+      kind: "slash-command",
+      query: "",
+      rangeStart: 0,
+      rangeEnd: text.length,
+    });
+  });
+
   it("detects @path trigger in the middle of existing text", () => {
     // User typed @ between "inspect " and "in this sentence"
     const text = "Please inspect @in this sentence";
