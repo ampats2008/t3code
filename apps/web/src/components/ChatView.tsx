@@ -1702,8 +1702,14 @@ export default function ChatView({ threadId }: ChatViewProps) {
       role: m.role,
       text: m.text.slice(0, 2000),
     }));
+    const loadingToastId = toastManager.add({
+      type: "loading",
+      title: "Generating thread title...",
+      timeout: 0,
+    });
     try {
       const result = await api.thread.generateTitle({ messages: messagesToSend });
+      toastManager.close(loadingToastId);
       await api.orchestration.dispatchCommand({
         type: "thread.meta.update",
         commandId: newCommandId(),
@@ -1711,6 +1717,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
         title: result.title,
       });
     } catch (error) {
+      toastManager.close(loadingToastId);
       toastManager.add({
         type: "error",
         title: "Rename failed",

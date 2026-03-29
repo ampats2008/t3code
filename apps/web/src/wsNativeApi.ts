@@ -198,7 +198,8 @@ export function createWsNativeApi(): NativeApi {
       },
     },
     thread: {
-      generateTitle: (input) => transport.request(WS_METHODS.threadGenerateTitle, input),
+      generateTitle: (input) =>
+        transport.request(WS_METHODS.threadGenerateTitle, input, { timeoutMs: null }),
     },
     contextMenu: {
       show: async <T extends string>(
