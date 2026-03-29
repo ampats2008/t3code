@@ -63,6 +63,13 @@ export interface GitManagerShape {
     input: GitRunStackedActionInput,
     options?: GitRunStackedActionOptions,
   ) => Effect.Effect<GitRunStackedActionResult, GitManagerServiceError>;
+
+  /**
+   * Generate a concise thread title from conversation messages using AI.
+   */
+  readonly generateThreadTitle: (input: {
+    messages: ReadonlyArray<{ role: string; text: string }>;
+  }) => Effect.Effect<{ title: string }, GitManagerServiceError>;
 }
 
 /**

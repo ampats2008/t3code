@@ -1103,6 +1103,13 @@ export default function ChatView({ threadId }: ChatViewProps) {
           label: "/default",
           description: "Switch this thread back to normal chat mode",
         },
+        {
+          id: "slash:rename",
+          type: "slash-command",
+          command: "rename",
+          label: "/rename",
+          description: "Generate a title for this thread using AI",
+        },
       ] satisfies ReadonlyArray<Extract<ComposerCommandItem, { type: "slash-command" }>>;
       const skillItems: ComposerCommandItem[] = (serverConfigQuery.data?.skills ?? []).map(
         (skill) => ({
@@ -1678,6 +1685,39 @@ export default function ChatView({ threadId }: ChatViewProps) {
       return !open;
     });
   }, [activePlan?.turnId, sidebarProposedPlan?.turnId]);
+
+  const handleRenameThread = useCallback(async () => {
+    const api = readNativeApi();
+    if (!api || !activeThread) return;
+    const threadMessages = activeThread.messages;
+    if (threadMessages.length === 0) {
+      toastManager.add({
+        type: "warning",
+        title: "No messages",
+        description: "Cannot generate a title for an empty thread.",
+      });
+      return;
+    }
+    const messagesToSend = threadMessages.slice(0, 20).map((m) => ({
+      role: m.role,
+      text: m.text.slice(0, 2000),
+    }));
+    try {
+      const result = await api.thread.generateTitle({ messages: messagesToSend });
+      await api.orchestration.dispatchCommand({
+        type: "thread.meta.update",
+        commandId: newCommandId(),
+        threadId: activeThread.id,
+        title: result.title,
+      });
+    } catch (error) {
+      toastManager.add({
+        type: "error",
+        title: "Rename failed",
+        description: error instanceof Error ? error.message : "Failed to generate thread title.",
+      });
+    }
+  }, [activeThread]);
 
   const persistThreadSettingsForNextTurn = useCallback(
     async (input: {
@@ -2481,7 +2521,11 @@ export default function ChatView({ threadId }: ChatViewProps) {
         ? parseStandaloneComposerSlashCommand(trimmed)
         : null;
     if (standaloneSlashCommand) {
-      handleInteractionModeChange(standaloneSlashCommand);
+      if (standaloneSlashCommand === "rename") {
+        void handleRenameThread();
+      } else {
+        handleInteractionModeChange(standaloneSlashCommand);
+      }
       promptRef.current = "";
       clearComposerDraftContent(activeThread.id);
       setComposerHighlightedItemId(null);
@@ -3372,6 +3416,16 @@ export default function ChatView({ threadId }: ChatViewProps) {
           }
           return;
         }
+        if (item.command === "rename") {
+          const applied = applyPromptReplacement(trigger.rangeStart, trigger.rangeEnd, "", {
+            expectedText: snapshot.value.slice(trigger.rangeStart, trigger.rangeEnd),
+          });
+          if (applied) {
+            setComposerHighlightedItemId(null);
+          }
+          void handleRenameThread();
+          return;
+        }
         void handleInteractionModeChange(item.command === "plan" ? "plan" : "default");
         const applied = applyPromptReplacement(trigger.rangeStart, trigger.rangeEnd, "", {
           expectedText: snapshot.value.slice(trigger.rangeStart, trigger.rangeEnd),
@@ -3424,6 +3478,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
     [
       applyPromptReplacement,
       handleInteractionModeChange,
+      handleRenameThread,
       onProviderModelSelect,
       onSend,
       resolveActiveComposerTrigger,

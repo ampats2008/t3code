@@ -66,6 +66,9 @@ export const WS_METHODS = {
   gitResolvePullRequest: "git.resolvePullRequest",
   gitPreparePullRequestThread: "git.preparePullRequestThread",
 
+  // Thread methods
+  threadGenerateTitle: "thread.generateTitle",
+
   // Terminal methods
   terminalOpen: "terminal.open",
   terminalWrite: "terminal.write",
@@ -134,6 +137,14 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.gitInit, GitInitInput),
   tagRequestBody(WS_METHODS.gitResolvePullRequest, GitPullRequestRefInput),
   tagRequestBody(WS_METHODS.gitPreparePullRequestThread, GitPreparePullRequestThreadInput),
+
+  // Thread methods
+  tagRequestBody(
+    WS_METHODS.threadGenerateTitle,
+    Schema.Struct({
+      messages: Schema.Array(Schema.Struct({ role: Schema.String, text: Schema.String })),
+    }),
+  ),
 
   // Terminal methods
   tagRequestBody(WS_METHODS.terminalOpen, TerminalOpenInput),

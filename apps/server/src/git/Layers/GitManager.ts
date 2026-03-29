@@ -1280,11 +1280,37 @@ export const makeGitManager = Effect.gen(function* () {
     },
   );
 
+  const generateThreadTitle: GitManagerShape["generateThreadTitle"] = Effect.fn(
+    "GitManager.generateThreadTitle",
+  )(function* (input) {
+    const modelSelection = yield* serverSettingsService.getSettings.pipe(
+      Effect.map((settings) => settings.textGenerationModelSelection),
+      Effect.mapError((cause) =>
+        gitManagerError("generateThreadTitle", "Failed to get server settings.", cause),
+      ),
+    );
+
+    const result = yield* textGeneration
+      .generateThreadTitle({
+        cwd: ".",
+        messages: input.messages,
+        modelSelection,
+      })
+      .pipe(
+        Effect.mapError((cause) =>
+          gitManagerError("generateThreadTitle", "Failed to generate thread title.", cause),
+        ),
+      );
+
+    return { title: result.title };
+  });
+
   return {
     status,
     resolvePullRequest,
     preparePullRequestThread,
     runStackedAction,
+    generateThreadTitle,
   } satisfies GitManagerShape;
 });
 

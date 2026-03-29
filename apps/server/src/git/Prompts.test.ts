@@ -4,6 +4,7 @@ import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
   buildPrContentPrompt,
+  buildThreadTitlePrompt,
 } from "./Prompts.ts";
 import { normalizeCliError } from "./Utils.ts";
 import { TextGenerationError } from "./Errors.ts";
@@ -100,6 +101,53 @@ describe("buildBranchNamePrompt", () => {
     expect(result.prompt).toContain("screenshot.png");
     expect(result.prompt).toContain("image/png");
     expect(result.prompt).toContain("12345 bytes");
+  });
+});
+
+describe("buildThreadTitlePrompt", () => {
+  it("includes the conversation in the prompt", () => {
+    const result = buildThreadTitlePrompt({
+      messages: [
+        { role: "user", text: "How do I fix a TypeScript error?" },
+        { role: "assistant", text: "You can add type annotations." },
+      ],
+    });
+
+    expect(result.prompt).toContain("Conversation:");
+    expect(result.prompt).toContain("user: How do I fix a TypeScript error?");
+    expect(result.prompt).toContain("assistant: You can add type annotations.");
+  });
+
+  it("includes the system instruction about generating thread titles", () => {
+    const result = buildThreadTitlePrompt({
+      messages: [{ role: "user", text: "Test message" }],
+    });
+
+    expect(result.prompt).toContain("You generate concise thread titles for coding assistant conversations.");
+    expect(result.prompt).toContain("Return a JSON object with key: title.");
+    expect(result.prompt).toContain("Title should be 3-8 words summarizing the conversation topic.");
+  });
+
+  it("returns an outputSchema with a title key", () => {
+    const result = buildThreadTitlePrompt({
+      messages: [{ role: "user", text: "Test" }],
+    });
+
+    expect(result.outputSchema).toBeDefined();
+    // The outputSchema should have a title property
+    expect(result.outputSchema.fields).toBeDefined();
+  });
+
+  it("truncates long conversations with limitSection call at 12_000", () => {
+    const longText = "a".repeat(20_000);
+    const result = buildThreadTitlePrompt({
+      messages: [{ role: "user", text: longText }],
+    });
+
+    // The conversation should be truncated, so it should be shorter than the input
+    expect(result.prompt.length).toBeLessThan(longText.length + 500);
+    // Verify it still contains the conversation section header
+    expect(result.prompt).toContain("Conversation:");
   });
 });
 

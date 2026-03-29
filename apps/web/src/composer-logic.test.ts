@@ -60,6 +60,18 @@ describe("detectComposerTrigger", () => {
     });
   });
 
+  it("detects /rename as a slash-command trigger", () => {
+    const text = "/ren";
+    const trigger = detectComposerTrigger(text, text.length);
+
+    expect(trigger).toEqual({
+      kind: "slash-command",
+      query: "ren",
+      rangeStart: 0,
+      rangeEnd: text.length,
+    });
+  });
+
   it("detects unknown slash commands (skills) as slash-command triggers", () => {
     const text = "/commit";
     const trigger = detectComposerTrigger(text, text.length);
@@ -278,6 +290,11 @@ describe("parseStandaloneComposerSlashCommand", () => {
 
   it("parses standalone /default command", () => {
     expect(parseStandaloneComposerSlashCommand("/default")).toBe("default");
+  });
+
+  it("parses standalone /rename command", () => {
+    expect(parseStandaloneComposerSlashCommand("/rename")).toBe("rename");
+    expect(parseStandaloneComposerSlashCommand(" /rename ")).toBe("rename");
   });
 
   it("ignores slash commands with extra message text", () => {

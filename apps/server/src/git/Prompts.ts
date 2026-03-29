@@ -119,6 +119,40 @@ export interface BranchNamePromptInput {
   attachments?: ReadonlyArray<ChatAttachment> | undefined;
 }
 
+// ---------------------------------------------------------------------------
+// Thread title
+// ---------------------------------------------------------------------------
+
+export interface ThreadTitlePromptInput {
+  messages: ReadonlyArray<{ role: string; text: string }>;
+}
+
+export function buildThreadTitlePrompt(input: ThreadTitlePromptInput) {
+  const conversation = input.messages
+    .map((m) => `${m.role}: ${m.text}`)
+    .join("\n");
+
+  const prompt = [
+    "You generate concise thread titles for coding assistant conversations.",
+    "Return a JSON object with key: title.",
+    "Rules:",
+    "- Title should be 3-8 words summarizing the conversation topic.",
+    "- Use sentence case (capitalize only the first word).",
+    "- Focus on the user's primary intent or task.",
+    "- Do not use quotes or trailing punctuation.",
+    "",
+    "Conversation:",
+    limitSection(conversation, 12_000),
+  ].join("\n");
+
+  const outputSchema = Schema.Struct({ title: Schema.String });
+  return { prompt, outputSchema };
+}
+
+// ---------------------------------------------------------------------------
+// Branch name
+// ---------------------------------------------------------------------------
+
 export function buildBranchNamePrompt(input: BranchNamePromptInput) {
   const attachmentLines = (input.attachments ?? []).map(
     (attachment) => `- ${attachment.name} (${attachment.mimeType}, ${attachment.sizeBytes} bytes)`,

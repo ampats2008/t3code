@@ -247,4 +247,34 @@ it.layer(ClaudeTextGenerationTestLayer)("ClaudeTextGenerationLive", (it) => {
       }),
     ),
   );
+
+  it.effect("generates thread title from conversation messages", () =>
+    withFakeClaudeEnv(
+      {
+        output: JSON.stringify({
+          structured_output: {
+            title: "Fix login timeout handling",
+          },
+        }),
+        stdinMustContain: "user: Fix the login bug",
+      },
+      Effect.gen(function* () {
+        const textGeneration = yield* TextGeneration;
+
+        const generated = yield* textGeneration.generateThreadTitle({
+          cwd: process.cwd(),
+          messages: [
+            { role: "user", text: "Fix the login bug" },
+            { role: "assistant", text: "I'll look into the login timeout issue." },
+          ],
+          modelSelection: {
+            provider: "claudeAgent",
+            model: "claude-haiku-4-5",
+          },
+        });
+
+        expect(generated.title).toBe("Fix login timeout handling");
+      }),
+    ),
+  );
 });

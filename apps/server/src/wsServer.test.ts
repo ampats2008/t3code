@@ -1760,6 +1760,7 @@ describe("WebSocket Server", () => {
       resolvePullRequest,
       preparePullRequestThread,
       runStackedAction,
+      generateThreadTitle: vi.fn(() => Effect.succeed({ title: "Test title" })),
     };
 
     server = await createTestServer({ cwd: "/test", gitManager });
@@ -1799,6 +1800,7 @@ describe("WebSocket Server", () => {
       resolvePullRequest: vi.fn(() => Effect.succeed(resolvePullRequestResult)),
       preparePullRequestThread: vi.fn(() => Effect.succeed(preparePullRequestThreadResult)),
       runStackedAction: vi.fn(() => Effect.void as any),
+      generateThreadTitle: vi.fn(() => Effect.succeed({ title: "Test title" })),
     };
 
     server = await createTestServer({ cwd: "/test", gitManager });
@@ -1847,6 +1849,7 @@ describe("WebSocket Server", () => {
       resolvePullRequest: vi.fn(() => Effect.void as any),
       preparePullRequestThread: vi.fn(() => Effect.void as any),
       runStackedAction,
+      generateThreadTitle: vi.fn(() => Effect.succeed({ title: "Test title" })),
     };
 
     server = await createTestServer({ cwd: "/test", gitManager });
@@ -1913,6 +1916,7 @@ describe("WebSocket Server", () => {
       resolvePullRequest: vi.fn(() => Effect.void as any),
       preparePullRequestThread: vi.fn(() => Effect.void as any),
       runStackedAction,
+      generateThreadTitle: vi.fn(() => Effect.succeed({ title: "Test title" })),
     };
 
     server = await createTestServer({ cwd: "/test", gitManager });
@@ -1953,6 +1957,34 @@ describe("WebSocket Server", () => {
         }),
       }),
     );
+  });
+
+  it("routes thread.generateTitle requests to gitManager.generateThreadTitle", async () => {
+    const generateThreadTitle = vi.fn(() => Effect.succeed({ title: "Fix auth flow" }));
+    const gitManager: GitManagerShape = {
+      status: vi.fn(() => Effect.void as any),
+      resolvePullRequest: vi.fn(() => Effect.void as any),
+      preparePullRequestThread: vi.fn(() => Effect.void as any),
+      runStackedAction: vi.fn(() => Effect.void as any),
+      generateThreadTitle,
+    };
+
+    server = await createTestServer({ cwd: "/test", gitManager });
+    const addr = server.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+
+    const [ws] = await connectAndAwaitWelcome(port);
+    connections.push(ws);
+
+    const response = await sendRequest(ws, WS_METHODS.threadGenerateTitle, {
+      messages: [{ role: "user", text: "Fix the auth bug" }],
+    });
+
+    expect(response.error).toBeUndefined();
+    expect(response.result).toEqual({ title: "Fix auth flow" });
+    expect(generateThreadTitle).toHaveBeenCalledWith({
+      messages: [{ role: "user", text: "Fix the auth bug" }],
+    });
   });
 
   it("rejects websocket connections without a valid auth token", async () => {

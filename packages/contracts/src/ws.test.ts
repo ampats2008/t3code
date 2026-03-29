@@ -155,3 +155,34 @@ it.effect("rejects push envelopes when channel payload does not match the channe
     assert.strictEqual(result._tag, "Failure");
   }),
 );
+
+it.effect("accepts thread.generateTitle requests", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWebSocketRequest({
+      id: "req-title-1",
+      body: {
+        _tag: WS_METHODS.threadGenerateTitle,
+        messages: [
+          { role: "user", text: "Fix the login bug" },
+          { role: "assistant", text: "I'll fix the login timeout issue." },
+        ],
+      },
+    });
+    assert.strictEqual(parsed.body._tag, WS_METHODS.threadGenerateTitle);
+  }),
+);
+
+it.effect("rejects thread.generateTitle requests with invalid messages", () =>
+  Effect.gen(function* () {
+    const result = yield* Effect.exit(
+      decodeWebSocketRequest({
+        id: "req-title-2",
+        body: {
+          _tag: WS_METHODS.threadGenerateTitle,
+          messages: [{ role: "user" }],
+        },
+      }),
+    );
+    assert.strictEqual(result._tag, "Failure");
+  }),
+);

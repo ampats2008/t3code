@@ -158,6 +158,11 @@ export interface NativeApi {
     runStackedAction: (input: GitRunStackedActionInput) => Promise<GitRunStackedActionResult>;
     onActionProgress: (callback: (event: GitActionProgressEvent) => void) => () => void;
   };
+  thread: {
+    generateTitle: (input: {
+      messages: Array<{ role: string; text: string }>;
+    }) => Promise<{ title: string }>;
+  };
   contextMenu: {
     show: <T extends string>(
       items: readonly ContextMenuItem<T>[],

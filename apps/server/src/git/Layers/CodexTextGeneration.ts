@@ -18,6 +18,7 @@ import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
   buildPrContentPrompt,
+  buildThreadTitlePrompt,
 } from "../Prompts.ts";
 import {
   normalizeCliError,
@@ -83,7 +84,7 @@ const makeCodexTextGeneration = Effect.gen(function* () {
     fileSystem.remove(filePath).pipe(Effect.catch(() => Effect.void));
 
   const materializeImageAttachments = (
-    _operation: "generateCommitMessage" | "generatePrContent" | "generateBranchName",
+    _operation: "generateCommitMessage" | "generatePrContent" | "generateBranchName" | "generateThreadTitle",
     attachments: BranchNameGenerationInput["attachments"],
   ): Effect.Effect<MaterializedImageAttachments, TextGenerationError> =>
     Effect.gen(function* () {
@@ -124,7 +125,7 @@ const makeCodexTextGeneration = Effect.gen(function* () {
     cleanupPaths = [],
     modelSelection,
   }: {
-    operation: "generateCommitMessage" | "generatePrContent" | "generateBranchName";
+    operation: "generateCommitMessage" | "generatePrContent" | "generateBranchName" | "generateThreadTitle";
     cwd: string;
     prompt: string;
     outputSchemaJson: S;
@@ -363,10 +364,38 @@ const makeCodexTextGeneration = Effect.gen(function* () {
     };
   });
 
+  const generateThreadTitle: TextGenerationShape["generateThreadTitle"] = Effect.fn(
+    "CodexTextGeneration.generateThreadTitle",
+  )(function* (input) {
+    const { prompt, outputSchema } = buildThreadTitlePrompt({
+      messages: input.messages,
+    });
+
+    if (input.modelSelection.provider !== "codex") {
+      return yield* new TextGenerationError({
+        operation: "generateThreadTitle",
+        detail: "Invalid model selection.",
+      });
+    }
+
+    const generated = yield* runCodexJson({
+      operation: "generateThreadTitle",
+      cwd: input.cwd,
+      prompt,
+      outputSchemaJson: outputSchema,
+      modelSelection: input.modelSelection,
+    });
+
+    return {
+      title: generated.title.trim(),
+    };
+  });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
+    generateThreadTitle,
   } satisfies TextGenerationShape;
 });
 

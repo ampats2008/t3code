@@ -570,4 +570,28 @@ it.layer(CodexTextGenerationTestLayer)("CodexTextGenerationLive", (it) => {
       }),
     ),
   );
+
+  it.effect("generates thread titles from conversation messages", () =>
+    withFakeCodexEnv(
+      {
+        output: JSON.stringify({
+          title: "Refactor auth module",
+        }),
+      },
+      Effect.gen(function* () {
+        const textGeneration = yield* TextGeneration;
+
+        const generated = yield* textGeneration.generateThreadTitle({
+          cwd: process.cwd(),
+          messages: [
+            { role: "user", text: "How can we improve the authentication system?" },
+            { role: "assistant", text: "We should refactor the auth module for better maintainability." },
+          ],
+          modelSelection: DEFAULT_TEST_MODEL_SELECTION,
+        });
+
+        expect(generated.title).toBe("Refactor auth module");
+      }),
+    ),
+  );
 });
