@@ -310,18 +310,22 @@ function normalizeClaudeTokenUsage(
     typeof record.total_tokens === "number" && Number.isFinite(record.total_tokens)
       ? record.total_tokens
       : undefined;
+  const cacheReadInputTokens =
+    typeof record.cache_read_input_tokens === "number" &&
+    Number.isFinite(record.cache_read_input_tokens)
+      ? record.cache_read_input_tokens
+      : 0;
+  const cacheCreationInputTokens =
+    typeof record.cache_creation_input_tokens === "number" &&
+    Number.isFinite(record.cache_creation_input_tokens)
+      ? record.cache_creation_input_tokens
+      : 0;
   const inputTokens =
     (typeof record.input_tokens === "number" && Number.isFinite(record.input_tokens)
       ? record.input_tokens
       : 0) +
-    (typeof record.cache_creation_input_tokens === "number" &&
-    Number.isFinite(record.cache_creation_input_tokens)
-      ? record.cache_creation_input_tokens
-      : 0) +
-    (typeof record.cache_read_input_tokens === "number" &&
-    Number.isFinite(record.cache_read_input_tokens)
-      ? record.cache_read_input_tokens
-      : 0);
+    cacheCreationInputTokens +
+    cacheReadInputTokens;
   const outputTokens =
     typeof record.output_tokens === "number" && Number.isFinite(record.output_tokens)
       ? record.output_tokens
@@ -337,6 +341,9 @@ function normalizeClaudeTokenUsage(
     lastUsedTokens: usedTokens,
     ...(inputTokens > 0 ? { inputTokens } : {}),
     ...(outputTokens > 0 ? { outputTokens } : {}),
+    ...(cacheReadInputTokens > 0
+      ? { cachedInputTokens: cacheReadInputTokens, lastCachedInputTokens: cacheReadInputTokens }
+      : {}),
     ...(typeof contextWindow === "number" && Number.isFinite(contextWindow) && contextWindow > 0
       ? { maxTokens: contextWindow }
       : {}),
@@ -1389,7 +1396,12 @@ const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
           createdAt: usageStamp.createdAt,
           threadId: context.session.threadId,
           payload: {
-            usage: usageSnapshot,
+            usage: {
+              ...usageSnapshot,
+              ...(typeof result?.total_cost_usd === "number"
+                ? { totalCostUsd: result.total_cost_usd }
+                : {}),
+            },
           },
           providerRefs: {},
         });
@@ -1472,7 +1484,12 @@ const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         threadId: context.session.threadId,
         turnId: turnState.turnId,
         payload: {
-          usage: usageSnapshot,
+          usage: {
+            ...usageSnapshot,
+            ...(typeof result?.total_cost_usd === "number"
+              ? { totalCostUsd: result.total_cost_usd }
+              : {}),
+          },
         },
         providerRefs: nativeProviderRefs(context),
       });

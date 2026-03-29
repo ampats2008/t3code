@@ -1393,10 +1393,70 @@ describe("ClaudeAdapterLive", () => {
             usedTokens: 24542,
             lastUsedTokens: 24542,
             inputTokens: 23863,
+            cachedInputTokens: 21144,
+            lastCachedInputTokens: 21144,
             outputTokens: 679,
             maxTokens: 200000,
           },
         });
+      }
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
+
+  it.effect("threads totalCostUsd into token usage snapshot when present in result", () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+
+      const runtimeEventsFiber = yield* Stream.take(adapter.streamEvents, 7).pipe(
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+
+      yield* adapter.startSession({
+        threadId: THREAD_ID,
+        provider: "claudeAgent",
+        runtimeMode: "full-access",
+      });
+
+      yield* adapter.sendTurn({
+        threadId: THREAD_ID,
+        input: "hello",
+        attachments: [],
+      });
+
+      harness.query.emit({
+        type: "result",
+        subtype: "success",
+        is_error: false,
+        duration_ms: 500,
+        duration_api_ms: 450,
+        num_turns: 1,
+        result: "done",
+        stop_reason: "end_turn",
+        session_id: "sdk-session-cost",
+        total_cost_usd: 0.05,
+        usage: {
+          input_tokens: 100,
+          output_tokens: 50,
+        },
+        modelUsage: {
+          "claude-opus-4-6": {
+            contextWindow: 200000,
+            maxOutputTokens: 64000,
+          },
+        },
+      } as unknown as SDKMessage);
+      harness.query.finish();
+
+      const runtimeEvents = Array.from(yield* Fiber.join(runtimeEventsFiber));
+      const usageEvent = runtimeEvents.find((event) => event.type === "thread.token-usage.updated");
+      assert.equal(usageEvent?.type, "thread.token-usage.updated");
+      if (usageEvent?.type === "thread.token-usage.updated") {
+        assert.equal((usageEvent.payload.usage as { totalCostUsd?: number }).totalCostUsd, 0.05);
       }
     }).pipe(
       Effect.provideService(Random.Random, makeDeterministicRandomService()),

@@ -22,6 +22,8 @@ export type ContextWindowSnapshot = NullableContextWindowUsage & {
   readonly remainingTokens: number | null;
   readonly usedPercentage: number | null;
   readonly remainingPercentage: number | null;
+  readonly cacheHitPercentage: number | null;
+  readonly totalCostUsd: number | null;
   readonly updatedAt: string;
 };
 
@@ -47,6 +49,13 @@ export function deriveLatestContextWindowSnapshot(
       maxTokens !== null ? Math.max(0, Math.round(maxTokens - usedTokens)) : null;
     const remainingPercentage = usedPercentage !== null ? Math.max(0, 100 - usedPercentage) : null;
 
+    const inputTokens = asFiniteNumber(payload?.inputTokens);
+    const cachedInputTokens = asFiniteNumber(payload?.cachedInputTokens);
+    const cacheHitPercentage =
+      inputTokens !== null && inputTokens > 0 && cachedInputTokens !== null
+        ? Math.min(100, (cachedInputTokens / inputTokens) * 100)
+        : null;
+
     return {
       usedTokens,
       totalProcessedTokens: asFiniteNumber(payload?.totalProcessedTokens),
@@ -54,8 +63,10 @@ export function deriveLatestContextWindowSnapshot(
       remainingTokens,
       usedPercentage,
       remainingPercentage,
-      inputTokens: asFiniteNumber(payload?.inputTokens),
-      cachedInputTokens: asFiniteNumber(payload?.cachedInputTokens),
+      cacheHitPercentage,
+      totalCostUsd: asFiniteNumber(payload?.totalCostUsd),
+      inputTokens,
+      cachedInputTokens,
       outputTokens: asFiniteNumber(payload?.outputTokens),
       reasoningOutputTokens: asFiniteNumber(payload?.reasoningOutputTokens),
       lastUsedTokens: asFiniteNumber(payload?.lastUsedTokens),

@@ -64,4 +64,52 @@ describe("contextWindow", () => {
     expect(snapshot?.usedTokens).toBe(81_659);
     expect(snapshot?.totalProcessedTokens).toBe(748_126);
   });
+
+  it("calculates cache hit percentage from cached and total input tokens", () => {
+    const snapshot = deriveLatestContextWindowSnapshot([
+      makeActivity("activity-1", "context-window.updated", {
+        usedTokens: 24_542,
+        inputTokens: 23_863,
+        cachedInputTokens: 21_144,
+        outputTokens: 679,
+        maxTokens: 200_000,
+      }),
+    ]);
+
+    expect(snapshot?.cachedInputTokens).toBe(21_144);
+    expect(snapshot?.cacheHitPercentage).toBeCloseTo((21_144 / 23_863) * 100, 1);
+  });
+
+  it("returns null cacheHitPercentage when cached token data is absent", () => {
+    const snapshot = deriveLatestContextWindowSnapshot([
+      makeActivity("activity-1", "context-window.updated", {
+        usedTokens: 5_000,
+        inputTokens: 4_000,
+        outputTokens: 1_000,
+      }),
+    ]);
+
+    expect(snapshot?.cacheHitPercentage).toBeNull();
+  });
+
+  it("extracts totalCostUsd when present in the payload", () => {
+    const snapshot = deriveLatestContextWindowSnapshot([
+      makeActivity("activity-1", "context-window.updated", {
+        usedTokens: 5_000,
+        totalCostUsd: 0.05,
+      }),
+    ]);
+
+    expect(snapshot?.totalCostUsd).toBe(0.05);
+  });
+
+  it("returns null totalCostUsd when cost is absent", () => {
+    const snapshot = deriveLatestContextWindowSnapshot([
+      makeActivity("activity-1", "context-window.updated", {
+        usedTokens: 5_000,
+      }),
+    ]);
+
+    expect(snapshot?.totalCostUsd).toBeNull();
+  });
 });

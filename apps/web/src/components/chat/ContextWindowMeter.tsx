@@ -12,6 +12,19 @@ function formatPercentage(value: number | null): string | null {
   return `${Math.round(value)}%`;
 }
 
+function formatCost(value: number | null): string | null {
+  if (value === null || !Number.isFinite(value) || value <= 0) {
+    return null;
+  }
+  if (value < 0.01) {
+    return "<$0.01";
+  }
+  if (value < 1) {
+    return `$${value.toFixed(2)}`;
+  }
+  return `$${value.toFixed(2)}`;
+}
+
 export function ContextWindowMeter(props: { usage: ContextWindowSnapshot }) {
   const { usage } = props;
   const usedPercentage = formatPercentage(usage.usedPercentage);
@@ -78,33 +91,88 @@ export function ContextWindowMeter(props: { usage: ContextWindowSnapshot }) {
         }
       />
       <PopoverPopup tooltipStyle side="top" align="end" className="w-max max-w-none px-3 py-2">
-        <div className="space-y-1.5 leading-tight">
-          <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-            Context window
+        <div className="space-y-3 leading-tight">
+          {/* ── Context window ── */}
+          <div className="space-y-1.5">
+            <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+              Context window
+            </div>
+            {usage.maxTokens !== null && usedPercentage ? (
+              <div className="whitespace-nowrap text-xs font-medium text-foreground">
+                <span>{usedPercentage}</span>
+                <span className="mx-1">⋅</span>
+                <span>{formatContextWindowTokens(usage.usedTokens)}</span>
+                <span>/</span>
+                <span>{formatContextWindowTokens(usage.maxTokens ?? null)} context used</span>
+              </div>
+            ) : (
+              <div className="text-sm text-foreground">
+                {formatContextWindowTokens(usage.usedTokens)} tokens used so far
+              </div>
+            )}
+            {(usage.totalProcessedTokens ?? null) !== null &&
+            (usage.totalProcessedTokens ?? 0) > usage.usedTokens ? (
+              <div className="text-xs text-muted-foreground">
+                Total processed: {formatContextWindowTokens(usage.totalProcessedTokens ?? null)}{" "}
+                tokens
+              </div>
+            ) : null}
+            {usage.compactsAutomatically ? (
+              <div className="text-xs text-muted-foreground">
+                Automatically compacts its context when needed.
+              </div>
+            ) : null}
           </div>
-          {usage.maxTokens !== null && usedPercentage ? (
-            <div className="whitespace-nowrap text-xs font-medium text-foreground">
-              <span>{usedPercentage}</span>
-              <span className="mx-1">⋅</span>
-              <span>{formatContextWindowTokens(usage.usedTokens)}</span>
-              <span>/</span>
-              <span>{formatContextWindowTokens(usage.maxTokens ?? null)} context used</span>
-            </div>
-          ) : (
-            <div className="text-sm text-foreground">
-              {formatContextWindowTokens(usage.usedTokens)} tokens used so far
-            </div>
-          )}
-          {(usage.totalProcessedTokens ?? null) !== null &&
-          (usage.totalProcessedTokens ?? 0) > usage.usedTokens ? (
-            <div className="text-xs text-muted-foreground">
-              Total processed: {formatContextWindowTokens(usage.totalProcessedTokens ?? null)}{" "}
-              tokens
+
+          {/* ── Session cost ── */}
+          {formatCost(usage.totalCostUsd) !== null ? (
+            <div className="space-y-1.5 border-t border-border pt-3">
+              <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                Session cost
+              </div>
+              <div className="whitespace-nowrap text-xs font-medium text-foreground">
+                {formatCost(usage.totalCostUsd)} total
+              </div>
+              {usage.lastUsedTokens !== null && (
+                <div className="flex justify-between gap-6 text-xs text-muted-foreground">
+                  <span>This turn</span>
+                  <span>{formatContextWindowTokens(usage.lastUsedTokens ?? null)} tokens</span>
+                </div>
+              )}
             </div>
           ) : null}
-          {usage.compactsAutomatically ? (
-            <div className="text-xs text-muted-foreground">
-              Automatically compacts its context when needed.
+
+          {/* ── Prompt cache ── */}
+          {usage.cacheHitPercentage !== null ? (
+            <div className="space-y-1.5 border-t border-border pt-3">
+              <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                Prompt cache
+              </div>
+              <div className="whitespace-nowrap text-xs font-medium text-foreground">
+                {formatPercentage(usage.cacheHitPercentage)} cached
+              </div>
+              <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-blue-500 transition-[width] duration-500 ease-out"
+                  style={{ width: `${Math.min(100, usage.cacheHitPercentage ?? 0)}%` }}
+                />
+              </div>
+              {usage.cachedInputTokens !== null && usage.inputTokens !== null ? (
+                <div className="flex justify-between gap-6 text-xs text-muted-foreground">
+                  <span>{formatContextWindowTokens(usage.cachedInputTokens ?? null)} cached</span>
+                  <span>
+                    {formatContextWindowTokens(
+                      ((usage.inputTokens ?? 0) as number) - ((usage.cachedInputTokens ?? 0) as number),
+                    )}{" "}
+                    fresh
+                  </span>
+                </div>
+              ) : null}
+              {(usage.cacheHitPercentage ?? 100) < 10 ? (
+                <div className="text-xs text-yellow-500">
+                  Low cache rate — responses may be slower &amp; costlier.
+                </div>
+              ) : null}
             </div>
           ) : null}
         </div>
