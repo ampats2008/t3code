@@ -430,6 +430,12 @@ export function useSettingsRestore(onRestored?: () => void) {
       ...(settings.timestampFormat !== DEFAULT_UNIFIED_SETTINGS.timestampFormat
         ? ["Time format"]
         : []),
+      ...(settings.diffDefaultCollapsed !== DEFAULT_UNIFIED_SETTINGS.diffDefaultCollapsed
+        ? ["Diff default collapsed"]
+        : []),
+      ...(settings.diffDefaultView !== DEFAULT_UNIFIED_SETTINGS.diffDefaultView
+        ? ["Diff default view"]
+        : []),
       ...(settings.diffWordWrap !== DEFAULT_UNIFIED_SETTINGS.diffWordWrap
         ? ["Diff line wrapping"]
         : []),
@@ -454,6 +460,8 @@ export function useSettingsRestore(onRestored?: () => void) {
       settings.confirmThreadArchive,
       settings.confirmThreadDelete,
       settings.defaultThreadEnvMode,
+      settings.diffDefaultCollapsed,
+      settings.diffDefaultView,
       settings.diffWordWrap,
       settings.enableAssistantStreaming,
       settings.timestampFormat,
@@ -769,6 +777,71 @@ export function GeneralSettingsPanel() {
                 </SelectItem>
               </SelectPopup>
             </Select>
+          }
+        />
+
+        <SettingsRow
+          title="Diff default view"
+          description="Choose how changed files are displayed when the diff panel opens."
+          resetAction={
+            settings.diffDefaultView !== DEFAULT_UNIFIED_SETTINGS.diffDefaultView ? (
+              <SettingResetButton
+                label="diff default view"
+                onClick={() =>
+                  updateSettings({
+                    diffDefaultView: DEFAULT_UNIFIED_SETTINGS.diffDefaultView,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Select
+              value={settings.diffDefaultView}
+              onValueChange={(value) =>
+                updateSettings({
+                  diffDefaultView: value as "tree" | "list",
+                })
+              }
+            >
+              <SelectTrigger className="w-28" aria-label="Diff default view">
+                <SelectValue>{settings.diffDefaultView === "tree" ? "Tree" : "List"}</SelectValue>
+              </SelectTrigger>
+              <SelectPopup>
+                <SelectItem hideIndicator value="tree">
+                  Tree
+                </SelectItem>
+                <SelectItem hideIndicator value="list">
+                  List
+                </SelectItem>
+              </SelectPopup>
+            </Select>
+          }
+        />
+
+        <SettingsRow
+          title="Diff files collapsed"
+          description="Start with file diffs collapsed when the diff panel opens."
+          resetAction={
+            settings.diffDefaultCollapsed !== DEFAULT_UNIFIED_SETTINGS.diffDefaultCollapsed ? (
+              <SettingResetButton
+                label="diff files collapsed"
+                onClick={() =>
+                  updateSettings({
+                    diffDefaultCollapsed: DEFAULT_UNIFIED_SETTINGS.diffDefaultCollapsed,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.diffDefaultCollapsed}
+              onCheckedChange={(checked) =>
+                updateSettings({ diffDefaultCollapsed: Boolean(checked) })
+              }
+              aria-label="Collapse file diffs by default"
+            />
           }
         />
 
