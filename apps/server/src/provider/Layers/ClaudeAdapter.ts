@@ -2856,7 +2856,7 @@ const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
               }
             }),
           ),
-          Effect.catchAll(() => Effect.void),
+          Effect.catch(() => Effect.void),
         ),
       );
 

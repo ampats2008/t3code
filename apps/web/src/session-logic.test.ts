@@ -608,6 +608,27 @@ describe("deriveWorkLogEntries", () => {
     expect(entries.map((entry) => entry.id)).toEqual(["turn-2"]);
   });
 
+  it("includes error activities regardless of turnId", () => {
+    const activities: OrchestrationThreadActivity[] = [
+      makeActivity({
+        id: "turn-1-work",
+        turnId: "turn-1",
+        summary: "Tool call complete",
+        kind: "tool.completed",
+      }),
+      makeActivity({
+        id: "error-no-turn",
+        summary: "Provider turn start failed",
+        kind: "provider.turn.start.failed",
+        tone: "error",
+        payload: { detail: "TypeError: something broke" },
+      }),
+    ];
+
+    const entries = deriveWorkLogEntries(activities, TurnId.makeUnsafe("turn-1"));
+    expect(entries.map((entry) => entry.id)).toEqual(["error-no-turn", "turn-1-work"]);
+  });
+
   it("omits checkpoint captured info entries", () => {
     const activities: OrchestrationThreadActivity[] = [
       makeActivity({

@@ -462,7 +462,9 @@ export function deriveWorkLogEntries(
 ): WorkLogEntry[] {
   const ordered = [...activities].toSorted(compareActivitiesByOrder);
   const entries = ordered
-    .filter((activity) => (latestTurnId ? activity.turnId === latestTurnId : true))
+    .filter((activity) =>
+      activity.tone === "error" || (latestTurnId ? activity.turnId === latestTurnId : true),
+    )
     .filter((activity) => activity.kind !== "tool.started")
     .filter((activity) => activity.kind !== "task.started" && activity.kind !== "task.completed")
     .filter((activity) => activity.kind !== "context-window.updated")
