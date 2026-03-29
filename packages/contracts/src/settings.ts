@@ -42,6 +42,7 @@ export const ClientSettingsSchema = Schema.Struct({
     Schema.withDecodingDefault(() => DEFAULT_SIDEBAR_THREAD_SORT_ORDER),
   ),
   timestampFormat: TimestampFormat.pipe(Schema.withDecodingDefault(() => DEFAULT_TIMESTAMP_FORMAT)),
+  autoRenameOnFirstMessage: Schema.Boolean.pipe(Schema.withDecodingDefault(() => false)),
 });
 export type ClientSettings = typeof ClientSettingsSchema.Type;
 

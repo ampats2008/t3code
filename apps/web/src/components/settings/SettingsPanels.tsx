@@ -451,12 +451,16 @@ export function useSettingsRestore(onRestored?: () => void) {
       ...(settings.confirmThreadDelete !== DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete
         ? ["Delete confirmation"]
         : []),
+      ...(settings.autoRenameOnFirstMessage !== DEFAULT_UNIFIED_SETTINGS.autoRenameOnFirstMessage
+        ? ["Auto-rename"]
+        : []),
       ...(isGitWritingModelDirty ? ["Git writing model"] : []),
       ...(areProviderSettingsDirty ? ["Providers"] : []),
     ],
     [
       areProviderSettingsDirty,
       isGitWritingModelDirty,
+      settings.autoRenameOnFirstMessage,
       settings.confirmThreadArchive,
       settings.confirmThreadDelete,
       settings.defaultThreadEnvMode,
@@ -985,6 +989,32 @@ export function GeneralSettingsPanel() {
                 updateSettings({ confirmThreadDelete: Boolean(checked) })
               }
               aria-label="Confirm thread deletion"
+            />
+          }
+        />
+
+        <SettingsRow
+          title="Auto-rename"
+          description="After the first message in a new thread, automatically generate a semantic title using AI."
+          resetAction={
+            settings.autoRenameOnFirstMessage !== DEFAULT_UNIFIED_SETTINGS.autoRenameOnFirstMessage ? (
+              <SettingResetButton
+                label="auto-rename"
+                onClick={() =>
+                  updateSettings({
+                    autoRenameOnFirstMessage: DEFAULT_UNIFIED_SETTINGS.autoRenameOnFirstMessage,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.autoRenameOnFirstMessage}
+              onCheckedChange={(checked) =>
+                updateSettings({ autoRenameOnFirstMessage: Boolean(checked) })
+              }
+              aria-label="Auto-rename thread on first message"
             />
           }
         />

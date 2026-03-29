@@ -351,6 +351,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
   // When set, the thread-change reset effect will open the sidebar instead of closing it.
   // Used by "Implement in a new thread" to carry the sidebar-open intent across navigation.
   const planSidebarOpenOnNextThreadRef = useRef(false);
+  // When true, the next thread message update will trigger an auto-rename.
+  const pendingAutoRenameRef = useRef(false);
   const [nowTick, setNowTick] = useState(() => Date.now());
   const [terminalFocusRequestId, setTerminalFocusRequestId] = useState(0);
   const [composerHighlightedItemId, setComposerHighlightedItemId] = useState<string | null>(null);
@@ -1728,6 +1730,14 @@ export default function ChatView({ threadId }: ChatViewProps) {
     }
   }, [activeThread]);
 
+  // Trigger auto-rename once the first message appears in the thread state.
+  useEffect(() => {
+    if (pendingAutoRenameRef.current && activeThread && activeThread.messages.length > 0) {
+      pendingAutoRenameRef.current = false;
+      void handleRenameThread();
+    }
+  }, [activeThread?.messages.length, handleRenameThread]);
+
   const persistThreadSettingsForNextTurn = useCallback(
     async (input: {
       threadId: ThreadId;
@@ -2796,6 +2806,11 @@ export default function ChatView({ threadId }: ChatViewProps) {
         createdAt: messageCreatedAt,
       });
       turnStartSucceeded = true;
+
+      // Queue auto-rename after the first message if the setting is enabled.
+      if (isFirstMessage && settings.autoRenameOnFirstMessage) {
+        pendingAutoRenameRef.current = true;
+      }
     })().catch(async (err: unknown) => {
       if (createdServerThreadForLocalDraft && !turnStartSucceeded) {
         await api.orchestration
@@ -3365,6 +3380,18 @@ export default function ChatView({ threadId }: ChatViewProps) {
     [activePendingProgress?.activeQuestion, activePendingUserInput, setPrompt],
   );
 
+  // Element inspector insertion bridge (dev-only)
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const { text } = (event as CustomEvent<{ text: string }>).detail;
+      const snapshot = composerEditorRef.current?.readSnapshot();
+      const cursor = snapshot?.cursor ?? promptRef.current.length;
+      applyPromptReplacement(cursor, cursor, ` ${text}`);
+    };
+    window.addEventListener("element-inspector:insert", handler);
+    return () => window.removeEventListener("element-inspector:insert", handler);
+  }, [applyPromptReplacement]);
+
   const readComposerSnapshot = useCallback((): {
     value: string;
     cursor: number;
@@ -3785,7 +3812,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
             <form
               ref={composerFormRef}
               onSubmit={onSend}
-              className="mx-auto w-full min-w-0 max-w-3xl"
+              className="mx-auto w-full min-w-0 max-w-4xl"
               data-chat-composer-form="true"
             >
               <div
