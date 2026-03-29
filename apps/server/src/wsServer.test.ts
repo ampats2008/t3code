@@ -1018,6 +1018,7 @@ describe("WebSocket Server", () => {
     );
     expect(malformedPush.data).toEqual({
       issues: [{ kind: "keybindings.malformed-config", message: expect.any(String) }],
+      keybindingsChanged: true,
     });
 
     const successPush = await rewriteKeybindingsAndWaitForPush(
@@ -1026,7 +1027,7 @@ describe("WebSocket Server", () => {
       "[]",
       (push) => Array.isArray(push.data.issues) && push.data.issues.length === 0,
     );
-    expect(successPush.data).toEqual({ issues: [] });
+    expect(successPush.data).toEqual({ issues: [], keybindingsChanged: true });
   });
 
   it("routes shell.openInEditor through the injected open service", async () => {

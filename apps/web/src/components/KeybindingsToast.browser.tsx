@@ -221,6 +221,7 @@ function sendServerConfigUpdatedPush(issues: Array<{ kind: string; message: stri
       channel: WS_CHANNELS.serverConfigUpdated,
       data: {
         issues,
+        keybindingsChanged: true,
         providers: fixture.serverConfig.providers,
       },
     }),
