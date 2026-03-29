@@ -218,8 +218,11 @@ const SUBSCRIPTION_TYPE_KEYS = [
 const SUBSCRIPTION_CONTAINER_KEYS = ["account", "subscription", "user", "billing"] as const;
 
 /** Lift an unknown value into `Option<string>` if it is a non-empty string. */
-const asNonEmptyString = (v: unknown): Option.Option<string> =>
-  typeof v === "string" && v.length > 0 ? Option.some(v) : Option.none();
+const asNonEmptyString = (v: unknown): Option.Option<string> => {
+  if (typeof v !== "string") return Option.none();
+  const trimmed = v.trim();
+  return trimmed.length > 0 ? Option.some(trimmed) : Option.none();
+};
 
 /** Lift an unknown value into `Option<Record>` if it is a plain object. */
 const asRecord = (v: unknown): Option.Option<Record<string, unknown>> =>
@@ -283,7 +286,7 @@ const PREMIUM_SUBSCRIPTION_TYPES = new Set([
  * - Other tiers (Pro, free, unknown): 200k context stays the default;
  *   1M remains available as a manual option so users can still enable it.
  */
-export function adjustModelsForSubscription(
+function adjustModelsForSubscription(
   baseModels: ReadonlyArray<ServerProviderModel>,
   subscriptionType: string | undefined,
 ): ReadonlyArray<ServerProviderModel> {
