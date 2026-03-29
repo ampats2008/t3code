@@ -26,6 +26,7 @@ import {
   isCodexCliVersionSupported,
   parseCodexCliVersion,
 } from "./provider/codexCliVersion";
+import { setCachedSkills, getCachedSkills, type CachedSkill } from "./provider/skillsCache";
 
 type PendingRequestKey = string;
 
@@ -96,17 +97,9 @@ interface JsonRpcNotification {
   params?: unknown;
 }
 
-interface CachedSkill {
-  name: string;
-  description: string;
-  argumentHint: string;
-}
-
-let _cachedSkills: CachedSkill[] = [];
-
 /** Read the skills discovered from the last codex `initialize` response. */
 export function getCachedCodexSkills(): ReadonlyArray<CachedSkill> {
-  return _cachedSkills;
+  return getCachedSkills();
 }
 
 type CodexPlanType =
@@ -596,11 +589,11 @@ export class CodexAppServerManager extends EventEmitter<CodexAppServerManagerEve
 
       const initResponse = await this.sendRequest(context, "initialize", buildCodexInitializeParams());
       if (Array.isArray((initResponse as any)?.commands)) {
-        _cachedSkills = (initResponse as any).commands.map((cmd: any) => ({
+        setCachedSkills("codex", (initResponse as any).commands.map((cmd: any) => ({
           name: typeof cmd.name === "string" ? cmd.name : "",
           description: typeof cmd.description === "string" ? cmd.description : "",
           argumentHint: typeof cmd.argumentHint === "string" ? cmd.argumentHint : "",
-        }));
+        })));
       }
 
       this.writeMessage(context, { method: "initialized" });

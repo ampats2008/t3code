@@ -75,6 +75,7 @@ import {
 } from "../Errors.ts";
 import { ClaudeAdapter, type ClaudeAdapterShape } from "../Services/ClaudeAdapter.ts";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
+import { setCachedSkills } from "../skillsCache.ts";
 
 const PROVIDER = "claudeAgent" as const;
 type ClaudeTextStreamKind = Extract<RuntimeContentStreamKind, "assistant_text" | "reasoning_text">;
@@ -2835,6 +2836,29 @@ const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         },
         providerRefs: {},
       });
+
+      // Discover skills from the Claude SDK (fire-and-forget, non-blocking).
+      runFork(
+        Effect.tryPromise({
+          try: () =>
+            (queryRuntime as unknown as { supportedCommands(): Promise<Array<{ name: string; description: string; argumentHint: string }>> })
+              .supportedCommands(),
+          catch: () => [] as Array<{ name: string; description: string; argumentHint: string }>,
+        }).pipe(
+          Effect.tap((commands) =>
+            Effect.sync(() => {
+              if (Array.isArray(commands) && commands.length > 0) {
+                setCachedSkills("claudeAgent", commands.map((cmd) => ({
+                  name: typeof cmd.name === "string" ? cmd.name : "",
+                  description: typeof cmd.description === "string" ? cmd.description : "",
+                  argumentHint: typeof cmd.argumentHint === "string" ? cmd.argumentHint : "",
+                })));
+              }
+            }),
+          ),
+          Effect.catchAll(() => Effect.void),
+        ),
+      );
 
       const streamFiber = runFork(runSdkStream(context));
       context.streamFiber = streamFiber;

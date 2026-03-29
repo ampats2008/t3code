@@ -79,7 +79,7 @@ import { expandHomePath } from "./os-jank.ts";
 import { makeServerPushBus } from "./wsServer/pushBus.ts";
 import { makeServerReadiness } from "./wsServer/readiness.ts";
 import { decodeJsonResult, formatSchemaError } from "@t3tools/shared/schemaJson";
-import { getCachedCodexSkills } from "./codexAppServerManager";
+import { getCachedSkills, onSkillsCacheChange } from "./provider/skillsCache";
 
 /**
  * ServerShape - Service API for server lifecycle control.
@@ -647,6 +647,15 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
     }),
   ).pipe(Effect.forkIn(subscriptionsScope));
 
+  // When provider adapters discover skills (lazily on first session init),
+  // push a config update so the web app refetches and surfaces them in the
+  // slash command menu.
+  onSkillsCacheChange(() => {
+    Effect.runFork(
+      pushBus.publishAll(WS_CHANNELS.serverConfigUpdated, { issues: [] }),
+    );
+  });
+
   yield* Scope.provide(orchestrationReactor.start, subscriptionsScope);
   yield* readiness.markOrchestrationSubscriptionsReady;
 
@@ -914,7 +923,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
           providers,
           availableEditors,
           settings,
-          skills: getCachedCodexSkills(),
+          skills: getCachedSkills(),
         };
       }
 
