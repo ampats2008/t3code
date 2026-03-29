@@ -1,5 +1,5 @@
 import { type ReactNode, memo, useCallback, useMemo, useState } from "react";
-import { ChevronRightIcon, FolderIcon, FolderClosedIcon } from "lucide-react";
+import { ChevronRightIcon, ExternalLinkIcon, FolderIcon, FolderClosedIcon } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { VscodeEntryIcon } from "./chat/VscodeEntryIcon";
 import { DiffStatLabel, hasNonZeroStat } from "./chat/DiffStatLabel";
@@ -25,6 +25,8 @@ interface DiffPanelFileTreeProps {
    * must return the rendered diff content (e.g. a `<FileDiff>`).
    */
   renderFileDiff?: (filePath: string) => ReactNode;
+  /** When provided, a hover-visible "open in editor" button appears on each file row. */
+  onOpenFile?: (filePath: string) => void;
 }
 
 export const DiffPanelFileTree = memo(function DiffPanelFileTree(
@@ -36,6 +38,7 @@ export const DiffPanelFileTree = memo(function DiffPanelFileTree(
     resolvedTheme,
     onToggleFile,
     renderFileDiff,
+    onOpenFile,
   } = props;
 
   const treeNodes = useMemo(
@@ -108,49 +111,67 @@ export const DiffPanelFileTree = memo(function DiffPanelFileTree(
 
     return (
       <div key={`file:${node.path}`} data-diff-file-path={node.path}>
-        <button
-          type="button"
+        <div
           className={cn(
-            "group flex w-full items-center gap-1.5 rounded-sm py-[3px] pr-2 text-left hover:bg-accent/50",
+            "group flex w-full items-center rounded-sm hover:bg-accent/50",
             hasInlineDiff && !isCollapsed && "bg-accent/30",
           )}
-          style={{ paddingLeft: `${hasInlineDiff ? indent : indent + 17}px` }}
-          onClick={() => onToggleFile(node.path)}
-          title={node.path}
         >
-          {hasInlineDiff && (
-            <ChevronRightIcon
-              className={cn(
-                "size-3 shrink-0 text-muted-foreground/60 transition-transform duration-150",
-                !isCollapsed && "rotate-90",
-              )}
-            />
-          )}
-          <VscodeEntryIcon
-            pathValue={node.path}
-            kind="file"
-            theme={resolvedTheme}
-            className="size-3.5 shrink-0"
-          />
-          <span
-            className={cn(
-              "truncate font-mono text-[11px]",
-              isCollapsed
-                ? "text-muted-foreground/60"
-                : "text-muted-foreground/90 group-hover:text-foreground/90",
-            )}
+          <button
+            type="button"
+            className="flex min-w-0 overflow-hidden items-center gap-1.5 py-[3px] text-left"
+            style={{ paddingLeft: `${hasInlineDiff ? indent : indent + 17}px`, paddingRight: "4px" }}
+            onClick={() => onToggleFile(node.path)}
+            title={node.path}
           >
-            {node.name}
-          </span>
+            {hasInlineDiff && (
+              <ChevronRightIcon
+                className={cn(
+                  "size-3 shrink-0 text-muted-foreground/60 transition-transform duration-150",
+                  !isCollapsed && "rotate-90",
+                )}
+              />
+            )}
+            <VscodeEntryIcon
+              pathValue={node.path}
+              kind="file"
+              theme={resolvedTheme}
+              className="size-3.5 shrink-0"
+            />
+            <span
+              className={cn(
+                "truncate font-mono text-[11px]",
+                isCollapsed
+                  ? "text-muted-foreground/60"
+                  : "text-muted-foreground/90 group-hover:text-foreground/90",
+              )}
+            >
+              {node.name}
+            </span>
+          </button>
+          {onOpenFile && (
+            <button
+              type="button"
+              className="inline-flex shrink-0 items-center justify-center rounded-sm p-0.5 opacity-0 transition-[opacity,colors] group-hover:opacity-100 hover:bg-foreground/10"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenFile(node.path);
+              }}
+              title="Open in editor"
+              aria-label="Open in editor"
+            >
+              <ExternalLinkIcon className="size-3 text-muted-foreground/60" />
+            </button>
+          )}
           {node.stat && hasNonZeroStat(node.stat) && (
-            <span className="ml-auto shrink-0 font-mono text-[10px] tabular-nums">
+            <span className="ml-auto shrink-0 pl-1 pr-2 font-mono text-[10px] tabular-nums">
               <DiffStatLabel
                 additions={node.stat.additions}
                 deletions={node.stat.deletions}
               />
             </span>
           )}
-        </button>
+        </div>
         {hasInlineDiff && !isCollapsed && (
           <div className="mt-1 mb-2 rounded-md">
             {renderFileDiff(node.path)}

@@ -8,6 +8,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   Columns2Icon,
+  ExternalLinkIcon,
   FoldVerticalIcon,
   ListTreeIcon,
   Rows3Icon,
@@ -38,6 +39,7 @@ import { useStore } from "../store";
 import { useSettings } from "../hooks/useSettings";
 import { formatShortTimestamp } from "../timestampFormat";
 import { DiffPanelLoadingState, DiffPanelShell, type DiffPanelMode } from "./DiffPanelShell";
+import { toastManager } from "./ui/toast";
 import { DiffPanelFileTree } from "./DiffPanelFileTree";
 import { VscodeEntryIcon } from "./chat/VscodeEntryIcon";
 import { DiffStatLabel, hasNonZeroStat } from "./chat/DiffStatLabel";
@@ -409,7 +411,11 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
       if (!api) return;
       const targetPath = activeCwd ? resolvePathLinkTarget(filePath, activeCwd) : filePath;
       void openInPreferredEditor(api, targetPath).catch((error) => {
-        console.warn("Failed to open diff file in editor.", error);
+        toastManager.add({
+          type: "error",
+          title: "Unable to open file",
+          description: error instanceof Error ? error.message : "An error occurred.",
+        });
       });
     },
     [activeCwd],
@@ -706,6 +712,7 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
                     collapsedFiles={collapsedFiles}
                     resolvedTheme={resolvedTheme as "light" | "dark"}
                     onToggleFile={toggleFileCollapse}
+                    onOpenFile={openDiffFileInEditor}
                     renderFileDiff={(filePath) => {
                       const fileDiff = fileDiffByPath.get(filePath);
                       if (!fileDiff) return null;
@@ -813,20 +820,35 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
                           <FileDiff
                             fileDiff={fileDiff}
                             renderHeaderPrefix={() => (
-                              <button
-                                type="button"
-                                data-collapse-toggle
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  e.preventDefault();
-                                  toggleFileCollapse(filePath);
-                                }}
-                                className="inline-flex items-center justify-center rounded-sm p-0.5 transition-colors hover:bg-foreground/10"
-                                aria-label="Collapse file diff"
-                                title="Collapse"
-                              >
-                                <ChevronDownIcon className="size-3.5" />
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  data-collapse-toggle
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    toggleFileCollapse(filePath);
+                                  }}
+                                  className="inline-flex items-center justify-center rounded-sm p-0.5 transition-colors hover:bg-foreground/10"
+                                  aria-label="Collapse file diff"
+                                  title="Collapse"
+                                >
+                                  <ChevronDownIcon className="size-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    openDiffFileInEditor(filePath);
+                                  }}
+                                  className="inline-flex items-center justify-center rounded-sm p-0.5 transition-colors hover:bg-foreground/10"
+                                  aria-label="Open in editor"
+                                  title="Open in editor"
+                                >
+                                  <ExternalLinkIcon className="size-3" />
+                                </button>
+                              </>
                             )}
                             options={{
                               diffStyle:
