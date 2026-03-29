@@ -112,20 +112,18 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
         />
       ) : null}
       {props.item.type === "slash-command" ? (
-        <BotIcon className="size-4 text-muted-foreground/80" />
+        <BotIcon className="size-4 shrink-0 text-muted-foreground/80" />
       ) : null}
       {props.item.type === "skill" ? (
-        <ZapIcon className="size-4 text-muted-foreground/80" />
+        <ZapIcon className="size-4 shrink-0 text-muted-foreground/80" />
       ) : null}
       {props.item.type === "model" ? (
-        <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
+        <Badge variant="outline" className="shrink-0 px-1.5 py-0 text-[10px]">
           model
         </Badge>
       ) : null}
-      <span className="flex min-w-0 items-center gap-1.5 truncate">
-        <span className="truncate">{props.item.label}</span>
-      </span>
-      <span className="truncate text-muted-foreground/70 text-xs">{props.item.description}</span>
+      <span className="shrink-0 items-center gap-1.5 whitespace-nowrap">{props.item.label}</span>
+      <span className="min-w-0 truncate text-muted-foreground/70 text-xs">{props.item.description}</span>
     </CommandItem>
   );
 });
