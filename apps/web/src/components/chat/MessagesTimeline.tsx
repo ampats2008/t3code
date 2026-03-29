@@ -16,6 +16,7 @@ import {
 } from "@tanstack/react-virtual";
 import { deriveTimelineEntries, formatElapsed } from "../../session-logic";
 import { AUTO_SCROLL_BOTTOM_THRESHOLD_PX } from "../../chat-scroll";
+import { logScroll, logVirtualizerAdjust } from "../../debug/scroll-debug";
 import { type TurnDiffSummary } from "../../types";
 import { summarizeTurnDiffStats } from "../../lib/turnDiffTree";
 import ChatMarkdown from "../ChatMarkdown";
@@ -263,27 +264,38 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   });
   useEffect(() => {
     if (timelineWidthPx === null) return;
+    if (scrollContainer) logScroll("virtualizer-measure", scrollContainer, { trigger: "width-change", timelineWidthPx });
     rowVirtualizer.measure();
-  }, [rowVirtualizer, timelineWidthPx]);
+  }, [rowVirtualizer, timelineWidthPx, scrollContainer]);
   useEffect(() => {
-    rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange = (_item, _delta, instance) => {
+    rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, delta, instance) => {
       const viewportHeight = instance.scrollRect?.height ?? 0;
       const scrollOffset = instance.scrollOffset ?? 0;
       const remainingDistance = instance.getTotalSize() - (scrollOffset + viewportHeight);
-      return remainingDistance > AUTO_SCROLL_BOTTOM_THRESHOLD_PX;
+      const decision = remainingDistance > AUTO_SCROLL_BOTTOM_THRESHOLD_PX;
+      logVirtualizerAdjust(decision, {
+        itemIndex: item.index,
+        itemKey: item.key,
+        sizeDelta: delta,
+        remainingDistance: Math.round(remainingDistance),
+        totalSize: instance.getTotalSize(),
+        scrollOffset: Math.round(scrollOffset),
+      }, scrollContainer ? { scrollTop: scrollContainer.scrollTop, scrollHeight: scrollContainer.scrollHeight, clientHeight: scrollContainer.clientHeight } : null);
+      return decision;
     };
     return () => {
       rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange = undefined;
     };
-  }, [rowVirtualizer]);
+  }, [rowVirtualizer, scrollContainer]);
   const pendingMeasureFrameRef = useRef<number | null>(null);
   const onTimelineImageLoad = useCallback(() => {
     if (pendingMeasureFrameRef.current !== null) return;
     pendingMeasureFrameRef.current = window.requestAnimationFrame(() => {
       pendingMeasureFrameRef.current = null;
+      if (scrollContainer) logScroll("image-load-measure", scrollContainer, { trigger: "image-load" });
       rowVirtualizer.measure();
     });
-  }, [rowVirtualizer]);
+  }, [rowVirtualizer, scrollContainer]);
   useEffect(() => {
     return () => {
       const frame = pendingMeasureFrameRef.current;

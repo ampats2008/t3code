@@ -56,6 +56,7 @@ import {
   formatElapsed,
 } from "../session-logic";
 import { isScrollContainerNearBottom } from "../chat-scroll";
+import { logScroll, watchScrollHeight } from "../debug/scroll-debug";
 import {
   buildPendingUserInputAnswers,
   derivePendingUserInputProgress,
@@ -1786,6 +1787,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
     const scrollContainer = messagesScrollRef.current;
     if (!scrollContainer) return;
     scrollContainer.scrollTo({ top: scrollContainer.scrollHeight, behavior });
+    logScroll("auto-scroll-to-bottom", scrollContainer, { behavior });
     lastKnownScrollTopRef.current = scrollContainer.scrollTop;
     shouldAutoScrollRef.current = true;
   }, []);
@@ -1805,6 +1807,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
     if (pendingAutoScrollFrameRef.current !== null) return;
     pendingAutoScrollFrameRef.current = window.requestAnimationFrame(() => {
       pendingAutoScrollFrameRef.current = null;
+      const sc = messagesScrollRef.current;
+      if (sc) logScroll("stick-to-bottom-raf", sc);
       scrollMessagesToBottom();
     });
   }, [scrollMessagesToBottom]);
@@ -1838,12 +1842,15 @@ export default function ChatView({ threadId }: ChatViewProps) {
         if (Math.abs(delta) < 0.5) return;
 
         activeScrollContainer.scrollTop += delta;
+        logScroll("anchor-preserve", activeScrollContainer, { anchorDelta: delta });
         lastKnownScrollTopRef.current = activeScrollContainer.scrollTop;
       });
     },
     [cancelPendingInteractionAnchorAdjustment],
   );
   const forceStickToBottom = useCallback(() => {
+    const sc = messagesScrollRef.current;
+    if (sc) logScroll("force-stick-to-bottom", sc);
     cancelPendingStickToBottom();
     scrollMessagesToBottom();
     scheduleStickToBottom();
@@ -1853,6 +1860,12 @@ export default function ChatView({ threadId }: ChatViewProps) {
     if (!scrollContainer) return;
     const currentScrollTop = scrollContainer.scrollTop;
     const isNearBottom = isScrollContainerNearBottom(scrollContainer);
+    logScroll("user-scroll", scrollContainer, {
+      isNearBottom,
+      shouldAutoScroll: shouldAutoScrollRef.current,
+      pointerActive: isPointerScrollActiveRef.current,
+      pendingUpIntent: pendingUserScrollUpIntentRef.current,
+    });
 
     if (!shouldAutoScrollRef.current && isNearBottom) {
       shouldAutoScrollRef.current = true;
@@ -1882,6 +1895,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const onMessagesWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
     if (event.deltaY < 0) {
       pendingUserScrollUpIntentRef.current = true;
+      const sc = messagesScrollRef.current;
+      if (sc) logScroll("wheel-up", sc, { deltaY: event.deltaY });
     }
   }, []);
   const onMessagesPointerDown = useCallback((_event: React.PointerEvent<HTMLDivElement>) => {
@@ -1911,7 +1926,9 @@ export default function ChatView({ threadId }: ChatViewProps) {
     lastTouchClientYRef.current = null;
   }, []);
   useEffect(() => {
+    const stopWatcher = watchScrollHeight(() => messagesScrollRef.current);
     return () => {
+      stopWatcher();
       cancelPendingStickToBottom();
       cancelPendingInteractionAnchorAdjustment();
     };
@@ -1919,11 +1936,14 @@ export default function ChatView({ threadId }: ChatViewProps) {
   useLayoutEffect(() => {
     if (!activeThread?.id) return;
     shouldAutoScrollRef.current = true;
+    const sc = messagesScrollRef.current;
+    if (sc) logScroll("thread-change", sc, { threadId: activeThread.id });
     scheduleStickToBottom();
     const timeout = window.setTimeout(() => {
       const scrollContainer = messagesScrollRef.current;
       if (!scrollContainer) return;
       if (isScrollContainerNearBottom(scrollContainer)) return;
+      logScroll("thread-change", scrollContainer, { threadId: activeThread.id, fallback96ms: true });
       scheduleStickToBottom();
     }, 96);
     return () => {
@@ -1958,6 +1978,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
 
       if (previousHeight > 0 && Math.abs(nextHeight - previousHeight) < 0.5) return;
       if (!shouldAutoScrollRef.current) return;
+      const sc = messagesScrollRef.current;
+      if (sc) logScroll("composer-resize", sc, { prevHeight: previousHeight, nextHeight });
       scheduleStickToBottom();
     });
 
@@ -1968,11 +1990,15 @@ export default function ChatView({ threadId }: ChatViewProps) {
   }, [activeThread?.id, composerFooterHasWideActions, scheduleStickToBottom]);
   useEffect(() => {
     if (!shouldAutoScrollRef.current) return;
+    const sc = messagesScrollRef.current;
+    if (sc) logScroll("message-count", sc, { messageCount });
     scheduleStickToBottom();
   }, [messageCount, scheduleStickToBottom]);
   useEffect(() => {
     if (phase !== "running") return;
     if (!shouldAutoScrollRef.current) return;
+    const sc = messagesScrollRef.current;
+    if (sc) logScroll("phase-running", sc, { phase });
     scheduleStickToBottom();
   }, [phase, scheduleStickToBottom, timelineEntries]);
 
