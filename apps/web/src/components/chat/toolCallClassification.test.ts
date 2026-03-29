@@ -66,4 +66,24 @@ describe("classifyToolDisplayMode", () => {
   it("returns simple for entries with no itemType or requestKind", () => {
     expect(classifyToolDisplayMode(makeWorkEntry({}))).toBe("simple");
   });
+
+  it("returns rich-skill when toolName is Skill", () => {
+    expect(
+      classifyToolDisplayMode(
+        makeWorkEntry({ data: { toolName: "Skill", input: { skill: "simplify" } } }),
+      ),
+    ).toBe("rich-skill");
+  });
+
+  it("returns rich-skill when label contains 'skill'", () => {
+    expect(classifyToolDisplayMode(makeWorkEntry({ label: "Skill - simplify" }))).toBe(
+      "rich-skill",
+    );
+  });
+
+  it("returns rich-skill for case-insensitive 'skill' in label", () => {
+    expect(classifyToolDisplayMode(makeWorkEntry({ label: "SKILL invocation" }))).toBe(
+      "rich-skill",
+    );
+  });
 });

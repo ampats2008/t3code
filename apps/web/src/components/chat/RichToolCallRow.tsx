@@ -6,6 +6,7 @@ import {
   HammerIcon,
   SquarePenIcon,
   TerminalIcon,
+  ZapIcon,
 } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsiblePanel } from "~/components/ui/collapsible";
 import { cn } from "~/lib/utils";
@@ -17,6 +18,12 @@ interface RichToolCallRowProps {
   displayMode: ToolDisplayMode;
 }
 
+interface SkillInput {
+  skill?: string; // Used by Claude provider
+  args?: string;
+  [key: string]: unknown; // For future providers
+}
+
 export const RichToolCallRow = memo(function RichToolCallRow(props: RichToolCallRowProps) {
   const { workEntry, displayMode } = props;
   const [open, setOpen] = useState(false);
@@ -24,7 +31,7 @@ export const RichToolCallRow = memo(function RichToolCallRow(props: RichToolCall
   return (
     <div className="rounded-lg px-1 py-1">
       <Collapsible open={open} onOpenChange={setOpen}>
-        <CollapsibleTrigger className="flex w-full items-center gap-2 text-left">
+        <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-muted/40 text-left">
           <SummaryLine workEntry={workEntry} displayMode={displayMode} open={open} />
         </CollapsibleTrigger>
         <CollapsiblePanel>
@@ -32,6 +39,7 @@ export const RichToolCallRow = memo(function RichToolCallRow(props: RichToolCall
             {displayMode === "rich-agent" && <AgentDetail workEntry={workEntry} />}
             {displayMode === "rich-bash" && <BashDetail workEntry={workEntry} />}
             {displayMode === "rich-edit" && <EditDetail workEntry={workEntry} />}
+            {displayMode === "rich-skill" && <SkillDetail workEntry={workEntry} />}
           </div>
         </CollapsiblePanel>
       </Collapsible>
@@ -47,7 +55,10 @@ function SummaryLine(props: {
   open: boolean;
 }) {
   const { workEntry, displayMode, open } = props;
-  const Icon = displayMode === "rich-agent" ? HammerIcon : displayMode === "rich-bash" ? TerminalIcon : SquarePenIcon;
+  let Icon = SquarePenIcon;
+  if (displayMode === "rich-agent") Icon = HammerIcon;
+  else if (displayMode === "rich-bash") Icon = TerminalIcon;
+  else if (displayMode === "rich-skill") Icon = ZapIcon;
 
   return (
     <>
@@ -58,6 +69,7 @@ function SummaryLine(props: {
         {displayMode === "rich-agent" && <AgentSummary workEntry={workEntry} />}
         {displayMode === "rich-bash" && <BashSummary workEntry={workEntry} />}
         {displayMode === "rich-edit" && <EditSummary workEntry={workEntry} />}
+        {displayMode === "rich-skill" && <SkillSummary workEntry={workEntry} />}
       </div>
       <StatusDot status={workEntry.status} />
       <ChevronRightIcon
@@ -211,6 +223,52 @@ function EditDetail(props: { workEntry: WorkLogEntry }) {
             <DiffBlock prefix="+" text={newString} className="bg-green-500/8 text-green-400/80" />
           )}
         </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------- Skill ---------- */
+
+function SkillSummary(props: { workEntry: WorkLogEntry }) {
+  const { workEntry } = props;
+  const input = workEntry.data?.input as SkillInput | undefined;
+  const skillName = input?.skill ?? "";
+  const args = input?.args ?? "";
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      <p className="truncate text-[11px] leading-5 text-foreground/80">
+        <span className="text-foreground/60">Skill</span>
+        <span className="text-foreground/50"> - </span>
+        <span>{skillName}</span>
+      </p>
+      {args && <p className="truncate text-[10px] text-foreground/50">{args}</p>}
+    </div>
+  );
+}
+
+function SkillDetail(props: { workEntry: WorkLogEntry }) {
+  const { workEntry } = props;
+  const input = workEntry.data?.input as SkillInput | undefined;
+  const result = workEntry.data?.result;
+  const skillName = input?.skill ?? "";
+  const args = input?.args ?? "";
+
+  return (
+    <div className="space-y-2 pb-1">
+      {skillName && (
+        <div className="flex gap-2 text-[11px]">
+          <span className="shrink-0 text-muted-foreground/60">name:</span>
+          <span className="text-foreground/70">{skillName}</span>
+        </div>
+      )}
+      {args && <TruncatedBlock label="Arguments" text={args} />}
+      {result !== undefined && (
+        <TruncatedBlock
+          label="Result"
+          text={typeof result === "string" ? result : JSON.stringify(result, null, 2)}
+        />
       )}
     </div>
   );
