@@ -654,6 +654,64 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     })`bun install --production`,
   );
 
+  // On Windows, node-pty requires Spectre-mitigated MSVC libs and uses cmd
+  // `&&`-chained .bat scripts to generate a version header at gyp-configure
+  // time. Both fail in standard Build Tools installs. We patch the gyp files
+  // to remove these requirements so @electron/rebuild can build node-pty from
+  // source. We break bun's hard-link before writing to avoid corrupting the
+  // global package cache.
+  if (process.platform === "win32") {
+    const nodePtyDir = path.join(stageAppDir, "node_modules/node-pty");
+
+    // Helper: patch a gyp file if it exists, breaking the bun hard-link first.
+    const patchGypFile = (gypPath: string, transform: (content: string) => string) =>
+      Effect.gen(function* () {
+        if (!(yield* fs.exists(gypPath))) return;
+        const original = yield* fs.readFileString(gypPath);
+        const patched = transform(original);
+        if (patched !== original) {
+          yield* fs.remove(gypPath);
+          yield* fs.writeFileString(gypPath, patched);
+        }
+      });
+
+    // Remove Spectre mitigation requirement (needs separate VS installer component).
+    const removeSpectre = (content: string) =>
+      content.replace(/[ \t]*'SpectreMitigation':\s*'Spectre',?\r?\n/g, "");
+
+    yield* patchGypFile(path.join(nodePtyDir, "binding.gyp"), removeSpectre);
+
+    const winptyGypPath = path.join(nodePtyDir, "deps/winpty/src/winpty.gyp");
+    yield* patchGypFile(winptyGypPath, (content) => {
+      let out = removeSpectre(content);
+      // Replace cmd-chained .bat invocations (fail in some cmd environments)
+      // with static values. (?:call )? tolerates a previously-patched file.
+      out = out
+        .replace(
+          /'<!\(cmd \/c "cd shared && (?:call )?GetCommitHash\.bat"\)'/,
+          "'none'",
+        )
+        .replace(
+          /'<!\(cmd \/c "cd shared && (?:call )?UpdateGenVersion\.bat [^"]*"\)'/,
+          "'gen'",
+        );
+      return out;
+    });
+
+    // Pre-create gen/GenVersion.h so the compiler finds it without running the bat.
+    const genDir = path.join(nodePtyDir, "deps/winpty/src/gen");
+    yield* fs.makeDirectory(genDir, { recursive: true });
+    const genVersionHeader = [
+      "// AUTO-GENERATED (patched by t3code build script)",
+      'const char GenVersion_Version[] = "0.4.4-dev";',
+      'const char GenVersion_Commit[] = "none";',
+      "",
+    ].join("\n");
+    yield* fs.writeFileString(path.join(genDir, "GenVersion.h"), genVersionHeader);
+
+    yield* Effect.log("[desktop-artifact] Patched node-pty gyp files for local Windows build.");
+  }
+
   const buildEnv: NodeJS.ProcessEnv = {
     ...process.env,
   };
