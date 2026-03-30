@@ -35,6 +35,10 @@
     "./Struct": {
       "types": "./src/Struct.ts",
       "import": "./src/Struct.ts"
+    },
+    "./elementInspectorCore": {
+      "types": "./src/elementInspectorCore.ts",
+      "import": "./src/elementInspectorCore.ts"
     }
   },
   "scripts": {

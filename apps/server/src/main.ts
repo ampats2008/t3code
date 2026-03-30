@@ -29,6 +29,7 @@ import { AnalyticsServiceLayerLive } from "./telemetry/Layers/AnalyticsService";
 import { AnalyticsService } from "./telemetry/Services/AnalyticsService";
 import { readBootstrapEnvelope } from "./bootstrap";
 import { ServerSettingsLive } from "./serverSettings";
+import { startInspectorWs } from "./inspectorWs";
 
 export class StartupError extends Data.TaggedError("StartupError")<{
   readonly message: string;
@@ -351,6 +352,14 @@ const makeServerRuntimeProgram = (input: CliInput) =>
 
     yield* start;
     yield* Effect.forkChild(recordStartupHeartbeat);
+
+    // Start inspector WebSocket server for Chrome extension
+    const cleanupInspectorWs = Effect.sync(() => startInspectorWs());
+    yield* cleanupInspectorWs.pipe(
+      Effect.flatMap((cleanup) =>
+        Effect.addFinalizer(() => Effect.sync(() => cleanup())),
+      ),
+    );
 
     const localUrl = `http://localhost:${config.port}`;
     const bindUrl =
