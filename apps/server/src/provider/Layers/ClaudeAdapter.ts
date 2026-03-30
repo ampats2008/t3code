@@ -2736,6 +2736,12 @@ const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         ...(fastMode ? { fastMode: true } : {}),
       };
 
+      yield* Effect.logInfo("[ClaudeAdapter] spawning claude", {
+        claudeBinaryPath,
+        cwd: input.cwd ?? "(none)",
+        apiModelId: apiModelId ?? "(none)",
+      });
+
       const queryOptions: ClaudeQueryOptions = {
         ...(input.cwd ? { cwd: input.cwd } : {}),
         ...(apiModelId ? { model: apiModelId } : {}),
