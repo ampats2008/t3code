@@ -480,7 +480,7 @@ export class CodexAppServerManager extends EventEmitter<CodexAppServerManagerEve
         account: {
           type: "unknown",
           planType: null,
-          sparkEnabled: true,
+          sparkEnabled: false,
         },
         child,
         output,
