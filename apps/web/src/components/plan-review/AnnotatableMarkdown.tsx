@@ -26,13 +26,14 @@ function SelectionToolbar({
 }) {
   return (
     <div
-      className="fixed z-50 flex items-center gap-1 rounded-lg border border-border/70 bg-card px-2 py-1.5 shadow-lg"
+      className="fixed z-50"
       style={{ top: position.top + 4, left: position.left }}
       onMouseDown={(e) => e.preventDefault()} // Prevent stealing focus / clearing selection
     >
       <button
         type="button"
-        className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-foreground/80 hover:bg-muted/60 transition-colors"
+        title="Add comment"
+        className="flex items-center justify-center size-7 rounded-md border border-border/70 bg-card text-foreground/70 shadow-lg hover:bg-muted/60 hover:text-foreground transition-colors"
         onMouseDown={(e) => {
           e.preventDefault(); // Keep selection alive
           e.stopPropagation();
@@ -40,7 +41,6 @@ function SelectionToolbar({
         }}
       >
         <MessageSquareIcon className="size-3.5" />
-        Add comment
       </button>
     </div>
   );
