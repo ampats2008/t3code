@@ -19,6 +19,15 @@ inspectBtn.addEventListener("click", async () => {
     try {
       await chrome.scripting.executeScript({
         target: { tabId: tab.id },
+        files: ["dist/fiber-reader.js"],
+        world: "MAIN",
+      });
+    } catch {
+      // May already be injected
+    }
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
         files: ["dist/content-script.js"],
       });
     } catch {

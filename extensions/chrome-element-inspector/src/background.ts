@@ -69,15 +69,27 @@ chrome.commands.onCommand.addListener(async (command) => {
   if (command === "toggle-inspect") {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
-      // Inject content script if not already there, then toggle
+      // 1. Inject MAIN world fiber reader (reads React __reactFiber$ expandos
+      //    that are invisible from the default isolated world).
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ["dist/fiber-reader.js"],
+          world: "MAIN",
+        });
+      } catch {
+        // May already be injected
+      }
+      // 2. Inject isolated world content script (overlay UI + chrome API comms).
       try {
         await chrome.scripting.executeScript({
           target: { tabId: tab.id },
           files: ["dist/content-script.js"],
         });
       } catch {
-        // Script may already be injected, that's fine
+        // May already be injected
       }
+      // 3. Toggle via normal extension messaging.
       chrome.tabs.sendMessage(tab.id, { type: "toggle-inspect" });
     }
   }

@@ -28,6 +28,14 @@ const configs = [
     format: "esm",
   },
   {
+    // MAIN world: reads React fiber info from tagged elements
+    ...commonOptions,
+    entryPoints: [path.join(__dirname, "src/fiber-reader.ts")],
+    outfile: path.join(__dirname, "dist/fiber-reader.js"),
+    format: "iife",
+  },
+  {
+    // ISOLATED world: overlay UI + chrome API comms
     ...commonOptions,
     entryPoints: [path.join(__dirname, "src/content-script.ts")],
     outfile: path.join(__dirname, "dist/content-script.js"),

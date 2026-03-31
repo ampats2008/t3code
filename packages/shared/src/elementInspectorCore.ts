@@ -67,6 +67,98 @@ export function getNearestLabeledAncestor(el: Element): NearestAncestor | undefi
   return undefined;
 }
 
+const FIBER_SKIP_NAMES = new Set(["forwardRef", "memo", "Anonymous", ""]);
+
+/** Names that indicate the React tree root — not useful as ancestor context. */
+const APP_ROOT_NAMES = new Set([
+  "App",
+  "Root",
+  "Application",
+  "Provider",
+  "StrictMode",
+  "Suspense",
+  "ErrorBoundary",
+  "BrowserRouter",
+  "Router",
+  "Routes",
+  "Route",
+  "ThemeProvider",
+  "StoreProvider",
+  "QueryClientProvider",
+  "ReactBoot",
+]);
+
+function isAppRoot(name: string): boolean {
+  if (APP_ROOT_NAMES.has(name)) return true;
+  // Catch generic wrappers: FooProvider, FooRoot, FooContext, SegmentViewNode, etc.
+  if (
+    name.endsWith("Provider") ||
+    name.endsWith("Root") ||
+    name.endsWith("Context") ||
+    name.endsWith("Boundary")
+  ) return true;
+  return false;
+}
+
+/**
+ * Resolve a display name from a React fiber type.
+ * Handles plain function/class components, forwardRef wrappers, and memo wrappers.
+ * Prefers `displayName` over `name` (works with HOCs, styled-components, etc.).
+ */
+function resolveComponentName(type: unknown): string | undefined {
+  if (!type) return undefined;
+  const t = type as Record<string, any>;
+
+  if (typeof t === "function") {
+    const name = ((t as any).displayName as string | undefined) || t.name;
+    return name && !FIBER_SKIP_NAMES.has(name) ? name : undefined;
+  }
+
+  // forwardRef wrapper: { render: fn, displayName?: string }
+  if (t.render) {
+    const outer = t.displayName as string | undefined;
+    if (outer && !FIBER_SKIP_NAMES.has(outer)) return outer;
+    const inner = (t.render.displayName as string | undefined) || t.render.name;
+    return inner && !FIBER_SKIP_NAMES.has(inner) ? inner : undefined;
+  }
+
+  // memo wrapper: { type: fn | object }
+  if (t.type) return resolveComponentName(t.type as unknown);
+
+  return undefined;
+}
+
+/**
+ * Walk the fiber tree upward, skipping `skip` named components and returning
+ * the name of the next one. Returns null and advances `fiber` past any app-root
+ * components (which are filtered out). Mutates `state.fiber` and `state.depth`.
+ */
+function skipAndCollect(
+  state: { fiber: any; depth: number },
+  skip: number,
+  prevNames: Set<string>,
+): string | null {
+  let skipped = 0;
+  while (state.fiber && state.depth < 200) {
+    state.depth++;
+    const name = resolveComponentName(state.fiber.type);
+    if (name && !prevNames.has(name)) {
+      if (isAppRoot(name)) {
+        // Hit app root — stop collecting landmarks entirely
+        return null;
+      }
+      skipped++;
+      if (skipped >= skip) {
+        const result = name;
+        state.fiber = state.fiber.return ?? null;
+        return result;
+      }
+    }
+    state.fiber = state.fiber.return ?? null;
+  }
+  return null;
+}
+
 export function getReactFiberInfo(el: Element): {
   componentName?: string;
   ancestors: string[];
@@ -75,20 +167,19 @@ export function getReactFiberInfo(el: Element): {
   const fiberKey = Object.keys(el).find((k) => k.startsWith("__reactFiber$"));
   if (!fiberKey) return { ancestors: [] };
 
-  const SKIP_NAMES = new Set(["forwardRef", "memo", "Anonymous", ""]);
   let fiber = (el as any)[fiberKey];
   let depth = 0;
   let componentName: string | undefined;
   let sourceFile: string | undefined;
-  const ancestors: string[] = [];
+  const immediateAncestors: string[] = [];
 
+  // Phase 1: collect componentName + up to 3 immediate ancestors
   while (fiber && depth < 80) {
     depth++;
-    const type = fiber.type;
-    if (typeof type === "function" && type.name && !SKIP_NAMES.has(type.name)) {
+    const name = resolveComponentName(fiber.type);
+    if (name) {
       if (!componentName) {
-        // First named hit — this is the direct component
-        componentName = type.name;
+        componentName = name;
         const src = fiber._debugSource as { fileName?: string } | null;
         const fileName = src?.fileName;
         sourceFile = fileName
@@ -98,14 +189,38 @@ export function getReactFiberInfo(el: Element): {
             })()
           : undefined;
       } else {
-        // Subsequent hits — ancestor breadcrumb (collect up to 3)
-        if (ancestors.length < 3 && type.name !== componentName) {
-          ancestors.push(type.name);
+        if (immediateAncestors.length < 3 && name !== componentName && !isAppRoot(name)) {
+          immediateAncestors.push(name);
         }
-        if (ancestors.length >= 3) break;
+        if (immediateAncestors.length >= 3) {
+          fiber = fiber.return ?? null;
+          break;
+        }
       }
     }
     fiber = fiber.return ?? null;
+  }
+
+  // Collect names we've already shown so landmarks don't duplicate them
+  const seen = new Set<string>(immediateAncestors);
+  if (componentName) seen.add(componentName);
+
+  const state = { fiber, depth };
+
+  // Phase 2: +3 named components above the top immediate ancestor
+  const midAncestor = skipAndCollect(state, 3, seen);
+  if (midAncestor) seen.add(midAncestor);
+
+  // Phase 3: +5 named components above the mid landmark
+  const farAncestor = midAncestor ? skipAndCollect(state, 5, seen) : null;
+
+  // Assemble ancestors: immediate … mid … far
+  const ancestors = [...immediateAncestors];
+  if (midAncestor) {
+    ancestors.push("…", midAncestor);
+  }
+  if (farAncestor) {
+    ancestors.push("…", farAncestor);
   }
 
   const result: { componentName?: string; ancestors: string[]; sourceFile?: string } = { ancestors };

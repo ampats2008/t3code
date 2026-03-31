@@ -121,3 +121,24 @@ export function useInspectorWs() {
     };
   }, []);
 }
+
+// ── HMR cleanup ──────────────────────────────────────────────────────────
+// When Vite hot-reloads this module the old module scope is discarded, but
+// the old WebSocket connection stays open on the server. Without cleanup
+// the server sees two web clients and broadcasts the element-ref twice,
+// causing double chip insertion.
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+    if (singletonWs) {
+      singletonWs.close();
+      singletonWs = null;
+    }
+    refCount = 0;
+    shuttingDown = false;
+    reconnectDelay = INITIAL_RECONNECT_DELAY;
+  });
+}

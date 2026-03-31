@@ -1,10 +1,12 @@
-// Content script — injected into inspected pages
-// Uses shared element inspector core for extraction logic
+// Content script — injected into inspected pages (ISOLATED world)
+// Uses shared element inspector core for extraction logic.
+// React fiber info is read via a synchronous bridge to a MAIN world helper
+// (fiber-reader.ts), since __reactFiber$ expando properties on DOM elements
+// are only visible in the page's JS context.
 
 import {
   extractTooltipData,
   formatText,
-  detectFramework,
   type TooltipData,
 } from "@t3tools/shared/elementInspectorCore";
 
@@ -23,7 +25,41 @@ let overlayEl: HTMLDivElement | null = null;
 let highlightEl: HTMLDivElement | null = null;
 let tooltipEl: HTMLDivElement | null = null;
 let currentTooltipData: TooltipData | null = null;
-let hasWarnedFramework = false;
+
+// ---------------------------------------------------------------------------
+// MAIN world fiber bridge
+// ---------------------------------------------------------------------------
+// Tags the element with a data attribute, dispatches a synchronous custom
+// event that the MAIN world fiber-reader.ts listens for, then reads the
+// JSON result from a shared data attribute on <html>.
+
+const FIBER_TARGET_ATTR = "data-t3code-target";
+const FIBER_RESULT_ATTR = "data-t3code-fiber-result";
+const FIBER_EVENT = "__t3code-read-fiber";
+
+interface FiberResult {
+  componentName?: string;
+  ancestors: string[];
+  sourceFile?: string;
+}
+
+function readFiberFromMainWorld(el: Element): FiberResult | null {
+  el.setAttribute(FIBER_TARGET_ATTR, "");
+  document.dispatchEvent(new Event(FIBER_EVENT));
+  const raw = document.documentElement.getAttribute(FIBER_RESULT_ATTR);
+  el.removeAttribute(FIBER_TARGET_ATTR);
+  document.documentElement.removeAttribute(FIBER_RESULT_ATTR);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as FiberResult;
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Overlay UI
+// ---------------------------------------------------------------------------
 
 function createOverlay() {
   // Create shadow DOM host
@@ -113,18 +149,17 @@ function handleMouseMove(e: MouseEvent) {
     return;
   }
 
-  // Framework detection warning (once per session)
-  if (!hasWarnedFramework) {
-    const framework = detectFramework(el);
-    if (framework === "unknown") {
-      console.warn(
-        "[t3code Inspector] Only React is supported for component detection. Falling back to DOM-only info."
-      );
-    }
-    hasWarnedFramework = true;
+  // DOM-level tooltip data (works in isolated world)
+  currentTooltipData = extractTooltipData(el);
+
+  // Enrich with React fiber info from the MAIN world helper
+  const fiber = readFiberFromMainWorld(el);
+  if (fiber?.componentName) {
+    currentTooltipData.componentName = fiber.componentName;
+    currentTooltipData.ancestors = fiber.ancestors;
+    if (fiber.sourceFile) currentTooltipData.sourceFile = fiber.sourceFile;
   }
 
-  currentTooltipData = extractTooltipData(el);
   const rect = el.getBoundingClientRect();
 
   // Update highlight
@@ -168,8 +203,15 @@ function renderTooltip(data: TooltipData) {
   // Component breadcrumb
   if (data.componentName) {
     let crumb = data.componentName;
-    if (data.ancestors.length > 0)
-      crumb += ` <span style="opacity:0.5;">← ${data.ancestors.join(" ← ")}</span>`;
+    if (data.ancestors.length > 0) {
+      // Render ancestors, styling "…" gap markers dimmer than real names
+      const parts = data.ancestors.map((a) =>
+        a === "…"
+          ? `<span style="opacity:0.3;">…</span>`
+          : a
+      );
+      crumb += ` <span style="opacity:0.5;">← ${parts.join(" ← ")}</span>`;
+    }
     if (data.sourceFile)
       crumb += ` <span style="opacity:0.5;">@ ${data.sourceFile}</span>`;
     html += `<div style="color:#a6adc8;margin-top:2px;">${crumb}</div>`;
