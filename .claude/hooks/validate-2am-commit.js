@@ -17,6 +17,14 @@ const VALID_TYPES = ["feat", "fix", "chore", "refactor", "docs", "test", "style"
 const CONVENTION_RE = /^2AM: (feat|fix|chore|refactor|docs|test|style)\([a-z0-9][a-z0-9-]*\): .+/;
 
 function extractCommitMessage(command) {
+  // Check heredoc form FIRST — Claude Code uses:
+  //   git commit -m "$(cat <<'EOF'\n...\nEOF\n)"
+  // The plain regexes below would match the outer quotes and capture the
+  // raw $(cat <<...) shell command as the "message", so heredoc must win.
+  const heredocRe = /git\s+commit\b.*<<'?(\w+)'?\n([\s\S]*?)\n\s*\1/;
+  const heredocMatch = command.match(heredocRe);
+  if (heredocMatch) return heredocMatch[2].trim();
+
   // Match: git commit -m "..." or git commit -m '...'
   // Also handles --message= and multi-flag forms like -am
   const patterns = [
@@ -29,6 +37,7 @@ function extractCommitMessage(command) {
     const match = command.match(re);
     if (match) return match[1].trim();
   }
+
   return null;
 }
 
