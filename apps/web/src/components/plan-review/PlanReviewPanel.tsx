@@ -49,9 +49,8 @@ const PlanReviewPanel = memo(function PlanReviewPanel({
 
   // Get store state
   const annotations = usePlanReviewStore((state) => state.annotations[planId ?? ""] ?? []);
-  const editedMarkdown = planId
-    ? usePlanReviewStore((state) => state.editedMarkdown[planId])
-    : undefined;
+  const editedMarkdownMap = usePlanReviewStore((state) => state.editedMarkdown);
+  const editedMarkdown = planId ? editedMarkdownMap[planId] : undefined;
   const clearAnnotations = usePlanReviewStore((state) => state.clearAnnotations);
   const clearEditedMarkdown = usePlanReviewStore((state) => state.clearEditedMarkdown);
   const setEditedMarkdown = usePlanReviewStore((state) => state.setEditedMarkdown);

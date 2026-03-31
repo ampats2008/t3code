@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type PlanAnnotation, usePlanReviewStore } from "./planReviewStore";
 
 function makeAnnotation(input: {
@@ -133,26 +133,31 @@ describe("planReviewStore updateAnnotationComment", () => {
     expect(state.annotations[planId]?.[0]?.comment).toBe("new comment");
   });
 
-  it("updates updatedAt", async () => {
-    const planId = "plan-1";
-    const annotation = makeAnnotation({
-      selectedText: "test",
-      occurrenceIndex: 0,
-      comment: "comment",
-    });
+  it("updates updatedAt", () => {
+    vi.useFakeTimers();
+    try {
+      const planId = "plan-1";
+      const annotation = makeAnnotation({
+        selectedText: "test",
+        occurrenceIndex: 0,
+        comment: "comment",
+      });
 
-    usePlanReviewStore.getState().addAnnotation(planId, annotation);
-    const annotationId = usePlanReviewStore.getState().annotations[planId]?.[0]?.id;
-    const originalUpdatedAt = usePlanReviewStore.getState().annotations[planId]?.[0]?.updatedAt;
+      usePlanReviewStore.getState().addAnnotation(planId, annotation);
+      const annotationId = usePlanReviewStore.getState().annotations[planId]?.[0]?.id;
+      const originalUpdatedAt = usePlanReviewStore.getState().annotations[planId]?.[0]?.updatedAt;
 
-    // Wait a tiny bit to ensure timestamps differ
-    await new Promise((resolve) => setTimeout(resolve, 1));
+      // Advance the clock to ensure timestamps differ
+      vi.advanceTimersByTime(100);
 
-    usePlanReviewStore.getState().updateAnnotationComment(planId, annotationId!, "new comment");
+      usePlanReviewStore.getState().updateAnnotationComment(planId, annotationId!, "new comment");
 
-    const state = usePlanReviewStore.getState();
-    const newUpdatedAt = state.annotations[planId]?.[0]?.updatedAt;
-    expect(newUpdatedAt).not.toBe(originalUpdatedAt);
+      const state = usePlanReviewStore.getState();
+      const newUpdatedAt = state.annotations[planId]?.[0]?.updatedAt;
+      expect(newUpdatedAt).not.toBe(originalUpdatedAt);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("no-ops for nonexistent id", () => {
