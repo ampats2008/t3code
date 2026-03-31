@@ -3,7 +3,6 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import { usePlanReviewStore, type PlanAnnotation } from "~/planReviewStore";
 import { getAnnotationRanges, findOccurrenceIndex } from "~/planReview";
-import { Button } from "../ui/button";
 import { MessageSquareIcon, Trash2Icon } from "lucide-react";
 import ChatMarkdown from "../ChatMarkdown";
 
@@ -81,50 +80,80 @@ function CommentForm({
 
   return (
     <div
-      className="fixed z-50 w-80 rounded-lg border border-border/70 bg-card p-4 shadow-xl"
-      style={{ top: position.top + 4, left: position.left }}
+      className="fixed z-50 w-[340px]"
+      style={{ top: position.top + 8, left: position.left }}
       onMouseDown={(e) => e.stopPropagation()} // Don't let clicks bubble to container
     >
-      {/* Selected text preview */}
-      <div className="mb-3 text-sm text-muted-foreground">
-        <span className="italic">&ldquo;{truncated}&rdquo;</span>
-      </div>
-
-      {/* Comment textarea */}
-      <textarea
-        ref={textareaRef}
-        className="mb-3 w-full min-h-20 rounded border border-border/70 bg-input/50 px-3 py-2 text-sm text-foreground placeholder-muted-foreground outline-none transition-colors focus:border-primary/50 focus:bg-input"
-        placeholder="Add your feedback..."
-        rows={3}
-        value={comment}
-        onChange={(e) => setComment(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") {
-            e.preventDefault();
-            onCancel();
-          }
-          if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && comment.trim()) {
-            e.preventDefault();
-            onSave(comment);
-          }
-        }}
-      />
-
-      {/* Action buttons */}
-      <div className="flex justify-between">
-        <div className="flex gap-2">
-          <Button size="sm" onClick={() => onSave(comment)} disabled={!comment.trim()}>
-            Save
-          </Button>
-          <Button size="sm" variant="ghost" onClick={onCancel}>
-            Cancel
-          </Button>
+      {/* Outer wrapper — matches chatbox rounded pill + border style */}
+      <div className="rounded-2xl border border-border bg-card shadow-xl">
+        {/* Selected text quote — top banner like composer banners */}
+        <div className="rounded-t-[15px] border-b border-border/65 bg-muted/20 px-4 py-2.5">
+          <p className="text-xs leading-relaxed text-muted-foreground/70 line-clamp-2">
+            &ldquo;{truncated}&rdquo;
+          </p>
         </div>
-        {isEditing && onDelete && (
-          <Button size="sm" variant="ghost" onClick={onDelete} className="text-destructive">
-            <Trash2Icon className="size-3.5" />
-          </Button>
-        )}
+
+        {/* Textarea — borderless, like the chatbox input area */}
+        <div className="px-1">
+          <textarea
+            ref={textareaRef}
+            className="w-full resize-none bg-transparent px-3 py-3 text-sm text-foreground placeholder-muted-foreground/50 outline-none"
+            placeholder="Add your feedback..."
+            rows={2}
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.preventDefault();
+                onCancel();
+              }
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && comment.trim()) {
+                e.preventDefault();
+                onSave(comment);
+              }
+            }}
+          />
+        </div>
+
+        {/* Footer — matches chatbox footer bar style */}
+        <div className="flex items-center justify-between border-t border-border/40 px-3 py-2">
+          <div className="flex items-center gap-1.5">
+            {isEditing && onDelete && (
+              <button
+                type="button"
+                onClick={onDelete}
+                title="Delete annotation"
+                className="flex items-center justify-center size-7 rounded-md text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors"
+              >
+                <Trash2Icon className="size-3.5" />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onCancel}
+              className="rounded-md px-2.5 py-1 text-xs text-muted-foreground/60 hover:text-foreground/80 hover:bg-muted/40 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={() => onSave(comment)}
+            disabled={!comment.trim()}
+            className="flex items-center justify-center size-7 rounded-full bg-primary text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-30 disabled:pointer-events-none"
+            title={`Save (${navigator.platform?.includes("Mac") ? "\u2318" : "Ctrl"}+Enter)`}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <path
+                d="M7 11.5V2.5M7 2.5L3 6.5M7 2.5L11 6.5"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
   );
