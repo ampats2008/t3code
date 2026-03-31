@@ -510,21 +510,7 @@ label:has(> select#reasoning-effort) select {
   font-size: 0.75rem;
 }
 
-.chat-markdown :not(pre) > code.chat-markdown-file-link {
-  cursor: pointer;
-  color: var(--info-foreground);
-  text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--info-foreground) 30%, transparent);
-  text-underline-offset: 2px;
-  transition:
-    text-decoration-color 0.15s ease,
-    background 0.15s ease;
-}
 
-.chat-markdown :not(pre) > code.chat-markdown-file-link:hover {
-  text-decoration-color: var(--info-foreground);
-  background: color-mix(in srgb, var(--info-foreground) 10%, var(--muted));
-}
 
 .chat-markdown pre {
   max-width: 100%;

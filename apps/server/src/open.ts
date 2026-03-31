@@ -201,6 +201,24 @@ export class Open extends ServiceMap.Service<Open, OpenShape>()("t3/open") {}
 // Implementations
 // ==============================
 
+/**
+ * Environment variables that must be stripped from child editor processes.
+ *
+ * When the server runs inside Electron (desktop app), it inherits
+ * `ELECTRON_RUN_AS_NODE=1` which causes Electron-based editors (VS Code,
+ * Cursor, etc.) to behave as plain Node.js — interpreting the workspace
+ * path argument as a module to `require()` instead of opening the editor UI.
+ */
+const EDITOR_ENV_BLOCKLIST = ["ELECTRON_RUN_AS_NODE"];
+
+function cleanEditorEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  for (const key of EDITOR_ENV_BLOCKLIST) {
+    delete env[key];
+  }
+  return env;
+}
+
 export const resolveEditorLaunch = Effect.fnUntraced(function* (
   input: OpenInEditorInput,
   platform: NodeJS.Platform = process.platform,
@@ -236,6 +254,7 @@ export const launchDetached = (launch: EditorLaunch) =>
           detached: true,
           stdio: "ignore",
           shell: process.platform === "win32",
+          env: cleanEditorEnv(),
         });
       } catch (error) {
         return resume(
