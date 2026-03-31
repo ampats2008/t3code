@@ -45,6 +45,7 @@ import { VscodeEntryIcon } from "./chat/VscodeEntryIcon";
 import { DiffStatLabel, hasNonZeroStat } from "./chat/DiffStatLabel";
 import { ToggleGroup, Toggle } from "./ui/toggle-group";
 import { computeDefaultCollapsedFiles } from "./DiffPanel.logic";
+import { useDiffReviewPanel } from "../hooks/useDiffReviewPanel";
 
 type DiffRenderMode = "stacked" | "split";
 type DiffThemeType = "light" | "dark";
@@ -355,6 +356,12 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
     }
     return map;
   }, [renderableFiles]);
+
+  const diffReview = useDiffReviewPanel({
+    activeThreadId: activeThreadId?.toString() ?? null,
+    renderableFiles,
+    fileDiffByPath,
+  });
 
   const toggleFileCollapse = useCallback((filePath: string) => {
     setCollapsedFiles((prev) => {
@@ -733,6 +740,7 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
                         >
                           <FileDiff
                             fileDiff={fileDiff}
+                            {...diffReview.getFileDiffReviewProps(filePath)}
                             options={{
                               diffStyle:
                                 diffRenderMode === "split" ? "split" : "unified",
@@ -742,6 +750,7 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
                               themeType: resolvedTheme as DiffThemeType,
                               unsafeCSS: DIFF_PANEL_UNSAFE_CSS,
                               disableFileHeader: true,
+                              enableGutterUtility: true,
                             }}
                           />
                         </div>
@@ -819,6 +828,7 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
                         ) : (
                           <FileDiff
                             fileDiff={fileDiff}
+                            {...diffReview.getFileDiffReviewProps(filePath)}
                             renderHeaderPrefix={() => (
                               <>
                                 <button
@@ -858,6 +868,7 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
                               theme: resolveDiffThemeName(resolvedTheme),
                               themeType: resolvedTheme as DiffThemeType,
                               unsafeCSS: DIFF_PANEL_UNSAFE_CSS,
+                              enableGutterUtility: true,
                             }}
                           />
                         )}

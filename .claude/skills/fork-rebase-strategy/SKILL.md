@@ -111,6 +111,31 @@ git log --oneline --grep="2AM: .*(context-meter)"
 4. **Touch upstream files as little as possible.** If a feature can live in a new
    file rather than modifying an existing one, prefer the new file.
 
+### Fork-Safe Coding Pattern
+
+When adding features that touch existing upstream files (e.g., large components
+like `ChatView.tsx`, `DiffPanel.tsx`), follow this pattern to minimize merge
+conflict surface:
+
+1. **All logic in new files** — stores, hooks, helpers, and components that
+   don't exist upstream. Namespace them clearly (e.g., `diffReview*`,
+   `contextMeter*`).
+2. **Custom hooks encapsulate everything** — create a hook like
+   `useMyFeature()` that returns all the state, callbacks, and derived values
+   the upstream file needs.
+3. **Upstream files get only thin injection points** — a single import, one hook
+   call, and minimal JSX insertions (single-line conditionals added to existing
+   cascades).
+4. **Prop spreading over inline logic** — prefer `{...myHook.getProps()}` over
+   adding 20 lines of inline logic to an upstream component.
+5. **New component directory per feature** — e.g., `components/diff-review/`
+   keeps feature files grouped and clearly fork-only.
+
+**Why this matters:** Each insertion point in an upstream file is a potential
+merge conflict during `git rebase upstream/main`. By keeping insertions to
+single-line conditionals in existing cascades, conflicts are trivial to resolve
+— even if upstream restructures the file.
+
 ---
 
 ## Workflow: Adding a New Feature

@@ -155,6 +155,8 @@ import { CompactComposerControlsMenu } from "./chat/CompactComposerControlsMenu"
 import { ComposerPendingApprovalPanel } from "./chat/ComposerPendingApprovalPanel";
 import { ComposerPendingUserInputPanel } from "./chat/ComposerPendingUserInputPanel";
 import { ComposerPlanFollowUpBanner } from "./chat/ComposerPlanFollowUpBanner";
+import { useDiffReviewComposer } from "../hooks/useDiffReviewComposer";
+import { ComposerDiffReviewBanner } from "./diff-review/ComposerDiffReviewBanner";
 import {
   getComposerProviderState,
   renderProviderTraitsMenuContent,
@@ -757,11 +759,18 @@ export default function ChatView({ threadId }: ChatViewProps) {
     hasActionableProposedPlan(activeProposedPlan);
   const activePendingApproval = pendingApprovals[0] ?? null;
   const isComposerApprovalState = activePendingApproval !== null;
+  const diffReviewComposer = useDiffReviewComposer({
+    activeThreadId,
+    latestTurnSettled,
+    pendingUserInputsCount: pendingUserInputs.length,
+    isComposerApprovalState,
+  });
   const hasComposerHeader =
     isComposerApprovalState ||
     pendingUserInputs.length > 0 ||
+    diffReviewComposer.showDiffReviewPrompt ||
     (showPlanFollowUpPrompt && activeProposedPlan !== null);
-  const composerFooterHasWideActions = showPlanFollowUpPrompt || activePendingProgress !== null;
+  const composerFooterHasWideActions = showPlanFollowUpPrompt || diffReviewComposer.showDiffReviewPrompt || activePendingProgress !== null;
   const lastSyncedPendingInputRef = useRef<{
     requestId: string | null;
     questionId: string | null;
@@ -2534,6 +2543,20 @@ export default function ChatView({ threadId }: ChatViewProps) {
       imageCount: composerImages.length,
       terminalContexts: composerTerminalContexts,
     });
+    if (diffReviewComposer.showDiffReviewPrompt && activeThread) {
+      const reviewMessage = diffReviewComposer.buildReviewMessage(trimmed);
+      promptRef.current = "";
+      clearComposerDraftContent(activeThread.id);
+      setComposerHighlightedItemId(null);
+      setComposerCursor(0);
+      setComposerTrigger(null);
+      await onSubmitPlanFollowUp({
+        text: reviewMessage,
+        interactionMode: "default",
+      });
+      diffReviewComposer.clearAfterSubmit();
+      return;
+    }
     if (showPlanFollowUpPrompt && activeProposedPlan) {
       const followUp = resolvePlanFollowUpSubmission({
         draftText: trimmed,
@@ -3863,6 +3886,12 @@ export default function ChatView({ threadId }: ChatViewProps) {
                         onAdvance={onAdvanceActivePendingUserInput}
                       />
                     </div>
+                  ) : diffReviewComposer.showDiffReviewPrompt ? (
+                    <div className="rounded-t-[19px] border-b border-border/65 bg-muted/20">
+                      <ComposerDiffReviewBanner
+                        annotationCount={diffReviewComposer.nonOrphanedAnnotationCount}
+                      />
+                    </div>
                   ) : showPlanFollowUpPrompt && activeProposedPlan ? (
                     <div className="rounded-t-[19px] border-b border-border/65 bg-muted/20">
                       <ComposerPlanFollowUpBanner
@@ -3985,11 +4014,13 @@ export default function ChatView({ threadId }: ChatViewProps) {
                             "Resolve this approval request to continue")
                           : activePendingProgress
                             ? "Type your own answer, or leave this blank to use the selected option"
-                            : showPlanFollowUpPrompt && activeProposedPlan
-                              ? "Add feedback to refine the plan, or leave this blank to implement it"
-                              : phase === "disconnected"
-                                ? "Ask for follow-up changes or attach images"
-                                : "Ask anything, @tag files/folders, or use / to show available commands"
+                            : diffReviewComposer.showDiffReviewPrompt
+                              ? diffReviewComposer.reviewComposerPlaceholder
+                              : showPlanFollowUpPrompt && activeProposedPlan
+                                ? "Add feedback to refine the plan, or leave this blank to implement it"
+                                : phase === "disconnected"
+                                  ? "Ask for follow-up changes or attach images"
+                                  : "Ask anything, @tag files/folders, or use / to show available commands"
                       }
                       disabled={isConnecting || isComposerApprovalState}
                     />
@@ -4210,7 +4241,16 @@ export default function ChatView({ threadId }: ChatViewProps) {
                             </svg>
                           </button>
                         ) : pendingUserInputs.length === 0 ? (
-                          showPlanFollowUpPrompt ? (
+                          diffReviewComposer.showDiffReviewPrompt ? (
+                            <Button
+                              type="submit"
+                              size="sm"
+                              className="h-9 rounded-full px-4 sm:h-8"
+                              disabled={isSendBusy || isConnecting}
+                            >
+                              {isConnecting || isSendBusy ? "Sending..." : "Submit Review"}
+                            </Button>
+                          ) : showPlanFollowUpPrompt ? (
                             prompt.trim().length > 0 ? (
                               <Button
                                 type="submit"
