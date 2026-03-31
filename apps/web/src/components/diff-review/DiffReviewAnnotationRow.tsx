@@ -15,7 +15,6 @@ import {
 } from 'lucide-react';
 import {
   useDiffReviewStore,
-  buildActiveInputKey,
   type AnnotationSide,
 } from '../../diffReviewStore';
 import { cn } from '~/lib/utils';
@@ -25,7 +24,10 @@ interface DiffReviewAnnotationRowProps {
   filePath: string;
   lineNumber: number;
   side: AnnotationSide;
+  /** null = new annotation input mode; string = existing annotation ID */
   annotationId: string | null;
+  /** Called to close the annotation input (uses parent React state) */
+  onClose: () => void;
 }
 
 export const DiffReviewAnnotationRow = memo(
@@ -35,104 +37,64 @@ export const DiffReviewAnnotationRow = memo(
     lineNumber,
     side,
     annotationId,
+    onClose,
   }: DiffReviewAnnotationRowProps) {
-    // Local state for input mode
     const [inputValue, setInputValue] = useState('');
+    const [isEditing, setIsEditing] = useState(false);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-    // Store selectors
-    const activeInputKey = useDiffReviewStore((state) => state.activeInputKey);
-    const annotationsByThreadId = useDiffReviewStore(
-      (state) => state.annotationsByThreadId,
-    );
-    const addAnnotation = useDiffReviewStore((state) => state.addAnnotation);
-    const updateAnnotationText = useDiffReviewStore(
-      (state) => state.updateAnnotationText,
-    );
-    const removeAnnotation = useDiffReviewStore(
-      (state) => state.removeAnnotation,
-    );
-    const setActiveInputKey = useDiffReviewStore(
-      (state) => state.setActiveInputKey,
-    );
+    // Store actions
+    const annotationsByThreadId = useDiffReviewStore((s) => s.annotationsByThreadId);
+    const addAnnotation = useDiffReviewStore((s) => s.addAnnotation);
+    const updateAnnotationText = useDiffReviewStore((s) => s.updateAnnotationText);
+    const removeAnnotation = useDiffReviewStore((s) => s.removeAnnotation);
 
-    // Compute the key for this annotation location
-    const currentKey = buildActiveInputKey(threadId, filePath, lineNumber, side);
-
-    // Look up the annotation if it exists
+    // Look up the annotation
     const annotation = annotationId
-      ? annotationsByThreadId[threadId]?.find((a) => a.id === annotationId)
+      ? annotationsByThreadId[threadId]?.find((a) => a.id === annotationId) ?? null
       : null;
 
-    // Determine which mode we're in
-    const isInputMode = activeInputKey === currentKey && !annotation;
-    const isDisplayMode = annotation !== null && activeInputKey !== currentKey;
-    const isEditingExisting =
-      activeInputKey === currentKey && annotation !== null;
+    const isNewInput = annotationId === null;
+    const isInputMode = isNewInput || isEditing;
 
-    // Initialize input when entering input mode
+    // Auto-focus when entering input mode
     useEffect(() => {
-      if (isInputMode || isEditingExisting) {
-        setInputValue(isEditingExisting && annotation ? annotation.text : '');
-        // Small delay to ensure ref is mounted
-        setTimeout(() => {
-          textareaRef.current?.focus();
-        }, 0);
+      if (isInputMode) {
+        setInputValue(isEditing && annotation ? annotation.text : '');
+        setTimeout(() => textareaRef.current?.focus(), 0);
       }
-    }, [isInputMode, isEditingExisting, annotation]);
+    }, [isInputMode, isEditing, annotation]);
 
-    // Handle save
     const handleSave = useCallback(() => {
       const trimmedText = inputValue.trim();
       if (!trimmedText) {
-        // Don't save empty annotations
-        setActiveInputKey(null);
+        if (isEditing) setIsEditing(false);
+        else onClose();
         return;
       }
-
-      if (isEditingExisting && annotation) {
+      if (isEditing && annotation) {
         updateAnnotationText(threadId, annotation.id, trimmedText);
+        setIsEditing(false);
       } else {
-        addAnnotation(threadId, {
-          filePath,
-          lineNumber,
-          side,
-          text: trimmedText,
-        });
+        addAnnotation(threadId, { filePath, lineNumber, side, text: trimmedText });
+        onClose();
       }
-    }, [
-      inputValue,
-      isEditingExisting,
-      annotation,
-      threadId,
-      filePath,
-      lineNumber,
-      side,
-      updateAnnotationText,
-      addAnnotation,
-      setActiveInputKey,
-    ]);
+    }, [inputValue, isEditing, annotation, threadId, filePath, lineNumber, side, updateAnnotationText, addAnnotation, onClose]);
 
-    // Handle cancel
     const handleCancel = useCallback(() => {
-      setActiveInputKey(null);
+      if (isEditing) setIsEditing(false);
+      else onClose();
       setInputValue('');
-    }, [setActiveInputKey]);
+    }, [isEditing, onClose]);
 
-    // Handle delete
     const handleDelete = useCallback(() => {
-      if (annotation) {
-        removeAnnotation(threadId, annotation.id);
-      }
+      if (annotation) removeAnnotation(threadId, annotation.id);
     }, [annotation, threadId, removeAnnotation]);
 
-    // Handle keyboard shortcuts
     const handleKeyDown = useCallback(
       (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         const isMac = /mac|iphone|ipad|ipod/i.test(navigator.platform);
-        const isSubmitKey = isMac ? e.metaKey : e.ctrlKey;
-
-        if (isSubmitKey && e.key === 'Enter') {
+        if ((isMac ? e.metaKey : e.ctrlKey) && e.key === 'Enter') {
           e.preventDefault();
           handleSave();
         } else if (e.key === 'Escape') {
@@ -143,14 +105,13 @@ export const DiffReviewAnnotationRow = memo(
       [handleSave, handleCancel],
     );
 
-    // Input mode: render textarea + buttons
-    if (isInputMode || isEditingExisting) {
+    if (isInputMode) {
       return (
         <div className="border-l-2 border-l-primary/50 bg-muted/30 px-3 py-2.5 text-xs">
           <div className="mb-2 flex items-center gap-1.5 text-muted-foreground">
             <MessageSquareIcon className="size-3.5" />
             <span className="font-medium">
-              {isEditingExisting ? 'Edit annotation' : 'Add annotation'}
+              {isEditing ? 'Edit annotation' : 'Add annotation'}
             </span>
           </div>
           <textarea
@@ -193,8 +154,7 @@ export const DiffReviewAnnotationRow = memo(
       );
     }
 
-    // Display mode: render comment + action buttons
-    if (isDisplayMode && annotation) {
+    if (annotation) {
       return (
         <div
           className={cn(
@@ -217,9 +177,7 @@ export const DiffReviewAnnotationRow = memo(
             <div className="flex gap-1">
               <button
                 type="button"
-                onClick={() => {
-                  setActiveInputKey(currentKey);
-                }}
+                onClick={() => setIsEditing(true)}
                 className={cn(
                   'rounded-md p-1 transition-colors',
                   'text-muted-foreground hover:bg-muted hover:text-foreground',
@@ -250,7 +208,6 @@ export const DiffReviewAnnotationRow = memo(
       );
     }
 
-    // Not active, not in input mode, no annotation
     return null;
   },
 );

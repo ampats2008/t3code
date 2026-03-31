@@ -1,14 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import React from 'react';
 import type { DiffLineAnnotation, FileDiffMetadata } from '@pierre/diffs';
 import { ThreadId } from '@t3tools/contracts';
-import type { AnnotationSide } from '../diffReviewStore';
+import type { AnnotationSide, DiffReviewAnnotation } from '../diffReviewStore';
 import {
   useDiffReviewStore,
-  selectNonOrphanedAnnotations,
 } from '../diffReviewStore';
 import { DiffReviewGutterButton } from '../components/diff-review/DiffReviewGutterButton';
 import { DiffReviewAnnotationRow } from '../components/diff-review/DiffReviewAnnotationRow';
@@ -20,19 +19,21 @@ interface DiffReviewPanelProps {
   fileDiffByPath: Map<string, FileDiffMetadata>;
 }
 
+interface SelectedLineRange {
+  start: number;
+  side?: 'deletions' | 'additions';
+  end: number;
+  endSide?: 'deletions' | 'additions';
+}
+
 interface FileDiffReviewProps {
   lineAnnotations: DiffLineAnnotation<string>[];
   renderAnnotation: (
     annotation: DiffLineAnnotation<string>,
   ) => ReactNode;
-  renderGutterUtility: (
-    getHoveredLine: () =>
-      | {
-          lineNumber: number;
-          side: AnnotationSide;
-        }
-      | undefined,
-  ) => ReactNode;
+  renderGutterUtility: () => ReactNode;
+  /** Merge into FileDiff options — handles the click from @pierre/diffs' own gutter button */
+  onGutterUtilityClick: (range: SelectedLineRange) => void;
 }
 
 /**
@@ -48,51 +49,57 @@ function resolveFileDiffPath(fileDiff: FileDiffMetadata): string {
 
 /**
  * Hook that encapsulates all diff review logic for DiffPanel.
- * Returns a function to get review props for a specific file path.
+ *
+ * Uses React state (not Zustand) for `activeInputKey` because the gutter
+ * button is rendered inside @pierre/diffs' Shadow DOM via slots. The Shadow
+ * DOM boundary causes Zustand module duplication — the store instance used
+ * by slotted components can differ from the one used by the parent hook.
+ * React state propagated via callback props works reliably across slots.
  */
 export function useDiffReviewPanel({
   activeThreadId,
   renderableFiles,
   fileDiffByPath,
 }: DiffReviewPanelProps) {
-  const store = useDiffReviewStore();
-  const activeInputKey = store.activeInputKey;
+  // Local React state for tracking which annotation input is open.
+  // Format: "filePath\0lineNumber\0side" or null. Uses \0 as delimiter
+  // to avoid conflicts with characters in file paths (like colons).
+  const [activeInputKey, setActiveInputKey] = useState<string | null>(null);
 
-  // Get non-orphaned annotations for the active thread
-  const annotations = useMemo(() => {
-    return selectNonOrphanedAnnotations(store, activeThreadId);
-  }, [store, activeThreadId]);
+  // Zustand store — only for persisted annotations (not ephemeral UI state)
+  const annotationsByThreadId = useDiffReviewStore((s) => s.annotationsByThreadId);
+  const markOrphaned = useDiffReviewStore((s) => s.markOrphaned);
 
-  /**
-   * Invalidate annotations when renderableFiles change.
-   * Check if any annotations now reference files/lines that no longer exist.
-   */
+  // Non-orphaned annotations for the active thread
+  const annotations: DiffReviewAnnotation[] = useMemo(() => {
+    if (!activeThreadId) return [];
+    const threadAnnotations = annotationsByThreadId[activeThreadId] ?? [];
+    return threadAnnotations.filter((a) => !a.orphaned);
+  }, [annotationsByThreadId, activeThreadId]);
+
+  // Clear active input when thread changes
   useEffect(() => {
-    if (!activeThreadId || annotations.length === 0) {
-      return;
-    }
+    setActiveInputKey(null);
+  }, [activeThreadId]);
 
-    // Build a set of valid file paths
+  // Invalidate annotations when renderableFiles change
+  useEffect(() => {
+    if (!activeThreadId || annotations.length === 0) return;
+
     const validFiles = new Set<string>();
     for (const fileDiff of renderableFiles) {
-      const resolvedPath = resolveFileDiffPath(fileDiff);
-      validFiles.add(resolvedPath);
+      validFiles.add(resolveFileDiffPath(fileDiff));
     }
 
-    // Check for orphaned annotations
     const orphanedIds: string[] = [];
     for (const annotation of annotations) {
-      const isFileValid = validFiles.has(annotation.filePath);
-      const isDiffValid = fileDiffByPath.has(annotation.filePath);
-
-      if (!isFileValid || !isDiffValid) {
+      if (!validFiles.has(annotation.filePath) || !fileDiffByPath.has(annotation.filePath)) {
         orphanedIds.push(annotation.id);
       }
     }
 
-    // If we found orphaned annotations, mark them and show a toast
     if (orphanedIds.length > 0) {
-      store.markOrphaned(activeThreadId, orphanedIds);
+      markOrphaned(activeThreadId, orphanedIds);
       toastManager.add({
         title: 'Review comments invalidated',
         description: `${orphanedIds.length} comment(s) are no longer valid due to code changes.`,
@@ -103,17 +110,42 @@ export function useDiffReviewPanel({
         },
       });
     }
-  }, [renderableFiles, activeThreadId, annotations, fileDiffByPath, store]);
+  }, [renderableFiles, activeThreadId, annotations, fileDiffByPath, markOrphaned]);
+
+  // Callback for gutter button — sets React state directly
+  const onGutterButtonClick = useCallback(
+    (filePath: string, lineNumber: number, side: AnnotationSide) => {
+      const key = `${filePath}\0${lineNumber}\0${side}`;
+      setActiveInputKey(key);
+    },
+    [],
+  );
+
+  // Callback for annotation row to close input
+  const onCloseInput = useCallback(() => {
+    setActiveInputKey(null);
+  }, []);
+
+  // Parse activeInputKey
+  const parsedInputKey = useMemo(() => {
+    if (!activeInputKey) return null;
+    const parts = activeInputKey.split('\0');
+    if (parts.length !== 3) return null;
+    const [filePath, lineStr, side] = parts;
+    const lineNumber = parseInt(lineStr!, 10);
+    if (Number.isNaN(lineNumber)) return null;
+    if (side !== 'deletions' && side !== 'additions') return null;
+    return { filePath: filePath!, lineNumber, side: side as AnnotationSide };
+  }, [activeInputKey]);
 
   /**
-   * Return props to spread onto a <FileDiff> component for a given file path.
+   * Return props to spread onto a <FileDiff> for a given file path.
    */
   const getFileDiffReviewProps = useCallback(
     (filePath: string): FileDiffReviewProps => {
-      // Build lineAnnotations array
       const lineAnnotations: DiffLineAnnotation<string>[] = [];
 
-      // Add existing annotations for this file
+      // Existing annotations for this file
       for (const annotation of annotations) {
         if (annotation.filePath === filePath) {
           lineAnnotations.push({
@@ -124,84 +156,52 @@ export function useDiffReviewPanel({
         }
       }
 
-      // Add the active input position if it's for this file
-      if (activeInputKey) {
-        const parts = activeInputKey.split(':');
-        if (parts.length === 4) {
-          const [threadId, keyFilePath, lineNumberStr, side] = parts as [string, string, string, string];
-          if (
-            threadId === activeThreadId &&
-            keyFilePath === filePath &&
-            (side === 'deletions' || side === 'additions')
-          ) {
-            const lineNumber = parseInt(lineNumberStr, 10);
-            if (!Number.isNaN(lineNumber)) {
-              // Check if we already have an annotation at this position
-              const hasExisting = lineAnnotations.some(
-                (a) =>
-                  a.side === side &&
-                  a.lineNumber === lineNumber,
-              );
-              if (!hasExisting) {
-                lineAnnotations.push({
-                  side: side as AnnotationSide,
-                  lineNumber,
-                  metadata: '__new__',
-                });
-              }
-            }
-          }
+      // Active input position (if for this file)
+      if (parsedInputKey && parsedInputKey.filePath === filePath) {
+        const hasExisting = lineAnnotations.some(
+          (a) =>
+            a.side === parsedInputKey.side &&
+            a.lineNumber === parsedInputKey.lineNumber,
+        );
+        if (!hasExisting) {
+          lineAnnotations.push({
+            side: parsedInputKey.side,
+            lineNumber: parsedInputKey.lineNumber,
+            metadata: '__new__',
+          });
         }
       }
 
-      // Callback to render annotations
       const renderAnnotation = (
         annotation: DiffLineAnnotation<string>,
       ): ReactNode => {
-        if (annotation.metadata === '__new__') {
-          // Render input mode for new annotation
-          return React.createElement(DiffReviewAnnotationRow, {
-            threadId: activeThreadId!,
-            filePath,
-            lineNumber: annotation.lineNumber,
-            side: annotation.side,
-            annotationId: null,
-          });
-        }
-
-        // Render existing annotation
+        const isNew = annotation.metadata === '__new__';
         return React.createElement(DiffReviewAnnotationRow, {
+          key: isNew ? `new-${annotation.lineNumber}-${annotation.side}` : annotation.metadata,
           threadId: activeThreadId!,
           filePath,
           lineNumber: annotation.lineNumber,
           side: annotation.side,
-          annotationId: annotation.metadata,
+          annotationId: isNew ? null : annotation.metadata,
+          onClose: onCloseInput,
         });
       };
 
-      // Callback to render the gutter utility button
-      const renderGutterUtility = (
-        getHoveredLine: () =>
-          | {
-              lineNumber: number;
-              side: AnnotationSide;
-            }
-          | undefined,
-      ): ReactNode => {
-        return React.createElement(DiffReviewGutterButton, {
-          getHoveredLine,
-          threadId: activeThreadId!,
-          filePath,
-        });
+      // Visual-only gutter button — click is handled by onGutterUtilityClick
+      const renderGutterUtility = (): ReactNode => {
+        return React.createElement(DiffReviewGutterButton);
       };
 
-      return {
-        lineAnnotations,
-        renderAnnotation,
-        renderGutterUtility,
+      // Click handler — called by @pierre/diffs when the gutter utility is clicked
+      const onGutterUtilityClick = (range: SelectedLineRange) => {
+        const side = range.side;
+        if (side !== 'deletions' && side !== 'additions') return;
+        onGutterButtonClick(filePath, range.start, side);
       };
+
+      return { lineAnnotations, renderAnnotation, renderGutterUtility, onGutterUtilityClick };
     },
-    [annotations, activeInputKey, activeThreadId],
+    [annotations, parsedInputKey, activeThreadId, onGutterButtonClick, onCloseInput],
   );
 
   return { getFileDiffReviewProps };

@@ -2563,6 +2563,9 @@ export default function ChatView({ threadId }: ChatViewProps) {
         text: reviewMessage,
         interactionMode: "default",
       });
+      // onSubmitPlanFollowUp opens the plan sidebar for "default" mode —
+      // close it since this is a review submission, not a plan implementation.
+      setPlanSidebarOpen(false);
       diffReviewComposer.clearAfterSubmit();
       return;
     }

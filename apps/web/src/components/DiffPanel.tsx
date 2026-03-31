@@ -723,6 +723,7 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
                     renderFileDiff={(filePath) => {
                       const fileDiff = fileDiffByPath.get(filePath);
                       if (!fileDiff) return null;
+                      const reviewProps = diffReview.getFileDiffReviewProps(filePath);
                       return (
                         <div
                           className="diff-render-file rounded-md"
@@ -740,7 +741,9 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
                         >
                           <FileDiff
                             fileDiff={fileDiff}
-                            {...diffReview.getFileDiffReviewProps(filePath)}
+                            lineAnnotations={reviewProps.lineAnnotations}
+                            renderAnnotation={reviewProps.renderAnnotation}
+                            renderGutterUtility={reviewProps.renderGutterUtility}
                             options={{
                               diffStyle:
                                 diffRenderMode === "split" ? "split" : "unified",
@@ -751,6 +754,7 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
                               unsafeCSS: DIFF_PANEL_UNSAFE_CSS,
                               disableFileHeader: true,
                               enableGutterUtility: true,
+                              onGutterUtilityClick: reviewProps.onGutterUtilityClick,
                             }}
                           />
                         </div>
@@ -772,6 +776,7 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
                     const themedFileKey = `${fileKey}:${resolvedTheme}`;
                     const isCollapsed = collapsedFiles.has(filePath);
                     const stats = fileDiffStatsMap.get(filePath);
+                    const reviewProps = diffReview.getFileDiffReviewProps(filePath);
                     return (
                       <div
                         key={themedFileKey}
@@ -828,7 +833,9 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
                         ) : (
                           <FileDiff
                             fileDiff={fileDiff}
-                            {...diffReview.getFileDiffReviewProps(filePath)}
+                            lineAnnotations={reviewProps.lineAnnotations}
+                            renderAnnotation={reviewProps.renderAnnotation}
+                            renderGutterUtility={reviewProps.renderGutterUtility}
                             renderHeaderPrefix={() => (
                               <>
                                 <button
@@ -869,6 +876,7 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
                               themeType: resolvedTheme as DiffThemeType,
                               unsafeCSS: DIFF_PANEL_UNSAFE_CSS,
                               enableGutterUtility: true,
+                              onGutterUtilityClick: reviewProps.onGutterUtilityClick,
                             }}
                           />
                         )}
