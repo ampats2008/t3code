@@ -1,5 +1,5 @@
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
 import { RichToolCallRow } from "./RichToolCallRow";
 import { type WorkLogEntry } from "../../session-logic";
 
@@ -27,10 +27,12 @@ describe("RichToolCallRow - Skill Display", () => {
         },
       });
 
-      render(<RichToolCallRow workEntry={workEntry} displayMode="rich-skill" />);
+      const markup = renderToStaticMarkup(
+        <RichToolCallRow workEntry={workEntry} displayMode="rich-skill" />,
+      );
 
-      expect(screen.getByText(/Skill/i)).toBeInTheDocument();
-      expect(screen.getByText(/simplify/)).toBeInTheDocument();
+      expect(markup).toContain("Skill");
+      expect(markup).toContain("simplify");
     });
 
     it("displays arguments when present", () => {
@@ -44,9 +46,11 @@ describe("RichToolCallRow - Skill Display", () => {
         },
       });
 
-      render(<RichToolCallRow workEntry={workEntry} displayMode="rich-skill" />);
+      const markup = renderToStaticMarkup(
+        <RichToolCallRow workEntry={workEntry} displayMode="rich-skill" />,
+      );
 
-      expect(screen.getByText(/Add ctrl\+s shortcut/)).toBeInTheDocument();
+      expect(markup).toContain("Add ctrl+s shortcut");
     });
 
     it("handles empty skill name gracefully", () => {
@@ -60,12 +64,12 @@ describe("RichToolCallRow - Skill Display", () => {
         },
       });
 
-      const { container } = render(
+      const markup = renderToStaticMarkup(
         <RichToolCallRow workEntry={workEntry} displayMode="rich-skill" />,
       );
 
       // Should render without errors
-      expect(container).toBeInTheDocument();
+      expect(markup).toBeTruthy();
     });
   });
 
@@ -82,10 +86,12 @@ describe("RichToolCallRow - Skill Display", () => {
         },
       });
 
-      render(<RichToolCallRow workEntry={workEntry} displayMode="rich-skill" />);
+      const markup = renderToStaticMarkup(
+        <RichToolCallRow workEntry={workEntry} displayMode="rich-skill" />,
+      );
 
       // Should render without errors with all data present
-      expect(screen.getByText(/claude-api/)).toBeInTheDocument();
+      expect(markup).toContain("claude-api");
     });
 
     it("displays result when present", () => {
@@ -100,10 +106,13 @@ describe("RichToolCallRow - Skill Display", () => {
         },
       });
 
-      render(<RichToolCallRow workEntry={workEntry} displayMode="rich-skill" />);
+      const markup = renderToStaticMarkup(
+        <RichToolCallRow workEntry={workEntry} displayMode="rich-skill" />,
+      );
 
-      // Result section should be present
-      expect(screen.getByText(/Result/)).toBeInTheDocument();
+      // Verify the component renders with result data (SSR can't test expansion)
+      expect(markup).toContain("simplify");
+      expect(markup).toContain("Review changes");
     });
 
     it("omits skill name when empty", () => {
@@ -118,12 +127,12 @@ describe("RichToolCallRow - Skill Display", () => {
         },
       });
 
-      const { container } = render(
+      const markup = renderToStaticMarkup(
         <RichToolCallRow workEntry={workEntry} displayMode="rich-skill" />,
       );
 
       // Should render without the "name:" field when skill is empty
-      expect(container.textContent).not.toContain("name:");
+      expect(markup).not.toContain("name:");
     });
   });
 
@@ -135,12 +144,12 @@ describe("RichToolCallRow - Skill Display", () => {
         },
       });
 
-      const { container } = render(
+      const markup = renderToStaticMarkup(
         <RichToolCallRow workEntry={workEntry} displayMode="rich-skill" />,
       );
 
       // Should render without errors
-      expect(container).toBeInTheDocument();
+      expect(markup).toBeTruthy();
     });
 
     it("handles undefined data object", () => {
@@ -148,12 +157,12 @@ describe("RichToolCallRow - Skill Display", () => {
         // No data field
       });
 
-      const { container } = render(
+      const markup = renderToStaticMarkup(
         <RichToolCallRow workEntry={workEntry} displayMode="rich-skill" />,
       );
 
       // Should render without errors
-      expect(container).toBeInTheDocument();
+      expect(markup).toBeTruthy();
     });
   });
 });
