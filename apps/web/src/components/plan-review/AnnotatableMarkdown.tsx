@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect, useCallback } from "react";
 import { usePlanReviewStore, type PlanAnnotation } from "~/planReviewStore";
-import { getAnnotationRanges, findOccurrenceIndex } from "~/planReview";
+import { getAnnotationRanges } from "~/planReview";
 import { MessageSquareIcon, Trash2Icon } from "lucide-react";
 import ChatMarkdown from "../ChatMarkdown";
 
@@ -47,11 +47,10 @@ function SelectionToolbar({
 
 /**
  * Inline comment form — step 2. A plain positioned div, not a Popover.
- * Rendered in a portal-free way to avoid focus management issues.
+ * No quote banner — the selected text stays highlighted in the plan panel instead.
  */
 function CommentForm({
   position,
-  selectedText,
   initialComment,
   isEditing,
   onSave,
@@ -59,7 +58,6 @@ function CommentForm({
   onCancel,
 }: {
   position: { top: number; left: number };
-  selectedText: string;
   initialComment: string;
   isEditing: boolean;
   onSave: (comment: string) => void;
@@ -70,34 +68,22 @@ function CommentForm({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    // Auto-focus textarea after a tick (avoid interfering with selection clear)
     const id = requestAnimationFrame(() => textareaRef.current?.focus());
     return () => cancelAnimationFrame(id);
   }, []);
-
-  const truncated =
-    selectedText.length > 80 ? selectedText.slice(0, 80) + "\u2026" : selectedText;
 
   return (
     <div
       className="fixed z-50 w-[340px]"
       style={{ top: position.top + 8, left: position.left }}
-      onMouseDown={(e) => e.stopPropagation()} // Don't let clicks bubble to container
+      onMouseDown={(e) => e.stopPropagation()}
     >
-      {/* Outer wrapper — matches chatbox rounded pill + border style */}
       <div className="rounded-2xl border border-border bg-card shadow-xl">
-        {/* Selected text quote — top banner like composer banners */}
-        <div className="rounded-t-[15px] border-b border-border/65 bg-muted/20 px-4 py-2.5">
-          <p className="text-xs leading-relaxed text-muted-foreground/70 line-clamp-2">
-            &ldquo;{truncated}&rdquo;
-          </p>
-        </div>
-
         {/* Textarea — borderless, like the chatbox input area */}
         <div className="px-1">
           <textarea
             ref={textareaRef}
-            className="w-full resize-none bg-transparent px-3 py-3 text-sm text-foreground placeholder-muted-foreground/50 outline-none"
+            className="w-full resize-none rounded-t-2xl bg-transparent px-3 py-3 text-sm text-foreground placeholder-muted-foreground/50 outline-none"
             placeholder="Add your feedback..."
             rows={2}
             value={comment}
@@ -115,7 +101,7 @@ function CommentForm({
           />
         </div>
 
-        {/* Footer — matches chatbox footer bar style */}
+        {/* Footer */}
         <div className="flex items-center justify-between border-t border-border/40 px-3 py-2">
           <div className="flex items-center gap-1.5">
             {isEditing && onDelete && (
@@ -235,6 +221,17 @@ function clearHighlights(container: HTMLElement) {
   });
 }
 
+function clearPendingHighlight(container: HTMLElement) {
+  const pending = container.querySelectorAll('mark[data-annotation-id="__pending__"]');
+  pending.forEach((mark) => {
+    const parent = mark.parentNode;
+    if (!parent) return;
+    while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+    parent.removeChild(mark);
+    parent.normalize();
+  });
+}
+
 // --- Interaction state types ---
 
 type InteractionState =
@@ -333,9 +330,30 @@ export function AnnotatableMarkdown({ planId, markdown, cwd }: AnnotatableMarkdo
       const anchorEl = selection.anchorNode?.parentElement;
       if (anchorEl?.closest("mark[data-annotation-id]")) return;
 
-      // Check if the selected text exists in the source markdown
-      const occurrenceIndex = findOccurrenceIndex(markdown, selectedText);
-      if (occurrenceIndex === -1) return;
+      // Compute occurrence index by searching the DOM's rendered text (not the markdown source).
+      // This handles selections that span rendered headings, bold text, etc. where the
+      // selection text won't match the raw markdown (e.g., "Section 1" vs "## Section 1").
+      const container = containerRef.current;
+      let occurrenceIndex = 0;
+      if (container) {
+        const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+        let domText = "";
+        let node: Node | null;
+        while ((node = walker.nextNode())) {
+          domText += node.textContent ?? "";
+        }
+        // Count how many times selectedText appears before the current selection position
+        let searchFrom = 0;
+        let found = false;
+        while (true) {
+          const idx = domText.indexOf(selectedText, searchFrom);
+          if (idx === -1) break;
+          found = true;
+          occurrenceIndex = 0; // We only need to know it exists; highlightTextInDom uses DOM text
+          searchFrom = idx + 1;
+        }
+        if (!found) return; // Text somehow not in DOM — bail
+      }
 
       const range = selection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
@@ -347,7 +365,7 @@ export function AnnotatableMarkdown({ planId, markdown, cwd }: AnnotatableMarkdo
         occurrenceIndex,
       });
     });
-  }, [markdown]);
+  }, []);
 
   // Handle click on annotation highlight → show edit form
   const handleClick = useCallback(
@@ -377,7 +395,19 @@ export function AnnotatableMarkdown({ planId, markdown, cwd }: AnnotatableMarkdo
   const handleToolbarAddComment = useCallback(() => {
     if (interaction?.mode !== "toolbar") return;
 
-    // Clear the text selection now (we've captured the text)
+    // Apply a pending highlight so the selected text stays visually marked
+    // even after the browser selection clears (when user clicks into textarea)
+    const container = containerRef.current;
+    if (container) {
+      clearPendingHighlight(container);
+      highlightTextInDom(container, interaction.selectedText, interaction.occurrenceIndex, "__pending__");
+      // Style the pending highlight differently (brighter)
+      const pending = container.querySelector('mark[data-annotation-id="__pending__"]');
+      if (pending) {
+        (pending as HTMLElement).className = "bg-amber-500/30 rounded-sm";
+      }
+    }
+
     window.getSelection()?.removeAllRanges();
 
     setInteraction({
@@ -392,6 +422,7 @@ export function AnnotatableMarkdown({ planId, markdown, cwd }: AnnotatableMarkdo
   const handleSaveNew = useCallback(
     (comment: string) => {
       if (interaction?.mode !== "new-comment") return;
+      if (containerRef.current) clearPendingHighlight(containerRef.current);
       addAnnotation(planId, {
         selectedText: interaction.selectedText,
         occurrenceIndex: interaction.occurrenceIndex,
@@ -423,6 +454,7 @@ export function AnnotatableMarkdown({ planId, markdown, cwd }: AnnotatableMarkdo
 
   // Cancel / dismiss
   const handleCancel = useCallback(() => {
+    if (containerRef.current) clearPendingHighlight(containerRef.current);
     window.getSelection()?.removeAllRanges();
     setInteraction(null);
     setActiveAnnotationId(null);
@@ -457,7 +489,6 @@ export function AnnotatableMarkdown({ planId, markdown, cwd }: AnnotatableMarkdo
       {interaction?.mode === "new-comment" && (
         <CommentForm
           position={interaction.position}
-          selectedText={interaction.selectedText}
           initialComment=""
           isEditing={false}
           onSave={handleSaveNew}
@@ -469,7 +500,6 @@ export function AnnotatableMarkdown({ planId, markdown, cwd }: AnnotatableMarkdo
       {interaction?.mode === "edit-comment" && editingAnnotation && (
         <CommentForm
           position={interaction.position}
-          selectedText={editingAnnotation.selectedText}
           initialComment={editingAnnotation.comment}
           isEditing={true}
           onSave={handleSaveEdit}
