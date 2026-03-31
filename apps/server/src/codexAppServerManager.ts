@@ -328,6 +328,7 @@ plan content should be human and agent digestible. The final plan must be plan-o
 * Important changes or additions to public APIs/interfaces/types
 * Test cases and scenarios
 * Explicit assumptions and defaults chosen where needed
+* An "## Open Questions" section at the end of every plan. List any ambiguities, key design decisions, or trade-offs where you want user input before finalizing. Frame each as a concise question. If there are no open questions, include the section with "None — this plan is decision-complete." This section helps the user provide targeted feedback using inline annotations.
 
 Do not ask "should I proceed?" in the final output. The user can easily switch out of Plan mode and request implementation if you have included a \`<proposed_plan>\` block in your response. Alternatively, they can decide to stay in Plan mode and continue refining the plan.
 
@@ -587,13 +588,20 @@ export class CodexAppServerManager extends EventEmitter<CodexAppServerManagerEve
 
       this.emitLifecycleEvent(context, "session/connecting", "Starting codex app-server");
 
-      const initResponse = await this.sendRequest(context, "initialize", buildCodexInitializeParams());
+      const initResponse = await this.sendRequest(
+        context,
+        "initialize",
+        buildCodexInitializeParams(),
+      );
       if (Array.isArray((initResponse as any)?.commands)) {
-        setCachedSkills("codex", (initResponse as any).commands.map((cmd: any) => ({
-          name: typeof cmd.name === "string" ? cmd.name : "",
-          description: typeof cmd.description === "string" ? cmd.description : "",
-          argumentHint: typeof cmd.argumentHint === "string" ? cmd.argumentHint : "",
-        })));
+        setCachedSkills(
+          "codex",
+          (initResponse as any).commands.map((cmd: any) => ({
+            name: typeof cmd.name === "string" ? cmd.name : "",
+            description: typeof cmd.description === "string" ? cmd.description : "",
+            argumentHint: typeof cmd.argumentHint === "string" ? cmd.argumentHint : "",
+          })),
+        );
       }
 
       this.writeMessage(context, { method: "initialized" });
