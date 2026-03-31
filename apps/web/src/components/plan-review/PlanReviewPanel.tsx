@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useState, useCallback } from "react";
+import { memo, useState, useCallback, useRef } from "react";
 import { type TimestampFormat } from "@t3tools/contracts/settings";
 import { usePlanReviewStore, type PlanAnnotation } from "../../planReviewStore";
 import { buildPlanReviewMessage } from "../../planReview";
@@ -23,6 +23,9 @@ import { EllipsisIcon, PanelRightCloseIcon, PencilIcon, MessageSquareIcon } from
 import type { ActivePlanState, LatestProposedPlanState } from "../../session-logic";
 
 const EMPTY_ANNOTATIONS: PlanAnnotation[] = [];
+const DEFAULT_WIDTH = 560;
+const MIN_WIDTH = 360;
+const MAX_WIDTH = 900;
 
 export interface PlanReviewPanelProps {
   activePlan: ActivePlanState | null;
@@ -43,14 +46,18 @@ const PlanReviewPanel = memo(function PlanReviewPanel({
 }: PlanReviewPanelProps) {
   const [mode, setMode] = useState<"annotate" | "edit">("annotate");
   const [isSavingToWorkspace, setIsSavingToWorkspace] = useState(false);
+  const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH);
   const { copyToClipboard, isCopied } = useCopyToClipboard();
+  const resizingRef = useRef(false);
 
   const planId = activeProposedPlan?.id;
   const planMarkdown = activeProposedPlan?.planMarkdown ?? null;
   const planTitle = planMarkdown ? proposedPlanTitle(planMarkdown) : null;
 
   // Get store state — use stable empty array reference to avoid infinite re-render loop
-  const annotations = usePlanReviewStore((state) => state.annotations[planId ?? ""] ?? EMPTY_ANNOTATIONS);
+  const annotations = usePlanReviewStore(
+    (state) => state.annotations[planId ?? ""] ?? EMPTY_ANNOTATIONS,
+  );
   const editedMarkdownMap = usePlanReviewStore((state) => state.editedMarkdown);
   const editedMarkdown = planId ? editedMarkdownMap[planId] : undefined;
   const clearAnnotations = usePlanReviewStore((state) => state.clearAnnotations);
@@ -63,6 +70,40 @@ const PlanReviewPanel = memo(function PlanReviewPanel({
   const hasChanges = hasAnnotations || hasMarkdownChanges;
 
   const displayedPlanMarkdown = planMarkdown ? stripDisplayedPlanMarkdown(planMarkdown) : null;
+  // Use editedMarkdown if the user has made edits, otherwise fall back to the stripped display markdown
+  const effectiveMarkdown = editedMarkdown ?? displayedPlanMarkdown ?? "";
+
+  // Resize handle drag logic
+  const handleResizeStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      resizingRef.current = true;
+      const startX = e.clientX;
+      const startWidth = panelWidth;
+
+      const handleMouseMove = (moveEvent: MouseEvent) => {
+        if (!resizingRef.current) return;
+        // Panel is on the right, so dragging left increases width
+        const delta = startX - moveEvent.clientX;
+        const newWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth + delta));
+        setPanelWidth(newWidth);
+      };
+
+      const handleMouseUp = () => {
+        resizingRef.current = false;
+        document.removeEventListener("mousemove", handleMouseMove);
+        document.removeEventListener("mouseup", handleMouseUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      };
+
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+    },
+    [panelWidth],
+  );
 
   // Copy to clipboard
   const handleCopyPlan = useCallback(() => {
@@ -134,7 +175,16 @@ const PlanReviewPanel = memo(function PlanReviewPanel({
   }
 
   return (
-    <div className="flex h-full w-[480px] shrink-0 flex-col border-l border-border/70 bg-card/50">
+    <div
+      className="relative flex h-full shrink-0 flex-col border-l border-border/70 bg-card/50"
+      style={{ width: panelWidth }}
+    >
+      {/* Resize handle — left edge drag */}
+      <div
+        className="absolute left-0 top-0 z-10 h-full w-1 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
+        onMouseDown={handleResizeStart}
+      />
+
       {/* Header */}
       <div className="flex h-12 shrink-0 items-center justify-between border-b border-border/60 px-3">
         <div className="flex items-center gap-2">
@@ -210,7 +260,7 @@ const PlanReviewPanel = memo(function PlanReviewPanel({
             {planId && (
               <AnnotatableMarkdown
                 planId={planId}
-                markdown={displayedPlanMarkdown ?? ""}
+                markdown={effectiveMarkdown}
                 {...(markdownCwd ? { cwd: markdownCwd } : {})}
               />
             )}

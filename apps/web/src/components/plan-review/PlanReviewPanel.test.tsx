@@ -1,9 +1,15 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach, vi } from "vitest";
 import { usePlanReviewStore } from "../../planReviewStore";
-import { PlanReviewPanel } from "./index";
 import type { LatestProposedPlanState } from "../../session-logic";
 import type { TimestampFormat } from "@t3tools/contracts/settings";
+
+// Mock ChatMarkdown to avoid its heavy browser dependency chain (useTheme, shiki, etc.)
+vi.mock("../ChatMarkdown", () => ({
+  default: ({ text }: { text: string }) => <div data-testid="chat-markdown">{text}</div>,
+}));
+
+import { PlanReviewPanel } from "./index";
 
 describe("PlanReviewPanel", () => {
   beforeEach(() => {
@@ -159,7 +165,8 @@ describe("PlanReviewPanel", () => {
       />,
     );
 
-    expect(markup).toContain("w-[480px]");
+    // Width is now dynamic via inline style (default 560px), not a Tailwind class
+    expect(markup).toContain("width:560px");
   });
 
   it("renders textarea in edit mode with plan markdown", () => {

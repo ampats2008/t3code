@@ -1,6 +1,12 @@
-import { describe, expect, it, beforeEach } from "vitest";
-import { AnnotatableMarkdown } from "./AnnotatableMarkdown";
+import { describe, expect, it, beforeEach, vi } from "vitest";
 import { usePlanReviewStore } from "~/planReviewStore";
+
+// Mock ChatMarkdown to avoid its heavy browser dependency chain (useTheme, shiki, etc.)
+vi.mock("../ChatMarkdown", () => ({
+  default: ({ text }: { text: string }) => <div data-testid="chat-markdown">{text}</div>,
+}));
+
+import { AnnotatableMarkdown } from "./AnnotatableMarkdown";
 
 /**
  * Note: AnnotatableMarkdown is a client component with hooks, so we test:
