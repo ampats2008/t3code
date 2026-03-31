@@ -84,6 +84,8 @@ import { useTurnDiffSummaries } from "../hooks/useTurnDiffSummaries";
 import BranchToolbar from "./BranchToolbar";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
 import PlanSidebar from "./PlanSidebar";
+import { PlanReviewPanel } from "./plan-review";
+import { usePlanReviewStore } from "../planReviewStore";
 import ThreadTerminalDrawer from "./ThreadTerminalDrawer";
 import {
   BotIcon,
@@ -2023,6 +2025,13 @@ export default function ChatView({ threadId }: ChatViewProps) {
     }
     planSidebarDismissedForTurnRef.current = null;
   }, [activeThread?.id]);
+
+  useEffect(() => {
+    if (sidebarProposedPlan?.id) {
+      usePlanReviewStore.getState().clearAnnotations(sidebarProposedPlan.id);
+      usePlanReviewStore.getState().clearEditedMarkdown(sidebarProposedPlan.id);
+    }
+  }, [sidebarProposedPlan?.id]);
 
   useEffect(() => {
     if (!composerMenuOpen) {
@@ -4389,21 +4398,40 @@ export default function ChatView({ threadId }: ChatViewProps) {
 
         {/* Plan sidebar */}
         {planSidebarOpen ? (
-          <PlanSidebar
-            activePlan={activePlan}
-            activeProposedPlan={sidebarProposedPlan}
-            markdownCwd={gitCwd ?? undefined}
-            workspaceRoot={activeProject?.cwd ?? undefined}
-            timestampFormat={timestampFormat}
-            onClose={() => {
-              setPlanSidebarOpen(false);
-              // Track that the user explicitly dismissed for this turn so auto-open won't fight them.
-              const turnKey = activePlan?.turnId ?? sidebarProposedPlan?.turnId ?? null;
-              if (turnKey) {
-                planSidebarDismissedForTurnRef.current = turnKey;
-              }
-            }}
-          />
+          sidebarProposedPlan && !sidebarProposedPlan.implementedAt ? (
+            <PlanReviewPanel
+              activePlan={activePlan}
+              activeProposedPlan={sidebarProposedPlan}
+              markdownCwd={gitCwd ?? undefined}
+              workspaceRoot={activeProject?.cwd ?? undefined}
+              timestampFormat={timestampFormat}
+              onSubmitReview={(text, interactionMode) => {
+                void onSubmitPlanFollowUp({ text, interactionMode });
+              }}
+              onClose={() => {
+                setPlanSidebarOpen(false);
+                const turnKey = activePlan?.turnId ?? sidebarProposedPlan?.turnId ?? null;
+                if (turnKey) {
+                  planSidebarDismissedForTurnRef.current = turnKey;
+                }
+              }}
+            />
+          ) : (
+            <PlanSidebar
+              activePlan={activePlan}
+              activeProposedPlan={sidebarProposedPlan}
+              markdownCwd={gitCwd ?? undefined}
+              workspaceRoot={activeProject?.cwd ?? undefined}
+              timestampFormat={timestampFormat}
+              onClose={() => {
+                setPlanSidebarOpen(false);
+                const turnKey = activePlan?.turnId ?? sidebarProposedPlan?.turnId ?? null;
+                if (turnKey) {
+                  planSidebarDismissedForTurnRef.current = turnKey;
+                }
+              }}
+            />
+          )
         ) : null}
       </div>
       {/* end horizontal flex container */}
