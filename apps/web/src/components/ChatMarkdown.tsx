@@ -263,6 +263,45 @@ function ChatMarkdown({ text, cwd, isStreaming = false }: ChatMarkdownProps) {
           />
         );
       },
+      code({ node: _node, children, ...props }) {
+        // Only handle inline code (not code inside <pre> blocks, which are handled by the pre component)
+        const text = nodeToPlainText(children);
+        const targetPath = resolveMarkdownFileLinkTarget(text, cwd);
+        if (!targetPath) {
+          return <code {...props}>{children}</code>;
+        }
+
+        return (
+          <code
+            {...props}
+            className={`${props.className ?? ""} chat-markdown-file-link`.trim()}
+            role="link"
+            tabIndex={0}
+            title={`Open ${targetPath} in editor`}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              const api = readNativeApi();
+              if (api) {
+                void openInPreferredEditor(api, targetPath);
+              } else {
+                console.warn("Native API not found. Unable to open file in editor.");
+              }
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                const api = readNativeApi();
+                if (api) {
+                  void openInPreferredEditor(api, targetPath);
+                }
+              }
+            }}
+          >
+            {children}
+          </code>
+        );
+      },
       pre({ node: _node, children, ...props }) {
         const codeBlock = extractCodeBlock(children);
         if (!codeBlock) {
