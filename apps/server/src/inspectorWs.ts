@@ -44,6 +44,8 @@ export function startInspectorWs(): () => void {
         const message = JSON.parse(messageText) as InspectorMessage;
 
         if (message.type === "element-ref") {
+          const otherClients = [...clients].filter(c => c !== ws && c.readyState === WebSocket.OPEN);
+
           // Send ack to sender
           try {
             ws.send(JSON.stringify({ type: "ack" } satisfies AckMessage));
@@ -52,13 +54,11 @@ export function startInspectorWs(): () => void {
           }
 
           // Broadcast to all OTHER clients (the renderer)
-          for (const client of clients) {
-            if (client !== ws && client.readyState === WebSocket.OPEN) {
-              try {
-                client.send(JSON.stringify(message));
-              } catch {
-                // Ignore send errors
-              }
+          for (const client of otherClients) {
+            try {
+              client.send(JSON.stringify(message));
+            } catch {
+              // Ignore send errors
             }
           }
         }

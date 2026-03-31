@@ -44,6 +44,9 @@ function connectSingleton() {
     });
 
     ws.addEventListener("message", (event) => {
+      // Ignore messages from stale connections (React strict mode can leave
+      // an old WS alive briefly while a new one is already assigned).
+      if (ws !== singletonWs) return;
       try {
         const message = JSON.parse(event.data as string) as InspectorMessage;
         if (message.type === "element-ref") {
@@ -59,9 +62,12 @@ function connectSingleton() {
     });
 
     ws.addEventListener("close", () => {
-      singletonWs = null;
-      if (!shuttingDown && refCount > 0) {
-        scheduleReconnect();
+      // Only handle close for the current connection
+      if (singletonWs === ws) {
+        singletonWs = null;
+        if (!shuttingDown && refCount > 0) {
+          scheduleReconnect();
+        }
       }
     });
 
