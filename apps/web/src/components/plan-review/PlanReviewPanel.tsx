@@ -2,7 +2,7 @@
 
 import { memo, useState, useCallback } from "react";
 import { type TimestampFormat } from "@t3tools/contracts/settings";
-import { usePlanReviewStore } from "../../planReviewStore";
+import { usePlanReviewStore, type PlanAnnotation } from "../../planReviewStore";
 import { buildPlanReviewMessage } from "../../planReview";
 import { AnnotatableMarkdown } from "./AnnotatableMarkdown";
 import { Badge } from "../ui/badge";
@@ -21,6 +21,8 @@ import { toastManager } from "../ui/toast";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { EllipsisIcon, PanelRightCloseIcon, PencilIcon, MessageSquareIcon } from "lucide-react";
 import type { ActivePlanState, LatestProposedPlanState } from "../../session-logic";
+
+const EMPTY_ANNOTATIONS: PlanAnnotation[] = [];
 
 export interface PlanReviewPanelProps {
   activePlan: ActivePlanState | null;
@@ -47,8 +49,8 @@ const PlanReviewPanel = memo(function PlanReviewPanel({
   const planMarkdown = activeProposedPlan?.planMarkdown ?? null;
   const planTitle = planMarkdown ? proposedPlanTitle(planMarkdown) : null;
 
-  // Get store state
-  const annotations = usePlanReviewStore((state) => state.annotations[planId ?? ""] ?? []);
+  // Get store state — use stable empty array reference to avoid infinite re-render loop
+  const annotations = usePlanReviewStore((state) => state.annotations[planId ?? ""] ?? EMPTY_ANNOTATIONS);
   const editedMarkdownMap = usePlanReviewStore((state) => state.editedMarkdown);
   const editedMarkdown = planId ? editedMarkdownMap[planId] : undefined;
   const clearAnnotations = usePlanReviewStore((state) => state.clearAnnotations);

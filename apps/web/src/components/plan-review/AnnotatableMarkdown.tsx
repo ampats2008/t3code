@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { usePlanReviewStore } from "~/planReviewStore";
+import { usePlanReviewStore, type PlanAnnotation } from "~/planReviewStore";
 import { getAnnotationRanges, findOccurrenceIndex } from "~/planReview";
 import { AnnotationHighlight } from "./AnnotationHighlight";
 import { AnnotationPopover } from "./AnnotationPopover";
@@ -20,12 +20,14 @@ interface PopoverState {
   annotationId?: string;
 }
 
+const EMPTY_ANNOTATIONS: PlanAnnotation[] = [];
+
 export function AnnotatableMarkdown({ planId, markdown, cwd: _cwd }: AnnotatableMarkdownProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [popoverState, setPopoverState] = useState<PopoverState | null>(null);
 
-  // Get store state
-  const annotations = usePlanReviewStore((state) => state.annotations[planId] ?? []);
+  // Get store state — use stable empty array reference to avoid infinite re-render loop
+  const annotations = usePlanReviewStore((state) => state.annotations[planId] ?? EMPTY_ANNOTATIONS);
   const addAnnotation = usePlanReviewStore((state) => state.addAnnotation);
   const updateAnnotationComment = usePlanReviewStore((state) => state.updateAnnotationComment);
   const deleteAnnotation = usePlanReviewStore((state) => state.deleteAnnotation);
