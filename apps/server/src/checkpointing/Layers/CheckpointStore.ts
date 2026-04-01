@@ -111,6 +111,7 @@ const makeCheckpointStore = Effect.gen(function* () {
                 cwd: input.cwd,
                 args: ["read-tree", "HEAD"],
                 env: commitEnv,
+                timeoutMs: 120_000,
               });
             }
 
@@ -119,6 +120,7 @@ const makeCheckpointStore = Effect.gen(function* () {
               cwd: input.cwd,
               args: ["add", "-A", "--", "."],
               env: commitEnv,
+              timeoutMs: 120_000,
             });
 
             const writeTreeResult = yield* git.execute({
