@@ -20,7 +20,7 @@ function SelectionToolbar({
   position,
   onAddComment,
 }: {
-  position: { top: number; left: number; centerX: number };
+  position: SelectionPosition;
   onAddComment: () => void;
 }) {
   return (
@@ -57,7 +57,7 @@ function CommentForm({
   onDelete,
   onCancel,
 }: {
-  position: { top: number; left: number };
+  position: SelectionPosition;
   initialComment: string;
   isEditing: boolean;
   onSave: (comment: string) => void;
@@ -75,10 +75,10 @@ function CommentForm({
   return (
     <div
       className="fixed z-50 w-[340px]"
-      style={{ top: position.top + 8, left: position.left }}
+      style={{ top: position.bottom + 8, left: position.left }}
       onMouseDown={(e) => e.stopPropagation()}
     >
-      <div className="rounded-2xl border border-border bg-card shadow-xl">
+      <div className="rounded-2xl border border-border bg-secondary shadow-xl">
         {/* Textarea — borderless, like the chatbox input area */}
         <div className="px-1">
           <textarea
@@ -234,25 +234,18 @@ function clearPendingHighlight(container: HTMLElement) {
 
 // --- Interaction state types ---
 
+type SelectionPosition = {
+  top: number;
+  bottom: number;
+  left: number;
+  centerX: number;
+};
+
 type InteractionState =
   | null
-  | {
-      mode: "toolbar";
-      position: { top: number; left: number; centerX: number };
-      selectedText: string;
-      occurrenceIndex: number;
-    }
-  | {
-      mode: "new-comment";
-      position: { top: number; left: number; centerX: number };
-      selectedText: string;
-      occurrenceIndex: number;
-    }
-  | {
-      mode: "edit-comment";
-      position: { top: number; left: number; centerX: number };
-      annotationId: string;
-    };
+  | { mode: "toolbar"; position: SelectionPosition; selectedText: string; occurrenceIndex: number }
+  | { mode: "new-comment"; position: SelectionPosition; selectedText: string; occurrenceIndex: number }
+  | { mode: "edit-comment"; position: SelectionPosition; annotationId: string };
 
 // --- Main component ---
 
@@ -362,6 +355,7 @@ export function AnnotatableMarkdown({ planId, markdown, cwd }: AnnotatableMarkdo
         mode: "toolbar",
         position: {
           top: rect.top,
+          bottom: rect.bottom,
           left: rect.left,
           centerX: rect.left + rect.width / 2,
         },
@@ -389,7 +383,8 @@ export function AnnotatableMarkdown({ planId, markdown, cwd }: AnnotatableMarkdo
       setInteraction({
         mode: "edit-comment",
         position: {
-          top: rect.bottom,
+          top: rect.top,
+          bottom: rect.bottom,
           left: rect.left,
           centerX: rect.left + rect.width / 2,
         },
