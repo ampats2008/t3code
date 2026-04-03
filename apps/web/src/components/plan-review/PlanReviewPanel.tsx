@@ -179,11 +179,16 @@ const PlanReviewPanel = memo(function PlanReviewPanel({
       className="relative flex h-full shrink-0 flex-col border-l border-border/70 bg-card/50"
       style={{ width: panelWidth }}
     >
-      {/* Resize handle — left edge drag */}
+      {/* Resize handle — left edge drag (wider hit area, narrow visible line) */}
       <div
-        className="absolute left-0 top-0 z-10 h-full w-1 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
+        className="absolute -left-1 top-0 z-10 h-full w-3 cursor-col-resize group"
         onMouseDown={handleResizeStart}
-      />
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize plan review panel"
+      >
+        <div className="absolute left-1 top-0 h-full w-px bg-transparent transition-colors group-hover:bg-primary/40 group-active:bg-primary/60" />
+      </div>
 
       {/* Header */}
       <div className="flex h-12 shrink-0 items-center justify-between border-b border-border/60 px-3">
@@ -267,7 +272,7 @@ const PlanReviewPanel = memo(function PlanReviewPanel({
           </div>
         ) : (
           <textarea
-            className="w-full h-full min-h-[400px] resize-none bg-transparent p-3 font-mono text-[13px] leading-relaxed text-foreground/90 outline-none"
+            className="w-full h-full min-h-[400px] resize-none bg-transparent p-3 font-mono text-[13px] leading-relaxed text-foreground/90 outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
             value={editedMarkdown ?? planMarkdown}
             onChange={(e) => planId && setEditedMarkdown(planId, e.target.value)}
           />

@@ -31,7 +31,7 @@ function SelectionToolbar({
     >
       <button
         type="button"
-        className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-foreground shadow-lg"
+        className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-foreground shadow-lg transition-shadow hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         onMouseDown={(e) => {
           e.preventDefault(); // Keep selection alive
           e.stopPropagation();
@@ -83,7 +83,7 @@ function CommentForm({
         <div className="px-1">
           <textarea
             ref={textareaRef}
-            className="w-full resize-none rounded-t-2xl bg-transparent px-3 py-3 text-sm text-foreground placeholder-muted-foreground/50 outline-none"
+            className="w-full resize-none rounded-t-2xl bg-transparent px-3 py-3 text-sm text-foreground placeholder-muted-foreground/50 outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
             placeholder="Add your feedback..."
             rows={2}
             value={comment}
@@ -109,7 +109,7 @@ function CommentForm({
                 type="button"
                 onClick={onDelete}
                 title="Delete annotation"
-                className="flex items-center justify-center size-7 rounded-md text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors"
+                className="flex cursor-pointer items-center justify-center size-7 rounded-md text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
                 <Trash2Icon className="size-3.5" />
               </button>
@@ -117,7 +117,7 @@ function CommentForm({
             <button
               type="button"
               onClick={onCancel}
-              className="rounded-md px-2.5 py-1 text-xs text-muted-foreground/60 hover:text-foreground/80 hover:bg-muted/40 transition-colors"
+              className="cursor-pointer rounded-md px-2.5 py-1 text-xs text-muted-foreground/60 hover:text-foreground/80 hover:bg-muted/40 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
               Cancel
             </button>
@@ -126,7 +126,7 @@ function CommentForm({
             type="button"
             onClick={() => onSave(comment)}
             disabled={!comment.trim()}
-            className="flex items-center justify-center size-7 rounded-full bg-primary text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-30 disabled:pointer-events-none"
+            className="flex cursor-pointer items-center justify-center size-7 rounded-full bg-primary text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-30 disabled:cursor-not-allowed disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
             title={`Save (${navigator.platform?.includes("Mac") ? "\u2318" : "Ctrl"}+Enter)`}
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
@@ -195,7 +195,7 @@ function highlightTextInDom(
 
   const mark = document.createElement("mark");
   mark.className =
-    "bg-amber-500/20 rounded-sm cursor-pointer hover:bg-amber-500/30 transition-colors";
+    "bg-amber-500/20 rounded-sm cursor-pointer hover:bg-amber-500/30 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/50";
   mark.dataset.annotationId = annotationId;
   mark.setAttribute("role", "button");
   mark.setAttribute("tabindex", "0");
