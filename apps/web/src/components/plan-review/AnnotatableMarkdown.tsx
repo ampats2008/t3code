@@ -13,26 +13,25 @@ export interface AnnotatableMarkdownProps {
 }
 
 /**
- * Floating toolbar shown near the text selection — step 1 of the two-step flow.
- * Just an "Add Comment" button. No focus trapping, no popover.
+ * Floating toolbar shown centered above the text selection — step 1 of the two-step flow.
+ * Shows "Add Comment" button with icon. No focus trapping, no popover.
  */
 function SelectionToolbar({
   position,
   onAddComment,
 }: {
-  position: { top: number; left: number };
+  position: { top: number; left: number; centerX: number };
   onAddComment: () => void;
 }) {
   return (
     <div
-      className="fixed z-50"
-      style={{ top: position.top + 4, left: position.left }}
+      className="fixed z-50 -translate-x-1/2"
+      style={{ top: position.top - 36, left: position.centerX }}
       onMouseDown={(e) => e.preventDefault()} // Prevent stealing focus / clearing selection
     >
       <button
         type="button"
-        title="Add comment"
-        className="flex items-center justify-center size-7 rounded-md border border-border/70 bg-card text-foreground/70 shadow-lg hover:bg-muted/60 hover:text-foreground transition-colors"
+        className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-foreground shadow-lg"
         onMouseDown={(e) => {
           e.preventDefault(); // Keep selection alive
           e.stopPropagation();
@@ -40,6 +39,7 @@ function SelectionToolbar({
         }}
       >
         <MessageSquareIcon className="size-3.5" />
+        Add Comment
       </button>
     </div>
   );
@@ -238,19 +238,19 @@ type InteractionState =
   | null
   | {
       mode: "toolbar";
-      position: { top: number; left: number };
+      position: { top: number; left: number; centerX: number };
       selectedText: string;
       occurrenceIndex: number;
     }
   | {
       mode: "new-comment";
-      position: { top: number; left: number };
+      position: { top: number; left: number; centerX: number };
       selectedText: string;
       occurrenceIndex: number;
     }
   | {
       mode: "edit-comment";
-      position: { top: number; left: number };
+      position: { top: number; left: number; centerX: number };
       annotationId: string;
     };
 
@@ -360,7 +360,11 @@ export function AnnotatableMarkdown({ planId, markdown, cwd }: AnnotatableMarkdo
 
       setInteraction({
         mode: "toolbar",
-        position: { top: rect.bottom, left: rect.left },
+        position: {
+          top: rect.top,
+          left: rect.left,
+          centerX: rect.left + rect.width / 2,
+        },
         selectedText,
         occurrenceIndex,
       });
@@ -384,7 +388,11 @@ export function AnnotatableMarkdown({ planId, markdown, cwd }: AnnotatableMarkdo
       setActiveAnnotationId(annotationId);
       setInteraction({
         mode: "edit-comment",
-        position: { top: rect.bottom, left: rect.left },
+        position: {
+          top: rect.bottom,
+          left: rect.left,
+          centerX: rect.left + rect.width / 2,
+        },
         annotationId,
       });
     },
