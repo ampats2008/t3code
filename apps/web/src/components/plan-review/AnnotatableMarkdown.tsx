@@ -78,7 +78,7 @@ function CommentForm({
       style={{ top: position.bottom + 8, left: position.left }}
       onMouseDown={(e) => e.stopPropagation()}
     >
-      <div className="rounded-2xl border border-border bg-[oklch(0.20_0.03_260)] shadow-xl">
+      <div className="rounded-2xl border border-border bg-surface-elevated text-surface-elevated-foreground shadow-xl">
         {/* Textarea — borderless, like the chatbox input area */}
         <div className="px-1">
           <textarea
