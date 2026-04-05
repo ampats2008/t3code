@@ -1,7 +1,7 @@
 import { splitPromptIntoComposerSegments } from "./composer-editor-mentions";
 import { INLINE_TERMINAL_CONTEXT_PLACEHOLDER } from "./lib/terminalContext";
 
-export type ComposerTriggerKind = "path" | "slash-command" | "slash-model";
+export type ComposerTriggerKind = "path" | "slash-command" | "slash-model" | "thread-mention";
 export type ComposerSlashCommand = "model" | "plan" | "default" | "rename" | "fork";
 
 export interface ComposerTrigger {
@@ -13,7 +13,11 @@ export interface ComposerTrigger {
 
 const _SLASH_COMMANDS: readonly ComposerSlashCommand[] = ["model", "plan", "default", "rename", "fork"];
 const isInlineTokenSegment = (
-  segment: { type: "text"; text: string } | { type: "mention" } | { type: "terminal-context" },
+  segment:
+    | { type: "text"; text: string }
+    | { type: "mention" }
+    | { type: "terminal-context" }
+    | { type: "thread-mention" },
 ): boolean => segment.type !== "text";
 
 function clampCursor(text: string, cursor: number): number {
@@ -59,7 +63,7 @@ export function expandCollapsedComposerCursor(text: string, cursorInput: number)
       expandedCursor += expandedLength;
       continue;
     }
-    if (segment.type === "terminal-context") {
+    if (segment.type === "terminal-context" || segment.type === "thread-mention") {
       if (remaining <= 1) {
         return expandedCursor + remaining;
       }
@@ -80,7 +84,11 @@ export function expandCollapsedComposerCursor(text: string, cursorInput: number)
 }
 
 function collapsedSegmentLength(
-  segment: { type: "text"; text: string } | { type: "mention" } | { type: "terminal-context" },
+  segment:
+    | { type: "text"; text: string }
+    | { type: "mention" }
+    | { type: "terminal-context" }
+    | { type: "thread-mention" },
 ): number {
   if (segment.type === "text") {
     return segment.text.length;
@@ -90,7 +98,10 @@ function collapsedSegmentLength(
 
 function clampCollapsedComposerCursorForSegments(
   segments: ReadonlyArray<
-    { type: "text"; text: string } | { type: "mention" } | { type: "terminal-context" }
+    | { type: "text"; text: string }
+    | { type: "mention" }
+    | { type: "terminal-context" }
+    | { type: "thread-mention" }
   >,
   cursorInput: number,
 ): number {
@@ -134,7 +145,7 @@ export function collapseExpandedComposerCursor(text: string, cursorInput: number
       collapsedCursor += 1;
       continue;
     }
-    if (segment.type === "terminal-context") {
+    if (segment.type === "terminal-context" || segment.type === "thread-mention") {
       if (remaining <= 1) {
         return collapsedCursor + remaining;
       }
@@ -224,6 +235,17 @@ export function detectComposerTrigger(text: string, cursorInput: number): Compos
   const token = text.slice(tokenStart, cursor);
   if (!token.startsWith("@")) {
     return null;
+  }
+
+  // Detect @Threads trigger (case-insensitive) — opens thread search sub-menu
+  if (token.toLowerCase().startsWith("@threads")) {
+    const query = token.slice("@Threads".length).replace(/^:/, "").trim();
+    return {
+      kind: "thread-mention",
+      query,
+      rangeStart: tokenStart,
+      rangeEnd: cursor,
+    };
   }
 
   return {

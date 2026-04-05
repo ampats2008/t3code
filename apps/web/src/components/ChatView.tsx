@@ -40,6 +40,7 @@ import {
   parseStandaloneComposerSlashCommand,
   replaceTextRange,
 } from "../composer-logic";
+import { splitPromptIntoComposerSegments } from "../composer-editor-mentions";
 import {
   derivePendingApprovals,
   derivePendingUserInputs,
@@ -1085,6 +1086,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const workspaceEntries = workspaceEntriesQuery.data?.entries ?? EMPTY_PROJECT_ENTRIES;
   const composerMenuItems = useMemo<ComposerCommandItem[]>(() => {
     if (!composerTrigger) return [];
+    // thread-mention handles its own search UI internally in ComposerCommandMenu
+    if (composerTrigger.kind === "thread-mention") return [];
     if (composerTrigger.kind === "path") {
       return workspaceEntries.map((entry) => ({
         id: `path:${entry.kind}:${entry.path}`,
@@ -1134,16 +1137,16 @@ export default function ChatView({ threadId }: ChatViewProps) {
           description: "Fork this conversation",
         },
       ] satisfies ReadonlyArray<Extract<ComposerCommandItem, { type: "slash-command" }>>;
-      const skillItems: ComposerCommandItem[] = (serverConfigQuery.data?.skills ?? []).map(
-        (skill) => ({
-          id: `skill:${skill.name}`,
-          type: "skill" as const,
-          name: skill.name,
-          label: `/${skill.name}`,
-          description: skill.description,
-          argumentHint: skill.argumentHint,
-        }),
-      );
+      const skillItems: Array<Extract<ComposerCommandItem, { type: "skill" }>> = (
+        serverConfigQuery.data?.skills ?? []
+      ).map((skill) => ({
+        id: `skill:${skill.name}`,
+        type: "skill" as const,
+        name: skill.name,
+        label: `/${skill.name}`,
+        description: skill.description,
+        argumentHint: skill.argumentHint,
+      }));
       const allItems = [...slashCommandItems, ...skillItems];
       const query = composerTrigger.query.trim().toLowerCase();
       if (!query) {
@@ -2666,6 +2669,14 @@ export default function ChatView({ threadId }: ChatViewProps) {
       effort: selectedPromptEffort,
       text: messageTextForSend || IMAGE_ONLY_BOOTSTRAP_PROMPT,
     });
+    // Extract thread-mention segments from the prompt to include as thread-reference attachments
+    const threadMentionAttachments = splitPromptIntoComposerSegments(promptForSend)
+      .filter((seg) => seg.type === "thread-mention")
+      .map((seg) => ({
+        type: "thread-reference" as const,
+        threadId: seg.threadId as ThreadId,
+        threadTitle: seg.threadTitle,
+      }));
     const turnAttachmentsPromise = Promise.all(
       composerImagesSnapshot.map(async (image) => ({
         type: "image" as const,
@@ -2674,7 +2685,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
         sizeBytes: image.sizeBytes,
         dataUrl: await readFileAsDataUrl(image.file),
       })),
-    );
+    ).then((imageAttachments) => [...imageAttachments, ...threadMentionAttachments]);
     const optimisticAttachments = composerImagesSnapshot.map((image) => ({
       type: "image" as const,
       id: image.id,
@@ -3563,6 +3574,25 @@ export default function ChatView({ threadId }: ChatViewProps) {
         }
         return;
       }
+      if (item.type === "thread-result") {
+        // Insert @Thread:<id>:<title> chip followed by a space
+        const replacement = `@Thread:${item.threadId}:${item.threadTitle} `;
+        const replacementRangeEnd = extendReplacementRangeForTrailingSpace(
+          snapshot.value,
+          trigger.rangeEnd,
+          replacement,
+        );
+        const applied = applyPromptReplacement(
+          trigger.rangeStart,
+          replacementRangeEnd,
+          replacement,
+          { expectedText: snapshot.value.slice(trigger.rangeStart, replacementRangeEnd) },
+        );
+        if (applied) {
+          setComposerHighlightedItemId(null);
+        }
+        return;
+      }
       onProviderModelSelect(item.provider, item.model);
       const applied = applyPromptReplacement(trigger.rangeStart, trigger.rangeEnd, "", {
         expectedText: snapshot.value.slice(trigger.rangeStart, trigger.rangeEnd),
@@ -3944,6 +3974,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
                           resolvedTheme={resolvedTheme}
                           isLoading={isComposerMenuLoading}
                           triggerKind={composerTriggerKind}
+                          triggerQuery={composerTrigger?.query ?? ""}
+                          projectId={activeProject?.id ?? null}
                           activeItemId={activeComposerMenuItem?.id ?? null}
                           onHighlightedItemChange={onComposerMenuItemHighlighted}
                           onSelect={onSelectComposerItem}

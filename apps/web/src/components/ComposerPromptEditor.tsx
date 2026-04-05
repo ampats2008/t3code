@@ -727,6 +727,14 @@ function $setComposerEditorPrompt(
       }
       continue;
     }
+    if (segment.type === "thread-mention") {
+      // Render thread mention as inline text chip — @Thread:<id>:<title>
+      $appendTextWithLineBreaks(
+        paragraph,
+        `@Thread:${segment.threadId}:${segment.threadTitle}`,
+      );
+      continue;
+    }
     $appendTextWithLineBreaks(paragraph, segment.text);
   }
 }

@@ -15,9 +15,16 @@ export type ComposerPromptSegment =
   | {
       type: "terminal-context";
       context: TerminalContextDraft | null;
+    }
+  | {
+      type: "thread-mention";
+      threadId: string;
+      threadTitle: string;
     };
 
 const MENTION_TOKEN_REGEX = /(^|\s)@([^\s@]+)(?=\s)/g;
+// Matches @Thread:<threadId>:<threadTitle> tokens — note the title can contain colons
+const THREAD_MENTION_TOKEN_REGEX = /^Thread:([^:]+):(.+)$/;
 
 function pushTextSegment(segments: ComposerPromptSegment[], text: string): void {
   if (!text) return;
@@ -49,7 +56,14 @@ function splitPromptTextIntoComposerSegments(text: string): ComposerPromptSegmen
     }
 
     if (path.length > 0) {
-      segments.push({ type: "mention", path });
+      const threadMatch = THREAD_MENTION_TOKEN_REGEX.exec(path);
+      if (threadMatch) {
+        const threadId = threadMatch[1] ?? "";
+        const threadTitle = threadMatch[2] ?? "";
+        segments.push({ type: "thread-mention", threadId, threadTitle });
+      } else {
+        segments.push({ type: "mention", path });
+      }
     } else {
       pushTextSegment(segments, text.slice(mentionStart, mentionEnd));
     }
