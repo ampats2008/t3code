@@ -57,6 +57,7 @@ import { OrchestrationReactor } from "./orchestration/Services/OrchestrationReac
 import { ProviderService } from "./provider/Services/ProviderService";
 import { ProviderRegistry } from "./provider/Services/ProviderRegistry";
 import { CheckpointDiffQuery } from "./checkpointing/Services/CheckpointDiffQuery";
+import { ConversationSearchRepository } from "./persistence/Services/ConversationSearch.ts";
 import { clamp } from "effect/Number";
 import { Open, resolveAvailableEditors } from "./open";
 import { ServerConfig } from "./config";
@@ -210,7 +211,8 @@ export type ServerCoreRuntimeServices =
   | CheckpointDiffQuery
   | OrchestrationReactor
   | ProviderService
-  | ProviderRegistry;
+  | ProviderRegistry
+  | ConversationSearchRepository;
 
 export type ServerRuntimeServices =
   | ServerCoreRuntimeServices
@@ -354,6 +356,10 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       turnStartCommand.message.attachments,
       (attachment) =>
         Effect.gen(function* () {
+          // Pass through non-image attachments (e.g., thread-reference) as-is
+          if (attachment.type !== "image") {
+            return attachment as any;
+          }
           const parsed = parseBase64DataUrl(attachment.dataUrl);
           if (!parsed || !parsed.mimeType.startsWith("image/")) {
             return yield* new RouteRequestError({
@@ -616,6 +622,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const projectionReadModelQuery = yield* ProjectionSnapshotQuery;
   const checkpointDiffQuery = yield* CheckpointDiffQuery;
   const orchestrationReactor = yield* OrchestrationReactor;
+  const conversationSearchRepository = yield* ConversationSearchRepository;
   const { openInEditor } = yield* Open;
 
   const subscriptionsScope = yield* Scope.make("sequential");
@@ -952,6 +959,41 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       case WS_METHODS.serverUpdateSettings: {
         const body = stripRequestTag(request.body);
         return yield* serverSettingsManager.updateSettings(body.patch);
+      }
+
+      case ORCHESTRATION_WS_METHODS.searchConversations: {
+        const body = stripRequestTag(request.body);
+        const rows = yield* conversationSearchRepository.searchAll(body);
+        // Group results by thread
+        const threadMap = new Map<
+          string,
+          {
+            threadId: string;
+            threadTitle: string;
+            createdAt: string;
+            updatedAt: string;
+            matches: Array<{ messageId?: string; snippet: string; relevance: number }>;
+          }
+        >();
+        for (const row of rows) {
+          let entry = threadMap.get(row.threadId);
+          if (!entry) {
+            entry = {
+              threadId: row.threadId,
+              threadTitle: row.threadTitle,
+              createdAt: row.threadCreatedAt,
+              updatedAt: row.threadUpdatedAt,
+              matches: [],
+            };
+            threadMap.set(row.threadId, entry);
+          }
+          entry.matches.push({
+            ...(row.messageId !== null ? { messageId: row.messageId } : {}),
+            snippet: row.snippet,
+            relevance: row.relevance,
+          });
+        }
+        return { results: Array.from(threadMap.values()) };
       }
 
       default: {

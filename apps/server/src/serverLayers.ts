@@ -19,6 +19,7 @@ import { RuntimeReceiptBusLive } from "./orchestration/Layers/RuntimeReceiptBus"
 import { ThreadSummarizerLive } from "./orchestration/Layers/ThreadSummarizer";
 import { ProjectionThreadMessageRepositoryLive } from "./persistence/Layers/ProjectionThreadMessages";
 import { ProjectionThreadRepositoryLive } from "./persistence/Layers/ProjectionThreads";
+import { ConversationSearchRepositoryLive } from "./persistence/Layers/ConversationSearch";
 import { ProviderUnsupportedError } from "./provider/Errors";
 import { makeClaudeAdapterLive } from "./provider/Layers/ClaudeAdapter";
 import { makeCodexAdapterLive } from "./provider/Layers/CodexAdapter";
@@ -151,5 +152,6 @@ export function makeServerRuntimeServicesLayer() {
     gitManagerLayer,
     terminalLayer,
     KeybindingsLive,
+    ConversationSearchRepositoryLive,
   ).pipe(Layer.provideMerge(NodeServices.layer));
 }
