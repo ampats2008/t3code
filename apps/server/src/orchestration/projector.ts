@@ -17,6 +17,7 @@ import {
   ThreadArchivedPayload,
   ThreadCreatedPayload,
   ThreadDeletedPayload,
+  ThreadForkedPayload,
   ThreadInteractionModeSetPayload,
   ThreadMetaUpdatedPayload,
   ThreadProposedPlanUpsertedPayload,
@@ -313,6 +314,81 @@ export function projectEvent(
           }),
         })),
       );
+
+    case "thread.forked":
+      return Effect.gen(function* () {
+        const payload = yield* decodeForEvent(
+          ThreadForkedPayload,
+          event.payload,
+          event.type,
+          "payload",
+        );
+
+        const sourceThread = nextBase.threads.find(
+          (entry) => entry.id === payload.sourceThreadId,
+        );
+
+        const copiedMessageIdSet = new Set(payload.copiedMessageIds as unknown as string[]);
+        const copiedMessages: OrchestrationMessage[] = sourceThread
+          ? sourceThread.messages
+              .filter((msg) => copiedMessageIdSet.has(msg.id))
+              .map((msg) => ({ ...msg }))
+          : [];
+
+        const forkedThread: OrchestrationThread = yield* decodeForEvent(
+          OrchestrationThread,
+          {
+            id: payload.threadId,
+            projectId: payload.projectId,
+            title: payload.title,
+            modelSelection: payload.modelSelection,
+            runtimeMode: payload.runtimeMode,
+            interactionMode: payload.interactionMode,
+            branch: payload.branch,
+            worktreePath: payload.worktreePath,
+            latestTurn: null,
+            createdAt: payload.createdAt,
+            updatedAt: payload.updatedAt,
+            archivedAt: null,
+            forkSource: {
+              threadId: payload.sourceThreadId,
+              messageId: payload.forkAtMessageId,
+            },
+            forks: [],
+            deletedAt: null,
+            messages: copiedMessages,
+            proposedPlans: [],
+            activities: [],
+            checkpoints: [],
+            session: null,
+          },
+          event.type,
+          "forkedThread",
+        );
+
+        const updatedThreads = nextBase.threads.map((thread) => {
+          if (thread.id === payload.sourceThreadId) {
+            return {
+              ...thread,
+              forks: [
+                ...thread.forks,
+                {
+                  sourceMessageId: payload.forkAtMessageId,
+                  forkedThreadId: payload.threadId,
+                  forkedThreadTitle: payload.title,
+                  forkNumber: payload.forkNumber,
+                },
+              ],
+            };
+          }
+          return thread;
+        });
+
+        return {
+          ...nextBase,
+          threads: [...updatedThreads, forkedThread],
+        };
+      });
 
     case "thread.meta-updated":
       return decodeForEvent(ThreadMetaUpdatedPayload, event.payload, event.type, "payload").pipe(

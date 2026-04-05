@@ -21,6 +21,7 @@ export const ORCHESTRATION_WS_METHODS = {
   getTurnDiff: "orchestration.getTurnDiff",
   getFullThreadDiff: "orchestration.getFullThreadDiff",
   replayEvents: "orchestration.replayEvents",
+  searchConversations: "orchestration.searchConversations",
 } as const;
 
 export const ORCHESTRATION_WS_CHANNELS = {
@@ -116,9 +117,17 @@ const UploadChatImageAttachment = Schema.Struct({
 });
 export type UploadChatImageAttachment = typeof UploadChatImageAttachment.Type;
 
-export const ChatAttachment = Schema.Union([ChatImageAttachment]);
+// Thread mention attachment for cross-thread context
+export const ThreadMentionAttachment = Schema.Struct({
+  type: Schema.Literal("thread-reference"),
+  threadId: ThreadId,
+  threadTitle: TrimmedNonEmptyString,
+});
+export type ThreadMentionAttachment = typeof ThreadMentionAttachment.Type;
+
+export const ChatAttachment = Schema.Union([ChatImageAttachment, ThreadMentionAttachment]);
 export type ChatAttachment = typeof ChatAttachment.Type;
-const UploadChatAttachment = Schema.Union([UploadChatImageAttachment]);
+const UploadChatAttachment = Schema.Union([UploadChatImageAttachment, ThreadMentionAttachment]);
 export type UploadChatAttachment = typeof UploadChatAttachment.Type;
 
 export const ProjectScriptIcon = Schema.Literals([
@@ -1075,6 +1084,37 @@ export type OrchestrationReplayEventsInput = typeof OrchestrationReplayEventsInp
 const OrchestrationReplayEventsResult = Schema.Array(OrchestrationEvent);
 export type OrchestrationReplayEventsResult = typeof OrchestrationReplayEventsResult.Type;
 
+// ── Conversation Search ───────────────────────────────────────────
+
+export const ConversationSearchRequest = Schema.Struct({
+  projectId: ProjectId,
+  query: Schema.String,
+  limit: Schema.optional(NonNegativeInt),
+  filter: Schema.optional(Schema.Literals(["all", "active", "archived"])),
+});
+export type ConversationSearchRequest = typeof ConversationSearchRequest.Type;
+
+export const ConversationSearchMatch = Schema.Struct({
+  messageId: Schema.optional(MessageId),
+  snippet: Schema.String,
+  relevance: Schema.Number,
+});
+export type ConversationSearchMatch = typeof ConversationSearchMatch.Type;
+
+export const ConversationSearchResult = Schema.Struct({
+  threadId: ThreadId,
+  threadTitle: Schema.String,
+  createdAt: IsoDateTime,
+  updatedAt: IsoDateTime,
+  matches: Schema.Array(ConversationSearchMatch),
+});
+export type ConversationSearchResult = typeof ConversationSearchResult.Type;
+
+export const ConversationSearchResponse = Schema.Struct({
+  results: Schema.Array(ConversationSearchResult),
+});
+export type ConversationSearchResponse = typeof ConversationSearchResponse.Type;
+
 export const OrchestrationRpcSchemas = {
   getSnapshot: {
     input: OrchestrationGetSnapshotInput,
@@ -1095,5 +1135,9 @@ export const OrchestrationRpcSchemas = {
   replayEvents: {
     input: OrchestrationReplayEventsInput,
     output: OrchestrationReplayEventsResult,
+  },
+  searchConversations: {
+    input: ConversationSearchRequest,
+    output: ConversationSearchResponse,
   },
 } as const;

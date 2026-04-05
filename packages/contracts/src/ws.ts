@@ -3,6 +3,7 @@ import { NonNegativeInt, ProjectId, ThreadId, TrimmedNonEmptyString } from "./ba
 
 import {
   ClientOrchestrationCommand,
+  ConversationSearchRequest,
   OrchestrationEvent,
   ORCHESTRATION_WS_CHANNELS,
   OrchestrationGetFullThreadDiffInput,
@@ -117,6 +118,7 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(ORCHESTRATION_WS_METHODS.getTurnDiff, OrchestrationGetTurnDiffInput),
   tagRequestBody(ORCHESTRATION_WS_METHODS.getFullThreadDiff, OrchestrationGetFullThreadDiffInput),
   tagRequestBody(ORCHESTRATION_WS_METHODS.replayEvents, OrchestrationReplayEventsInput),
+  tagRequestBody(ORCHESTRATION_WS_METHODS.searchConversations, ConversationSearchRequest),
 
   // Project Search
   tagRequestBody(WS_METHODS.projectsSearchEntries, ProjectSearchEntriesInput),
