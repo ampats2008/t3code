@@ -3849,6 +3849,13 @@ export default function ChatView({ threadId }: ChatViewProps) {
                 resolvedTheme={resolvedTheme}
                 timestampFormat={timestampFormat}
                 workspaceRoot={activeProject?.cwd ?? undefined}
+                onForkAtMessage={(messageId) => {
+                  void handleForkThread(threadId, messageId);
+                }}
+                threadForks={activeThread?.forks ?? []}
+                onNavigateToThread={(targetThreadId) =>
+                  void navigate({ to: "/$threadId", params: { threadId: targetThreadId } })
+                }
               />
             </div>
 
