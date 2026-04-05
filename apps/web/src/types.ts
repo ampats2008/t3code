@@ -5,6 +5,7 @@ import type {
   OrchestrationSessionStatus,
   OrchestrationThreadActivity,
   ProjectScript as ContractProjectScript,
+  ThreadForkInfo,
   ThreadId,
   ProjectId,
   TurnId,
@@ -109,6 +110,8 @@ export interface Thread {
   worktreePath: string | null;
   turnDiffSummaries: TurnDiffSummary[];
   activities: OrchestrationThreadActivity[];
+  forks?: ThreadForkInfo[] | undefined;
+  forkSource?: { threadId: ThreadId; messageId: MessageId } | undefined;
 }
 
 export interface ThreadSession {

@@ -234,6 +234,12 @@ function attachmentPreviewRoutePath(attachmentId: string): string {
 // ── Pure state transition functions ────────────────────────────────────
 
 export function syncServerReadModel(state: AppState, readModel: OrchestrationReadModel): AppState {
+  // DEBUG: Track thread counts through the sync pipeline
+  const incomingTotal = readModel.threads.length;
+  const deletedThreads = readModel.threads.filter((t) => t.deletedAt !== null);
+  const archivedThreads = readModel.threads.filter((t) => t.archivedAt !== null);
+  const prevThreadIdSet = new Set(state.threads.map((t) => t.id));
+
   const projects = mapProjectsFromReadModel(
     readModel.projects.filter((project) => project.deletedAt === null),
     state.projects,
@@ -315,8 +321,64 @@ export function syncServerReadModel(state: AppState, readModel: OrchestrationRea
           files: checkpoint.files.map((file) => ({ ...file })),
         })),
         activities: thread.activities.map((activity) => ({ ...activity })),
+        forks: thread.forks.map((fork) => ({ ...fork })),
+        forkSource: thread.forkSource,
       };
     });
+
+  // DEBUG: Log thread changes per-project to catch disappearing threads
+  const newThreadIdSet = new Set(threads.map((t) => t.id));
+  const disappeared = [...prevThreadIdSet].filter((id) => !newThreadIdSet.has(id));
+  const appeared = [...newThreadIdSet].filter((id) => !prevThreadIdSet.has(id));
+
+  const threadsByProject = new Map<string, number>();
+  for (const t of threads) {
+    threadsByProject.set(t.projectId, (threadsByProject.get(t.projectId) ?? 0) + 1);
+  }
+  const prevThreadsByProject = new Map<string, number>();
+  for (const t of state.threads) {
+    prevThreadsByProject.set(t.projectId, (prevThreadsByProject.get(t.projectId) ?? 0) + 1);
+  }
+
+  console.debug(
+    "[DEBUG syncServerReadModel]",
+    {
+      incomingTotal,
+      deletedCount: deletedThreads.length,
+      archivedCount: archivedThreads.length,
+      prevCount: state.threads.length,
+      newCount: threads.length,
+      projectCount: projects.length,
+      threadsByProject: Object.fromEntries(threadsByProject),
+      prevThreadsByProject: Object.fromEntries(prevThreadsByProject),
+    },
+  );
+
+  if (disappeared.length > 0) {
+    const disappearedDetails = disappeared.map((id) => {
+      const prev = state.threads.find((t) => t.id === id);
+      const inReadModel = readModel.threads.find((t) => t.id === id);
+      return {
+        id,
+        projectId: prev?.projectId,
+        title: prev?.title,
+        inReadModel: !!inReadModel,
+        readModelDeletedAt: inReadModel?.deletedAt ?? null,
+        readModelArchivedAt: inReadModel?.archivedAt ?? null,
+      };
+    });
+    console.warn(
+      "[DEBUG syncServerReadModel] ⚠️ THREADS DISAPPEARED:",
+      disappearedDetails,
+    );
+  }
+  if (appeared.length > 0) {
+    console.debug(
+      "[DEBUG syncServerReadModel] Threads appeared:",
+      appeared,
+    );
+  }
+
   return {
     ...state,
     projects,
