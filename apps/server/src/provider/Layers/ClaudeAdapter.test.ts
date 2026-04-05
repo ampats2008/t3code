@@ -17,11 +17,13 @@ import {
   ThreadId,
 } from "@t3tools/contracts";
 import { assert, describe, it } from "@effect/vitest";
-import { Effect, Fiber, Layer, Random, Stream } from "effect";
+import { Effect, Fiber, Layer, Option, Random, Stream } from "effect";
 
 import { attachmentRelativePath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
+import { ConversationSearchRepository } from "../../persistence/Services/ConversationSearch.ts";
+import { ProjectionThreadRepository } from "../../persistence/Services/ProjectionThreads.ts";
 import { ProviderAdapterValidationError } from "../Errors.ts";
 import { ClaudeAdapter } from "../Services/ClaudeAdapter.ts";
 import { makeClaudeAdapterLive, type ClaudeAdapterLiveOptions } from "./ClaudeAdapter.ts";
@@ -161,6 +163,20 @@ function makeHarness(config?: {
       : {}),
   };
 
+  const noopSearchRepository = Layer.succeed(ConversationSearchRepository, {
+    searchAll: () => Effect.succeed([]),
+    indexMessage: () => Effect.void,
+    updateThreadTitle: () => Effect.void,
+    removeThread: () => Effect.void,
+  });
+
+  const noopProjectionThreadRepository = Layer.succeed(ProjectionThreadRepository, {
+    upsert: () => Effect.void,
+    getById: () => Effect.succeed(Option.none()),
+    listByProjectId: () => Effect.succeed([]),
+    deleteById: () => Effect.void,
+  });
+
   return {
     layer: makeClaudeAdapterLive(adapterOptions).pipe(
       Layer.provideMerge(
@@ -171,6 +187,8 @@ function makeHarness(config?: {
       ),
       Layer.provideMerge(ServerSettingsService.layerTest()),
       Layer.provideMerge(NodeServices.layer),
+      Layer.provideMerge(noopSearchRepository),
+      Layer.provideMerge(noopProjectionThreadRepository),
     ),
     query,
     getLastCreateQueryInput: () => createInput,
@@ -1197,6 +1215,18 @@ describe("ClaudeAdapterLive", () => {
       Layer.provideMerge(ServerConfig.layerTest("/tmp/claude-adapter-test", "/tmp")),
       Layer.provideMerge(ServerSettingsService.layerTest()),
       Layer.provideMerge(NodeServices.layer),
+      Layer.provideMerge(Layer.succeed(ConversationSearchRepository, {
+        searchAll: () => Effect.succeed([]),
+        indexMessage: () => Effect.void,
+        updateThreadTitle: () => Effect.void,
+        removeThread: () => Effect.void,
+      })),
+      Layer.provideMerge(Layer.succeed(ProjectionThreadRepository, {
+        upsert: () => Effect.void,
+        getById: () => Effect.succeed(Option.none()),
+        listByProjectId: () => Effect.succeed([]),
+        deleteById: () => Effect.void,
+      })),
     );
 
     return Effect.gen(function* () {

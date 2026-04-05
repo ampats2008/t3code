@@ -81,6 +81,9 @@ export function makeServerProviderLayer(): Layer.Layer<
     );
     const claudeAdapterLayer = makeClaudeAdapterLive(
       nativeEventLogger ? { nativeEventLogger } : undefined,
+    ).pipe(
+      Layer.provide(ConversationSearchRepositoryLive),
+      Layer.provide(ProjectionThreadRepositoryLive),
     );
     const adapterRegistryLayer = ProviderAdapterRegistryLive.pipe(
       Layer.provide(codexAdapterLayer),
