@@ -1,5 +1,11 @@
 import { type MessageId, type TurnId } from "@t3tools/contracts";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../ui/menu";
+import {
   memo,
   useCallback,
   useEffect,
@@ -24,9 +30,11 @@ import {
   CheckIcon,
   CircleAlertIcon,
   EyeIcon,
+  GitForkIcon,
   GlobeIcon,
   HammerIcon,
   type LucideIcon,
+  MoreVerticalIcon,
   SquarePenIcon,
   TerminalIcon,
   Undo2Icon,
@@ -79,6 +87,7 @@ interface MessagesTimelineProps {
   revertTurnCountByUserMessageId: Map<MessageId, number>;
   onRevertUserMessage: (messageId: MessageId) => void;
   isRevertingCheckpoint: boolean;
+  onForkAtMessage: (messageId: MessageId) => void;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   markdownCwd: string | undefined;
   resolvedTheme: "light" | "dark";
@@ -104,6 +113,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   revertTurnCountByUserMessageId,
   onRevertUserMessage,
   isRevertingCheckpoint,
+  onForkAtMessage,
   onImageExpand,
   markdownCwd,
   resolvedTheme,
@@ -439,6 +449,17 @@ export const MessagesTimeline = memo(function MessagesTimeline({
                         <Undo2Icon className="size-3" />
                       </Button>
                     )}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger render={<Button type="button" size="xs" variant="outline" title="More actions" />}>
+                        <MoreVerticalIcon className="size-3" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => onForkAtMessage(row.message.id)}>
+                          <GitForkIcon className="size-3.5" />
+                          Fork here
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                   <p className="text-right text-[10px] text-muted-foreground/30">
                     {formatTimestamp(row.message.createdAt, timestampFormat)}
@@ -526,15 +547,30 @@ export const MessagesTimeline = memo(function MessagesTimeline({
                     </div>
                   );
                 })()}
-                <p className="mt-1.5 text-[10px] text-muted-foreground/30">
-                  {formatMessageMeta(
-                    row.message.createdAt,
-                    row.message.streaming
-                      ? formatElapsed(row.durationStart, nowIso)
-                      : formatElapsed(row.durationStart, row.message.completedAt),
-                    timestampFormat,
-                  )}
-                </p>
+                <div className="mt-1 flex items-center gap-1.5">
+                  <p className="flex-1 text-[10px] text-muted-foreground/30">
+                    {formatMessageMeta(
+                      row.message.createdAt,
+                      row.message.streaming
+                        ? formatElapsed(row.durationStart, nowIso)
+                        : formatElapsed(row.durationStart, row.message.completedAt),
+                      timestampFormat,
+                    )}
+                  </p>
+                  <div className="opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover:opacity-100">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger render={<Button type="button" size="xs" variant="ghost" title="More actions" />}>
+                        <MoreVerticalIcon className="size-3" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start">
+                        <DropdownMenuItem onClick={() => onForkAtMessage(row.message.id)}>
+                          <GitForkIcon className="size-3.5" />
+                          Fork here
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
               </div>
             </>
           );
