@@ -1,4 +1,5 @@
 import type {
+  MessageId,
   OrchestrationCommand,
   OrchestrationProject,
   OrchestrationReadModel,
@@ -156,4 +157,28 @@ export function requireNonNegativeInteger(input: {
       `${input.field} must be an integer greater than or equal to 0.`,
     ),
   );
+}
+
+export function requireMessageInThread(input: {
+  readonly readModel: OrchestrationReadModel;
+  readonly command: OrchestrationCommand;
+  readonly threadId: ThreadId;
+  readonly messageId: MessageId;
+}): Effect.Effect<OrchestrationThread, OrchestrationCommandInvariantError> {
+  const thread = findThreadById(input.readModel, input.threadId);
+  if (!thread) {
+    return Effect.fail(
+      invariantError(input.command.type, `Thread '${input.threadId}' does not exist.`),
+    );
+  }
+  const message = thread.messages.find((m) => m.id === input.messageId);
+  if (!message) {
+    return Effect.fail(
+      invariantError(
+        input.command.type,
+        `Message '${input.messageId}' does not exist in thread '${input.threadId}'.`,
+      ),
+    );
+  }
+  return Effect.succeed(thread);
 }

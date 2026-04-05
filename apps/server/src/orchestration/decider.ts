@@ -7,6 +7,7 @@ import { Effect } from "effect";
 
 import { OrchestrationCommandInvariantError } from "./Errors.ts";
 import {
+  requireMessageInThread,
   requireProject,
   requireProjectAbsent,
   requireThread,
@@ -673,6 +674,64 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         payload: {
           threadId: command.threadId,
           activity: command.activity,
+        },
+      };
+    }
+
+    case "thread.fork": {
+      yield* requireProject({
+        readModel,
+        command,
+        projectId: command.projectId,
+      });
+      const sourceThread = yield* requireMessageInThread({
+        readModel,
+        command,
+        threadId: command.sourceThreadId,
+        messageId: command.forkAtMessageId,
+      });
+      yield* requireThreadAbsent({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+
+      const forkMessageIndex = sourceThread.messages.findIndex(
+        (m) => m.id === command.forkAtMessageId,
+      );
+      const copiedMessages = sourceThread.messages.slice(0, forkMessageIndex + 1);
+      const copiedMessageIds = copiedMessages.map((m) => m.id);
+
+      const existingForks = readModel.threads.filter(
+        (t) =>
+          t.forkSource?.threadId === command.sourceThreadId &&
+          t.forkSource?.messageId === command.forkAtMessageId,
+      );
+      const forkNumber = existingForks.length + 1;
+
+      return {
+        ...withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        }),
+        type: "thread.forked",
+        payload: {
+          threadId: command.threadId,
+          projectId: command.projectId,
+          sourceThreadId: command.sourceThreadId,
+          forkAtMessageId: command.forkAtMessageId,
+          title: command.title,
+          modelSelection: command.modelSelection,
+          runtimeMode: command.runtimeMode,
+          interactionMode: command.interactionMode,
+          branch: command.branch,
+          worktreePath: command.worktreePath,
+          copiedMessageIds,
+          forkNumber,
+          createdAt: command.createdAt,
+          updatedAt: command.createdAt,
         },
       };
     }
