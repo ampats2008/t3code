@@ -1,4 +1,4 @@
-import { type MessageId, type TurnId } from "@t3tools/contracts";
+import { type MessageId, type ThreadForkInfo, type ThreadId, type TurnId } from "@t3tools/contracts";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -65,6 +65,7 @@ import {
 } from "./userMessageTerminalContexts";
 import { classifyToolDisplayMode } from "./toolCallClassification";
 import { RichToolCallRow } from "./RichToolCallRow";
+import { ForkBadge } from "./ForkBadge";
 
 const MAX_VISIBLE_WORK_LOG_ENTRIES = 6;
 const ALWAYS_UNVIRTUALIZED_TAIL_ROWS = 8;
@@ -87,7 +88,9 @@ interface MessagesTimelineProps {
   revertTurnCountByUserMessageId: Map<MessageId, number>;
   onRevertUserMessage: (messageId: MessageId) => void;
   isRevertingCheckpoint: boolean;
-  onForkAtMessage: (messageId: MessageId) => void;
+  onForkAtMessage?: (messageId: MessageId) => void;
+  threadForks?: ThreadForkInfo[];
+  onNavigateToThread?: (threadId: ThreadId) => void;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   markdownCwd: string | undefined;
   resolvedTheme: "light" | "dark";
@@ -114,6 +117,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   onRevertUserMessage,
   isRevertingCheckpoint,
   onForkAtMessage,
+  threadForks = [],
+  onNavigateToThread,
   onImageExpand,
   markdownCwd,
   resolvedTheme,
@@ -461,6 +466,15 @@ export const MessagesTimeline = memo(function MessagesTimeline({
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
+                  {(() => {
+                    const messageForks = threadForks.filter(
+                      (f) => f.sourceMessageId === row.message.id,
+                    );
+                    if (messageForks.length === 0 || !onNavigateToThread) return null;
+                    return (
+                      <ForkBadge forks={messageForks} onNavigate={onNavigateToThread} />
+                    );
+                  })()}
                   <p className="text-right text-[10px] text-muted-foreground/30">
                     {formatTimestamp(row.message.createdAt, timestampFormat)}
                   </p>
@@ -557,6 +571,15 @@ export const MessagesTimeline = memo(function MessagesTimeline({
                       timestampFormat,
                     )}
                   </p>
+                  {(() => {
+                    const messageForks = threadForks.filter(
+                      (f) => f.sourceMessageId === row.message.id,
+                    );
+                    if (messageForks.length === 0 || !onNavigateToThread) return null;
+                    return (
+                      <ForkBadge forks={messageForks} onNavigate={onNavigateToThread} />
+                    );
+                  })()}
                   <div className="opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover:opacity-100">
                     <DropdownMenu>
                       <DropdownMenuTrigger render={<Button type="button" size="xs" variant="ghost" title="More actions" />}>
