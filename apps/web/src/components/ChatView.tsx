@@ -81,6 +81,7 @@ import {
 import { basenameOfPath } from "../vscode-icons";
 import { useTheme } from "../hooks/useTheme";
 import { useTurnDiffSummaries } from "../hooks/useTurnDiffSummaries";
+import { useHandleForkThread } from "../hooks/useHandleForkThread";
 import BranchToolbar from "./BranchToolbar";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
 import PlanSidebar from "./PlanSidebar";
@@ -1125,6 +1126,13 @@ export default function ChatView({ threadId }: ChatViewProps) {
           label: "/rename",
           description: "Generate a title for this thread using AI",
         },
+        {
+          id: "slash:fork",
+          type: "slash-command",
+          command: "fork",
+          label: "/fork",
+          description: "Fork this conversation",
+        },
       ] satisfies ReadonlyArray<Extract<ComposerCommandItem, { type: "slash-command" }>>;
       const skillItems: ComposerCommandItem[] = (serverConfigQuery.data?.skills ?? []).map(
         (skill) => ({
@@ -1700,6 +1708,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
       return !open;
     });
   }, [activePlan?.turnId, sidebarProposedPlan?.turnId]);
+
+  const { handleForkThread } = useHandleForkThread();
 
   const handleRenameThread = useCallback(async () => {
     const api = readNativeApi();
@@ -2592,6 +2602,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
     if (standaloneSlashCommand) {
       if (standaloneSlashCommand === "rename") {
         void handleRenameThread();
+      } else if (standaloneSlashCommand === "fork") {
+        void handleForkThread(threadId);
       } else {
         handleInteractionModeChange(standaloneSlashCommand);
       }
