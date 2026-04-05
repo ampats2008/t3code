@@ -154,9 +154,11 @@ export function buildThreadTitlePrompt(input: ThreadTitlePromptInput) {
 // ---------------------------------------------------------------------------
 
 export function buildBranchNamePrompt(input: BranchNamePromptInput) {
-  const attachmentLines = (input.attachments ?? []).map(
-    (attachment) => `- ${attachment.name} (${attachment.mimeType}, ${attachment.sizeBytes} bytes)`,
-  );
+  const attachmentLines = (input.attachments ?? [])
+    .filter((attachment): attachment is Extract<typeof attachment, { type: "image" }> => attachment.type === "image")
+    .map(
+      (attachment) => `- ${attachment.name} (${attachment.mimeType}, ${attachment.sizeBytes} bytes)`,
+    );
 
   const promptSections = [
     "You generate concise git branch names.",
