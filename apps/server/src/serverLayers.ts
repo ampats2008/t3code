@@ -16,6 +16,9 @@ import { OrchestrationProjectionPipelineLive } from "./orchestration/Layers/Proj
 import { OrchestrationProjectionSnapshotQueryLive } from "./orchestration/Layers/ProjectionSnapshotQuery";
 import { ProviderRuntimeIngestionLive } from "./orchestration/Layers/ProviderRuntimeIngestion";
 import { RuntimeReceiptBusLive } from "./orchestration/Layers/RuntimeReceiptBus";
+import { ThreadSummarizerLive } from "./orchestration/Layers/ThreadSummarizer";
+import { ProjectionThreadMessageRepositoryLive } from "./persistence/Layers/ProjectionThreadMessages";
+import { ProjectionThreadRepositoryLive } from "./persistence/Layers/ProjectionThreads";
 import { ProviderUnsupportedError } from "./provider/Errors";
 import { makeClaudeAdapterLive } from "./provider/Layers/ClaudeAdapter";
 import { makeCodexAdapterLive } from "./provider/Layers/CodexAdapter";
@@ -104,12 +107,18 @@ export function makeServerRuntimeServicesLayer() {
     Layer.provideMerge(checkpointStoreLayer),
   );
 
+  const threadSummarizerLayer = ThreadSummarizerLive.pipe(
+    Layer.provide(ProjectionThreadMessageRepositoryLive),
+    Layer.provide(ProjectionThreadRepositoryLive),
+  );
+
   const runtimeServicesLayer = Layer.mergeAll(
     orchestrationLayer,
     OrchestrationProjectionSnapshotQueryLive,
     checkpointStoreLayer,
     checkpointDiffQueryLayer,
     RuntimeReceiptBusLive,
+    threadSummarizerLayer,
   );
   const runtimeIngestionLayer = ProviderRuntimeIngestionLive.pipe(
     Layer.provideMerge(runtimeServicesLayer),
