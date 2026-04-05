@@ -43,6 +43,8 @@ import type {
 import type { ServerUpsertKeybindingInput } from "./server";
 import type {
   ClientOrchestrationCommand,
+  ConversationSearchRequest,
+  ConversationSearchResponse,
   OrchestrationGetFullThreadDiffInput,
   OrchestrationGetFullThreadDiffResult,
   OrchestrationGetTurnDiffInput,
@@ -185,6 +187,7 @@ export interface NativeApi {
       input: OrchestrationGetFullThreadDiffInput,
     ) => Promise<OrchestrationGetFullThreadDiffResult>;
     replayEvents: (fromSequenceExclusive: number) => Promise<OrchestrationEvent[]>;
+    searchConversations: (request: ConversationSearchRequest) => Promise<ConversationSearchResponse>;
     onDomainEvent: (callback: (event: OrchestrationEvent) => void) => () => void;
   };
 }

@@ -228,6 +228,8 @@ export function createWsNativeApi(): NativeApi {
         transport.request(ORCHESTRATION_WS_METHODS.getFullThreadDiff, input),
       replayEvents: (fromSequenceExclusive) =>
         transport.request(ORCHESTRATION_WS_METHODS.replayEvents, { fromSequenceExclusive }),
+      searchConversations: (request) =>
+        transport.request(ORCHESTRATION_WS_METHODS.searchConversations, request),
       onDomainEvent: (callback) =>
         transport.subscribe(ORCHESTRATION_WS_CHANNELS.domainEvent, (message) =>
           callback(message.data),
