@@ -27,6 +27,7 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     turnDiffSummaries: [],
     activities: [],
     proposedPlans: [],
+    forks: [],
     error: null,
     createdAt: "2026-02-13T00:00:00.000Z",
     archivedAt: null,
@@ -79,6 +80,7 @@ function makeReadModelThread(overrides: Partial<OrchestrationReadModel["threads"
     activities: [],
     proposedPlans: [],
     checkpoints: [],
+    forks: [],
     session: null,
     ...overrides,
   } satisfies OrchestrationReadModel["threads"][number];

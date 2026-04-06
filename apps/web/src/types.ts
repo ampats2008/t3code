@@ -110,7 +110,7 @@ export interface Thread {
   worktreePath: string | null;
   turnDiffSummaries: TurnDiffSummary[];
   activities: OrchestrationThreadActivity[];
-  forks?: ThreadForkInfo[] | undefined;
+  forks: ThreadForkInfo[];
   forkSource?: { threadId: ThreadId; messageId: MessageId } | undefined;
 }
 

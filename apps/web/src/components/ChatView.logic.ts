@@ -40,6 +40,7 @@ export function buildLocalDraftThread(
     turnDiffSummaries: [],
     activities: [],
     proposedPlans: [],
+    forks: [],
   };
 }
 

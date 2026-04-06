@@ -20,7 +20,7 @@ export function useHandleForkThread() {
       if (!targetMessageId) return;
 
       // Count existing forks at this message for title numbering
-      const existingForksAtMessage = (sourceThread.forks ?? []).filter(
+      const existingForksAtMessage = sourceThread.forks.filter(
         (f) => f.sourceMessageId === targetMessageId,
       );
       const forkNumber = existingForksAtMessage.length + 1;
@@ -31,26 +31,30 @@ export function useHandleForkThread() {
       const api = readNativeApi();
       if (!api) return;
 
-      await api.orchestration.dispatchCommand({
-        type: "thread.fork",
-        commandId: newCommandId(),
-        sourceThreadId,
-        forkAtMessageId: targetMessageId,
-        threadId: forkedThreadId,
-        projectId: sourceThread.projectId,
-        title,
-        modelSelection: sourceThread.modelSelection,
-        runtimeMode: sourceThread.runtimeMode,
-        interactionMode: sourceThread.interactionMode,
-        branch: sourceThread.branch,
-        worktreePath: sourceThread.worktreePath,
-        createdAt: new Date().toISOString(),
-      });
+      try {
+        await api.orchestration.dispatchCommand({
+          type: "thread.fork",
+          commandId: newCommandId(),
+          sourceThreadId,
+          forkAtMessageId: targetMessageId,
+          threadId: forkedThreadId,
+          projectId: sourceThread.projectId,
+          title,
+          modelSelection: sourceThread.modelSelection,
+          runtimeMode: sourceThread.runtimeMode,
+          interactionMode: sourceThread.interactionMode,
+          branch: sourceThread.branch,
+          worktreePath: sourceThread.worktreePath,
+          createdAt: new Date().toISOString(),
+        });
 
-      await navigate({
-        to: "/$threadId",
-        params: { threadId: forkedThreadId },
-      });
+        await navigate({
+          to: "/$threadId",
+          params: { threadId: forkedThreadId },
+        });
+      } catch (error) {
+        console.error("[useHandleForkThread] Fork command failed:", error);
+      }
     },
     [threads, navigate],
   );

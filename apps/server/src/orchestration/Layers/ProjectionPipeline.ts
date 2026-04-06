@@ -522,6 +522,79 @@ const makeOrchestrationProjectionPipeline = Effect.gen(function* () {
           return;
         }
 
+        case "thread.forked": {
+          // 1. Insert the new forked thread row
+          yield* projectionThreadRepository.upsert({
+            threadId: event.payload.threadId,
+            projectId: event.payload.projectId,
+            title: event.payload.title,
+            modelSelection: event.payload.modelSelection,
+            runtimeMode: event.payload.runtimeMode,
+            interactionMode: event.payload.interactionMode,
+            branch: event.payload.branch,
+            worktreePath: event.payload.worktreePath,
+            latestTurnId: null,
+            createdAt: event.payload.createdAt,
+            updatedAt: event.payload.updatedAt,
+            archivedAt: null,
+            deletedAt: null,
+          });
+
+          // 2. Set fork_source columns on the forked thread
+          yield* sql`
+            UPDATE projection_threads
+            SET fork_source_thread_id = ${event.payload.sourceThreadId},
+                fork_source_message_id = ${event.payload.forkAtMessageId}
+            WHERE thread_id = ${event.payload.threadId}
+          `.pipe(
+            Effect.mapError(
+              toPersistenceSqlError("ProjectionPipeline.thread.forked:updateForkSource"),
+            ),
+          );
+
+          // 3. Insert fork tracking row
+          yield* sql`
+            INSERT OR IGNORE INTO projection_thread_forks (
+              source_thread_id,
+              source_message_id,
+              forked_thread_id,
+              fork_number,
+              created_at
+            ) VALUES (
+              ${event.payload.sourceThreadId},
+              ${event.payload.forkAtMessageId},
+              ${event.payload.threadId},
+              ${event.payload.forkNumber},
+              ${event.payload.createdAt}
+            )
+          `.pipe(
+            Effect.mapError(
+              toPersistenceSqlError("ProjectionPipeline.thread.forked:insertForkRow"),
+            ),
+          );
+
+          // 4. Copy source messages into the forked thread
+          const copiedMessageIdSet = new Set(event.payload.copiedMessageIds as unknown as string[]);
+          if (copiedMessageIdSet.size > 0) {
+            const sourceMessages = yield* projectionThreadMessageRepository.listByThreadId({
+              threadId: event.payload.sourceThreadId,
+            });
+            const messagesToCopy = sourceMessages.filter((msg) =>
+              copiedMessageIdSet.has(msg.messageId),
+            );
+            yield* Effect.forEach(
+              messagesToCopy,
+              (msg) =>
+                projectionThreadMessageRepository.upsert({
+                  ...msg,
+                  threadId: event.payload.threadId,
+                }),
+              { concurrency: 1 },
+            );
+          }
+          return;
+        }
+
         case "thread.deleted": {
           attachmentSideEffects.deletedThreadIds.add(event.payload.threadId);
           const existingRow = yield* projectionThreadRepository.getById({
@@ -1181,6 +1254,33 @@ const makeOrchestrationProjectionPipeline = Effect.gen(function* () {
           return;
         }
 
+        case "thread.forked": {
+          // Index the forked thread's title
+          yield* conversationSearchRepository.updateThreadTitle({
+            threadId: event.payload.threadId,
+            title: event.payload.title,
+          });
+          // Index all copied messages in the forked thread
+          const copiedMessageIdSet = new Set(event.payload.copiedMessageIds as unknown as string[]);
+          if (copiedMessageIdSet.size > 0) {
+            const sourceMessages = yield* projectionThreadMessageRepository.listByThreadId({
+              threadId: event.payload.sourceThreadId,
+            });
+            yield* Effect.forEach(
+              sourceMessages.filter((msg) => copiedMessageIdSet.has(msg.messageId)),
+              (msg) =>
+                conversationSearchRepository.indexMessage({
+                  threadId: event.payload.threadId,
+                  messageId: msg.messageId,
+                  role: msg.role,
+                  text: msg.text,
+                }),
+              { concurrency: 1 },
+            );
+          }
+          return;
+        }
+
         case "thread.meta-updated": {
           if (event.payload.title !== undefined) {
             yield* conversationSearchRepository.updateThreadTitle({
@@ -1201,9 +1301,7 @@ const makeOrchestrationProjectionPipeline = Effect.gen(function* () {
         case "thread.reverted": {
           // Delete all FTS message entries for this thread, then re-index retained messages
           yield* sql`DELETE FROM projection_messages_fts WHERE thread_id = ${event.payload.threadId}`.pipe(
-            Effect.mapError(
-              toPersistenceSqlError("ConversationSearchProjection.revert:delete"),
-            ),
+            Effect.mapError(toPersistenceSqlError("ConversationSearchProjection.revert:delete")),
           );
           const retainedMessages = yield* projectionThreadMessageRepository.listByThreadId({
             threadId: event.payload.threadId,

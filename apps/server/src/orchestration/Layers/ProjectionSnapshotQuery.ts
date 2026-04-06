@@ -60,8 +60,18 @@ const ProjectionThreadProposedPlanDbRowSchema = ProjectionThreadProposedPlan;
 const ProjectionThreadDbRowSchema = ProjectionThread.mapFields(
   Struct.assign({
     modelSelection: Schema.fromJsonString(ModelSelection),
+    forkSourceThreadId: Schema.NullOr(ThreadId),
+    forkSourceMessageId: Schema.NullOr(MessageId),
   }),
 );
+const ProjectionThreadForkDbRowSchema = Schema.Struct({
+  sourceThreadId: ThreadId,
+  sourceMessageId: MessageId,
+  forkedThreadId: ThreadId,
+  forkedThreadTitle: Schema.String,
+  forkNumber: Schema.Number,
+});
+type ProjectionThreadForkDbRow = typeof ProjectionThreadForkDbRowSchema.Type;
 const ProjectionThreadActivityDbRowSchema = ProjectionThreadActivity.mapFields(
   Struct.assign({
     payload: Schema.fromJsonString(Schema.Unknown),
@@ -175,7 +185,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           created_at AS "createdAt",
           updated_at AS "updatedAt",
           archived_at AS "archivedAt",
-          deleted_at AS "deletedAt"
+          deleted_at AS "deletedAt",
+          fork_source_thread_id AS "forkSourceThreadId",
+          fork_source_message_id AS "forkSourceMessageId"
         FROM projection_threads
         ORDER BY created_at ASC, thread_id ASC
       `,
@@ -319,6 +331,23 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
       `,
   });
 
+  const listThreadForkRows = SqlSchema.findAll({
+    Request: Schema.Void,
+    Result: ProjectionThreadForkDbRowSchema,
+    execute: () =>
+      sql`
+        SELECT
+          f.source_thread_id AS "sourceThreadId",
+          f.source_message_id AS "sourceMessageId",
+          f.forked_thread_id AS "forkedThreadId",
+          t.title AS "forkedThreadTitle",
+          f.fork_number AS "forkNumber"
+        FROM projection_thread_forks f
+        INNER JOIN projection_threads t ON t.thread_id = f.forked_thread_id
+        ORDER BY f.source_thread_id ASC, f.source_message_id ASC, f.fork_number ASC
+      `,
+  });
+
   const getSnapshot: ProjectionSnapshotQueryShape["getSnapshot"] = () =>
     sql
       .withTransaction(
@@ -333,6 +362,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             checkpointRows,
             latestTurnRows,
             stateRows,
+            forkRows,
           ] = yield* Effect.all([
             listProjectRows(undefined).pipe(
               Effect.mapError(
@@ -406,6 +436,14 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                 ),
               ),
             ),
+            listThreadForkRows(undefined).pipe(
+              Effect.mapError(
+                toPersistenceSqlOrDecodeError(
+                  "ProjectionSnapshotQuery.getSnapshot:listThreadForks:query",
+                  "ProjectionSnapshotQuery.getSnapshot:listThreadForks:decodeRows",
+                ),
+              ),
+            ),
           ]);
 
           const messagesByThread = new Map<string, Array<OrchestrationMessage>>();
@@ -414,6 +452,14 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           const checkpointsByThread = new Map<string, Array<OrchestrationCheckpointSummary>>();
           const sessionsByThread = new Map<string, OrchestrationSession>();
           const latestTurnByThread = new Map<string, OrchestrationLatestTurn>();
+
+          // Build forks-by-source-thread map
+          const forksBySourceThread = new Map<string, Array<ProjectionThreadForkDbRow>>();
+          for (const row of forkRows) {
+            const entries = forksBySourceThread.get(row.sourceThreadId) ?? [];
+            entries.push(row);
+            forksBySourceThread.set(row.sourceThreadId, entries);
+          }
 
           let updatedAt: string | null = null;
 
@@ -562,6 +608,15 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             createdAt: row.createdAt,
             updatedAt: row.updatedAt,
             archivedAt: row.archivedAt,
+            ...(row.forkSourceThreadId !== null && row.forkSourceMessageId !== null
+              ? {
+                  forkSource: {
+                    threadId: row.forkSourceThreadId,
+                    messageId: row.forkSourceMessageId,
+                  },
+                }
+              : {}),
+            forks: forksBySourceThread.get(row.threadId) ?? [],
             deletedAt: row.deletedAt,
             messages: messagesByThread.get(row.threadId) ?? [],
             proposedPlans: proposedPlansByThread.get(row.threadId) ?? [],
