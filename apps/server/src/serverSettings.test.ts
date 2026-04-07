@@ -92,6 +92,8 @@ it.layer(NodeServices.layer)("server settings", (it) => {
         enabled: true,
         binaryPath: "/usr/local/bin/claude",
         customModels: ["claude-custom"],
+        maxTurns: 50,
+        maxBudgetUsd: 2.0,
       });
       assert.deepEqual(next.textGenerationModelSelection, {
         provider: "codex",
@@ -130,6 +132,8 @@ it.layer(NodeServices.layer)("server settings", (it) => {
         enabled: true,
         binaryPath: "/opt/homebrew/bin/claude",
         customModels: [],
+        maxTurns: 50,
+        maxBudgetUsd: 2.0,
       });
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );

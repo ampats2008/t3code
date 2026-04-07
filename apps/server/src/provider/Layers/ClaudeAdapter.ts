@@ -2847,6 +2847,8 @@ const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         env: process.env,
         ...(input.cwd ? { additionalDirectories: [input.cwd] } : {}),
         mcpServers: { "t3-search": searchMcpServer },
+        maxTurns: claudeSettings.maxTurns,
+        maxBudgetUsd: claudeSettings.maxBudgetUsd,
       };
 
       const queryRuntime = yield* Effect.try({
@@ -2952,18 +2954,26 @@ const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       runFork(
         Effect.tryPromise({
           try: () =>
-            (queryRuntime as unknown as { supportedCommands(): Promise<Array<{ name: string; description: string; argumentHint: string }>> })
-              .supportedCommands(),
+            (
+              queryRuntime as unknown as {
+                supportedCommands(): Promise<
+                  Array<{ name: string; description: string; argumentHint: string }>
+                >;
+              }
+            ).supportedCommands(),
           catch: () => [] as Array<{ name: string; description: string; argumentHint: string }>,
         }).pipe(
           Effect.tap((commands) =>
             Effect.sync(() => {
               if (Array.isArray(commands) && commands.length > 0) {
-                setCachedSkills("claudeAgent", commands.map((cmd) => ({
-                  name: typeof cmd.name === "string" ? cmd.name : "",
-                  description: typeof cmd.description === "string" ? cmd.description : "",
-                  argumentHint: typeof cmd.argumentHint === "string" ? cmd.argumentHint : "",
-                })));
+                setCachedSkills(
+                  "claudeAgent",
+                  commands.map((cmd) => ({
+                    name: typeof cmd.name === "string" ? cmd.name : "",
+                    description: typeof cmd.description === "string" ? cmd.description : "",
+                    argumentHint: typeof cmd.argumentHint === "string" ? cmd.argumentHint : "",
+                  })),
+                );
               }
             }),
           ),

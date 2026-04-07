@@ -73,10 +73,15 @@ export const CodexSettings = Schema.Struct({
 });
 export type CodexSettings = typeof CodexSettings.Type;
 
+export const DEFAULT_CLAUDE_MAX_TURNS = 50;
+export const DEFAULT_CLAUDE_MAX_BUDGET_USD = 2.0;
+
 export const ClaudeSettings = Schema.Struct({
   enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(() => true)),
   binaryPath: makeBinaryPathSetting("claude"),
   customModels: Schema.Array(Schema.String).pipe(Schema.withDecodingDefault(() => [])),
+  maxTurns: Schema.Number.pipe(Schema.withDecodingDefault(() => DEFAULT_CLAUDE_MAX_TURNS)),
+  maxBudgetUsd: Schema.Number.pipe(Schema.withDecodingDefault(() => DEFAULT_CLAUDE_MAX_BUDGET_USD)),
 });
 export type ClaudeSettings = typeof ClaudeSettings.Type;
 
@@ -147,6 +152,8 @@ const ClaudeSettingsPatch = Schema.Struct({
   enabled: Schema.optionalKey(Schema.Boolean),
   binaryPath: Schema.optionalKey(Schema.String),
   customModels: Schema.optionalKey(Schema.Array(Schema.String)),
+  maxTurns: Schema.optionalKey(Schema.Number),
+  maxBudgetUsd: Schema.optionalKey(Schema.Number),
 });
 
 export const ServerSettingsPatch = Schema.Struct({

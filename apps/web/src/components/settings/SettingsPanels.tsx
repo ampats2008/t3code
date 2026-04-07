@@ -18,7 +18,11 @@ import {
   type ServerProviderModel,
   ThreadId,
 } from "@t3tools/contracts";
-import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
+import {
+  DEFAULT_CLAUDE_MAX_BUDGET_USD,
+  DEFAULT_CLAUDE_MAX_TURNS,
+  DEFAULT_UNIFIED_SETTINGS,
+} from "@t3tools/contracts/settings";
 import { normalizeModelSlug } from "@t3tools/shared/model";
 import { Equal } from "effect";
 import { APP_VERSION } from "../../branding";
@@ -135,7 +139,13 @@ function ThemePreviewCard({
           style={{ background: primary }}
         >
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-            <path d="M2 5.5L4 7.5L8 3" stroke={bg} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            <path
+              d="M2 5.5L4 7.5L8 3"
+              stroke={bg}
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
           </svg>
         </div>
       )}
@@ -997,7 +1007,8 @@ export function GeneralSettingsPanel() {
           title="Auto-rename"
           description="After the first message in a new thread, automatically generate a semantic title using AI."
           resetAction={
-            settings.autoRenameOnFirstMessage !== DEFAULT_UNIFIED_SETTINGS.autoRenameOnFirstMessage ? (
+            settings.autoRenameOnFirstMessage !==
+            DEFAULT_UNIFIED_SETTINGS.autoRenameOnFirstMessage ? (
               <SettingResetButton
                 label="auto-rename"
                 onClick={() =>
@@ -1257,6 +1268,82 @@ export function GeneralSettingsPanel() {
                         </span>
                       </label>
                     </div>
+
+                    {providerCard.provider === "claudeAgent" ? (
+                      <>
+                        <div className="border-t border-border/60 px-4 py-3 sm:px-5">
+                          <label htmlFor="provider-claude-max-turns" className="block">
+                            <span className="text-xs font-medium text-foreground">Max turns</span>
+                            <Input
+                              id="provider-claude-max-turns"
+                              type="number"
+                              className="mt-1.5"
+                              min={1}
+                              max={500}
+                              step={1}
+                              placeholder={String(DEFAULT_CLAUDE_MAX_TURNS)}
+                              value={String(settings.providers.claudeAgent.maxTurns ?? DEFAULT_CLAUDE_MAX_TURNS)}
+                              onChange={(event) => {
+                                const value = Math.floor(Number(event.target.value));
+                                if (!Number.isFinite(value) || value < 1) return;
+                                updateSettings({
+                                  providers: {
+                                    ...settings.providers,
+                                    claudeAgent: {
+                                      ...settings.providers.claudeAgent,
+                                      maxTurns: value,
+                                    },
+                                  },
+                                });
+                              }}
+                            />
+                            <span className="mt-1 block text-xs text-muted-foreground">
+                              Maximum agentic loop turns per query. Caps runaway loops without
+                              limiting quality. Default: {DEFAULT_CLAUDE_MAX_TURNS}.
+                            </span>
+                          </label>
+                        </div>
+
+                        <div className="border-t border-border/60 px-4 py-3 sm:px-5">
+                          <label htmlFor="provider-claude-max-budget" className="block">
+                            <span className="text-xs font-medium text-foreground">
+                              Max budget (USD)
+                            </span>
+                            <div className="relative mt-1.5">
+                              <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-xs text-muted-foreground">
+                                $
+                              </span>
+                              <Input
+                                id="provider-claude-max-budget"
+                                type="number"
+                                className="pl-6"
+                                min={0.1}
+                                step={0.5}
+                                placeholder={String(DEFAULT_CLAUDE_MAX_BUDGET_USD)}
+                                value={String(settings.providers.claudeAgent.maxBudgetUsd ?? DEFAULT_CLAUDE_MAX_BUDGET_USD)}
+                                onChange={(event) => {
+                                  const value = Number(event.target.value);
+                                  if (!Number.isFinite(value) || value <= 0) return;
+                                  updateSettings({
+                                    providers: {
+                                      ...settings.providers,
+                                      claudeAgent: {
+                                        ...settings.providers.claudeAgent,
+                                        maxBudgetUsd: value,
+                                      },
+                                    },
+                                  });
+                                }}
+                              />
+                            </div>
+                            <span className="mt-1 block text-xs text-muted-foreground">
+                              Spend cap per query. The agent stops gracefully when this limit is
+                              reached. Default: ${DEFAULT_CLAUDE_MAX_BUDGET_USD.toFixed(2)}.
+                            </span>
+                          </label>
+                        </div>
+                      </>
+                    ) : null}
 
                     {providerCard.homePathKey ? (
                       <div className="border-t border-border/60 px-4 py-3 sm:px-5">
