@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, beforeEach, vi } from "vitest";
+import { EnvironmentId } from "@t3tools/contracts";
 import { usePlanReviewStore } from "../../planReviewStore";
 import type { LatestProposedPlanState } from "../../session-logic";
 import type { TimestampFormat } from "@t3tools/contracts/settings";
@@ -38,6 +39,7 @@ describe("PlanReviewPanel", () => {
       <PlanReviewPanel
         activePlan={null}
         activeProposedPlan={mockProposedPlan}
+        environmentId={EnvironmentId.make("environment-local")}
         markdownCwd={undefined}
         workspaceRoot={undefined}
         timestampFormat={timestampFormat}
@@ -54,6 +56,7 @@ describe("PlanReviewPanel", () => {
       <PlanReviewPanel
         activePlan={null}
         activeProposedPlan={mockProposedPlan}
+        environmentId={EnvironmentId.make("environment-local")}
         markdownCwd={undefined}
         workspaceRoot={undefined}
         timestampFormat={timestampFormat}
@@ -70,6 +73,7 @@ describe("PlanReviewPanel", () => {
       <PlanReviewPanel
         activePlan={null}
         activeProposedPlan={mockProposedPlan}
+        environmentId={EnvironmentId.make("environment-local")}
         markdownCwd={undefined}
         workspaceRoot={undefined}
         timestampFormat={timestampFormat}
@@ -86,6 +90,7 @@ describe("PlanReviewPanel", () => {
       <PlanReviewPanel
         activePlan={null}
         activeProposedPlan={mockProposedPlan}
+        environmentId={EnvironmentId.make("environment-local")}
         markdownCwd={undefined}
         workspaceRoot={undefined}
         timestampFormat={timestampFormat}
@@ -102,6 +107,7 @@ describe("PlanReviewPanel", () => {
       <PlanReviewPanel
         activePlan={null}
         activeProposedPlan={mockProposedPlan}
+        environmentId={EnvironmentId.make("environment-local")}
         markdownCwd={undefined}
         workspaceRoot={undefined}
         timestampFormat={timestampFormat}
@@ -124,6 +130,7 @@ describe("PlanReviewPanel", () => {
       <PlanReviewPanel
         activePlan={null}
         activeProposedPlan={planWithHeading}
+        environmentId={EnvironmentId.make("environment-local")}
         markdownCwd={undefined}
         workspaceRoot={undefined}
         timestampFormat={timestampFormat}
@@ -140,6 +147,7 @@ describe("PlanReviewPanel", () => {
       <PlanReviewPanel
         activePlan={null}
         activeProposedPlan={null}
+        environmentId={EnvironmentId.make("environment-local")}
         markdownCwd={undefined}
         workspaceRoot={undefined}
         timestampFormat={timestampFormat}
@@ -157,6 +165,7 @@ describe("PlanReviewPanel", () => {
       <PlanReviewPanel
         activePlan={null}
         activeProposedPlan={mockProposedPlan}
+        environmentId={EnvironmentId.make("environment-local")}
         markdownCwd={undefined}
         workspaceRoot={undefined}
         timestampFormat={timestampFormat}
@@ -175,6 +184,7 @@ describe("PlanReviewPanel", () => {
       <PlanReviewPanel
         activePlan={null}
         activeProposedPlan={mockProposedPlan}
+        environmentId={EnvironmentId.make("environment-local")}
         markdownCwd={undefined}
         workspaceRoot={undefined}
         timestampFormat={timestampFormat}

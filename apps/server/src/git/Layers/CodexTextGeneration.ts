@@ -384,8 +384,11 @@ const makeCodexTextGeneration = Effect.gen(function* () {
       "generateThreadTitle",
       input.attachments,
     );
+    const concatenatedMessage = input.messages
+      .map((m) => `${m.role}: ${m.text}`)
+      .join("\n");
     const { prompt, outputSchema } = buildThreadTitlePrompt({
-      message: input.message,
+      message: concatenatedMessage,
       attachments: input.attachments,
     });
 

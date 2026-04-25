@@ -81,7 +81,7 @@ interface FakeGitTextGeneration {
   }) => Effect.Effect<{ branch: string }, TextGenerationError>;
   generateThreadTitle: (input: {
     cwd: string;
-    message: string;
+    messages: ReadonlyArray<{ role: string; text: string }>;
     modelSelection: ModelSelection;
   }) => Effect.Effect<{ title: string }, TextGenerationError>;
 }

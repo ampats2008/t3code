@@ -16,7 +16,8 @@ import {
   downloadPlanAsTextFile,
   stripDisplayedPlanMarkdown,
 } from "../../proposedPlan";
-import { readNativeApi } from "~/nativeApi";
+import { readEnvironmentApi } from "~/environmentApi";
+import type { EnvironmentId } from "@t3tools/contracts";
 import { toastManager } from "../ui/toast";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { EllipsisIcon, PanelRightCloseIcon, PencilIcon, MessageSquareIcon } from "lucide-react";
@@ -30,6 +31,7 @@ const MAX_WIDTH = 900;
 export interface PlanReviewPanelProps {
   activePlan: ActivePlanState | null;
   activeProposedPlan: LatestProposedPlanState | null;
+  environmentId: EnvironmentId;
   markdownCwd: string | undefined;
   workspaceRoot: string | undefined;
   timestampFormat: TimestampFormat;
@@ -39,6 +41,7 @@ export interface PlanReviewPanelProps {
 
 const PlanReviewPanel = memo(function PlanReviewPanel({
   activeProposedPlan,
+  environmentId,
   markdownCwd,
   workspaceRoot,
   onSubmitReview,
@@ -120,7 +123,7 @@ const PlanReviewPanel = memo(function PlanReviewPanel({
 
   // Save to workspace
   const handleSaveToWorkspace = useCallback(() => {
-    const api = readNativeApi();
+    const api = readEnvironmentApi(environmentId);
     if (!api || !workspaceRoot || !planMarkdown) return;
     const filename = buildProposedPlanMarkdownFilename(planMarkdown);
     setIsSavingToWorkspace(true);
@@ -130,14 +133,14 @@ const PlanReviewPanel = memo(function PlanReviewPanel({
         relativePath: filename,
         contents: normalizePlanMarkdownForExport(planMarkdown),
       })
-      .then((result) => {
+      .then((result: { relativePath: string }) => {
         toastManager.add({
           type: "success",
           title: "Plan saved",
           description: result.relativePath,
         });
       })
-      .catch((error) => {
+      .catch((error: unknown) => {
         toastManager.add({
           type: "error",
           title: "Could not save plan",
@@ -148,7 +151,7 @@ const PlanReviewPanel = memo(function PlanReviewPanel({
         () => setIsSavingToWorkspace(false),
         () => setIsSavingToWorkspace(false),
       );
-  }, [planMarkdown, workspaceRoot]);
+  }, [environmentId, planMarkdown, workspaceRoot]);
 
   // Handle submit review
   const handleSubmitReview = useCallback(() => {

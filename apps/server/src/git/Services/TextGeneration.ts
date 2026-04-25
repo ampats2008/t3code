@@ -63,7 +63,7 @@ export interface BranchNameGenerationResult {
 
 export interface ThreadTitleGenerationInput {
   cwd: string;
-  message: string;
+  messages: ReadonlyArray<{ role: string; text: string }>;
   attachments?: ReadonlyArray<ChatAttachment> | undefined;
   /** What model and provider to use for generation. */
   modelSelection: ModelSelection;

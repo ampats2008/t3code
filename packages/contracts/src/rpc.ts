@@ -104,6 +104,9 @@ export const WS_METHODS = {
   gitResolvePullRequest: "git.resolvePullRequest",
   gitPreparePullRequestThread: "git.preparePullRequestThread",
 
+  // Thread methods
+  threadGenerateTitle: "thread.generateTitle",
+
   // Terminal methods
   terminalOpen: "terminal.open",
   terminalWrite: "terminal.write",
@@ -251,6 +254,22 @@ export const WsGitInitRpc = Rpc.make(WS_METHODS.gitInit, {
   error: GitCommandError,
 });
 
+export const ThreadGenerateTitleInput = Schema.Struct({
+  messages: Schema.Array(Schema.Struct({ role: Schema.String, text: Schema.String })),
+});
+export type ThreadGenerateTitleInput = typeof ThreadGenerateTitleInput.Type;
+
+export const ThreadGenerateTitleResult = Schema.Struct({
+  title: Schema.String,
+});
+export type ThreadGenerateTitleResult = typeof ThreadGenerateTitleResult.Type;
+
+export const WsThreadGenerateTitleRpc = Rpc.make(WS_METHODS.threadGenerateTitle, {
+  payload: ThreadGenerateTitleInput,
+  success: ThreadGenerateTitleResult,
+  error: GitManagerServiceError,
+});
+
 export const WsTerminalOpenRpc = Rpc.make(WS_METHODS.terminalOpen, {
   payload: TerminalOpenInput,
   success: TerminalSessionSnapshot,
@@ -377,6 +396,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsGitCreateBranchRpc,
   WsGitCheckoutRpc,
   WsGitInitRpc,
+  WsThreadGenerateTitleRpc,
   WsTerminalOpenRpc,
   WsTerminalWriteRpc,
   WsTerminalResizeRpc,

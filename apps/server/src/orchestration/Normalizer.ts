@@ -67,8 +67,11 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
       return command as OrchestrationCommand;
     }
 
+    const imageAttachments = command.message.attachments.filter(
+      (a): a is Extract<typeof a, { type: "image" }> => a.type === "image",
+    );
     const normalizedAttachments = yield* Effect.forEach(
-      command.message.attachments,
+      imageAttachments,
       (attachment) =>
         Effect.gen(function* () {
           const parsed = parseBase64DataUrl(attachment.dataUrl);

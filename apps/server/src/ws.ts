@@ -919,6 +919,12 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
             git.initRepo(input).pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
             { "rpc.aggregate": "git" },
           ),
+        [WS_METHODS.threadGenerateTitle]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.threadGenerateTitle,
+            gitManager.generateThreadTitle(input),
+            { "rpc.aggregate": "thread" },
+          ),
         [WS_METHODS.terminalOpen]: (input) =>
           observeRpcEffect(WS_METHODS.terminalOpen, terminalManager.open(input), {
             "rpc.aggregate": "terminal",

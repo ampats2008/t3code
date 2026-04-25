@@ -155,17 +155,19 @@ function mapSession(session: OrchestrationSession): ThreadSession {
 }
 
 function mapMessage(environmentId: EnvironmentId, message: OrchestrationMessage): ChatMessage {
-  const attachments = message.attachments?.map((attachment) => ({
-    type: "image" as const,
-    id: attachment.id,
-    name: attachment.name,
-    mimeType: attachment.mimeType,
-    sizeBytes: attachment.sizeBytes,
-    previewUrl: resolveEnvironmentHttpUrl({
-      environmentId,
-      pathname: attachmentPreviewRoutePath(attachment.id),
-    }),
-  }));
+  const attachments = message.attachments
+    ?.filter((attachment): attachment is Extract<typeof attachment, { type: "image" }> => attachment.type === "image")
+    .map((attachment) => ({
+      type: "image" as const,
+      id: attachment.id,
+      name: attachment.name,
+      mimeType: attachment.mimeType,
+      sizeBytes: attachment.sizeBytes,
+      previewUrl: resolveEnvironmentHttpUrl({
+        environmentId,
+        pathname: attachmentPreviewRoutePath(attachment.id),
+      }),
+    }));
 
   return {
     id: message.id,
@@ -247,6 +249,8 @@ function mapThread(thread: OrchestrationThread, environmentId: EnvironmentId): T
     worktreePath: thread.worktreePath,
     turnDiffSummaries: thread.checkpoints.map(mapTurnDiffSummary),
     activities: thread.activities.map((activity) => ({ ...activity })),
+    forks: [...(thread.forks ?? [])],
+    ...(thread.forkSource ? { forkSource: thread.forkSource } : {}),
   };
 }
 
@@ -1262,6 +1266,7 @@ function applyEnvironmentOrchestrationEvent(
           proposedPlans: [],
           activities: [],
           checkpoints: [],
+          forks: [],
           session: null,
         },
         environmentId,

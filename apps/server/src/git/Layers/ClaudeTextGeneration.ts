@@ -319,8 +319,11 @@ const makeClaudeTextGeneration = Effect.gen(function* () {
   const generateThreadTitle: TextGenerationShape["generateThreadTitle"] = Effect.fn(
     "ClaudeTextGeneration.generateThreadTitle",
   )(function* (input) {
+    const concatenatedMessage = input.messages
+      .map((m) => `${m.role}: ${m.text}`)
+      .join("\n");
     const { prompt, outputSchema } = buildThreadTitlePrompt({
-      message: input.message,
+      message: concatenatedMessage,
       attachments: input.attachments,
     });
 

@@ -71,6 +71,7 @@ function makeTestLayer(state: {
     preparePullRequestThread: () =>
       Effect.die("preparePullRequestThread should not be called in this test"),
     runStackedAction: () => Effect.die("runStackedAction should not be called in this test"),
+    generateThreadTitle: () => Effect.die("generateThreadTitle should not be called in this test"),
   };
 
   return GitStatusBroadcasterLive.pipe(Layer.provide(Layer.succeed(GitManager, gitManager)));
@@ -269,6 +270,7 @@ describe("GitStatusBroadcasterLive", () => {
           preparePullRequestThread: () =>
             Effect.die("preparePullRequestThread should not be called in this test"),
           runStackedAction: () => Effect.die("runStackedAction should not be called in this test"),
+          generateThreadTitle: () => Effect.die("generateThreadTitle should not be called in this test"),
         } satisfies GitManagerShape),
       ),
     );

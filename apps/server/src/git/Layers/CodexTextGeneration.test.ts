@@ -368,7 +368,7 @@ it.layer(CodexTextGenerationTestLayer)("CodexTextGenerationLive", (it) => {
 
         const generated = yield* textGeneration.generateThreadTitle({
           cwd: process.cwd(),
-          message: "Please investigate websocket reconnect regressions after a worktree restore.",
+          messages: [{ role: "user", text: "Please investigate websocket reconnect regressions after a worktree restore." }],
           modelSelection: DEFAULT_TEST_MODEL_SELECTION,
         });
 
@@ -389,7 +389,7 @@ it.layer(CodexTextGenerationTestLayer)("CodexTextGenerationLive", (it) => {
 
         const generated = yield* textGeneration.generateThreadTitle({
           cwd: process.cwd(),
-          message: "Name this thread.",
+          messages: [{ role: "user", text: "Name this thread." }],
           modelSelection: DEFAULT_TEST_MODEL_SELECTION,
         });
 
@@ -410,7 +410,7 @@ it.layer(CodexTextGenerationTestLayer)("CodexTextGenerationLive", (it) => {
 
         const generated = yield* textGeneration.generateThreadTitle({
           cwd: process.cwd(),
-          message: "Name this thread.",
+          messages: [{ role: "user", text: "Name this thread." }],
           modelSelection: DEFAULT_TEST_MODEL_SELECTION,
         });
 

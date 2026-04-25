@@ -1,17 +1,20 @@
-import { type MessageId, type ThreadId } from "@t3tools/contracts";
+import { type EnvironmentId, type MessageId, type ThreadId } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback } from "react";
 import { newCommandId, newThreadId } from "../lib/utils";
-import { readNativeApi } from "../nativeApi";
-import { useStore } from "../store";
+import { readEnvironmentApi } from "../environmentApi";
+import { selectThreadByRef, useStore } from "../store";
+import { scopeThreadRef } from "@t3tools/client-runtime";
 
 export function useHandleForkThread() {
-  const threads = useStore((store) => store.threads);
   const navigate = useNavigate();
 
   const handleForkThread = useCallback(
-    async (sourceThreadId: ThreadId, forkAtMessageId?: MessageId) => {
-      const sourceThread = threads.find((t) => t.id === sourceThreadId);
+    async (environmentId: EnvironmentId, sourceThreadId: ThreadId, forkAtMessageId?: MessageId) => {
+      const sourceThread = selectThreadByRef(
+        useStore.getState(),
+        scopeThreadRef(environmentId, sourceThreadId),
+      );
       if (!sourceThread) return;
 
       // If no messageId specified, use the last message
@@ -20,15 +23,15 @@ export function useHandleForkThread() {
       if (!targetMessageId) return;
 
       // Count existing forks at this message for title numbering
-      const existingForksAtMessage = sourceThread.forks.filter(
-        (f) => f.sourceMessageId === targetMessageId,
+      const existingForksAtMessage = (sourceThread.forks ?? []).filter(
+        (f: { sourceMessageId: MessageId }) => f.sourceMessageId === targetMessageId,
       );
       const forkNumber = existingForksAtMessage.length + 1;
       const titleSuffix = forkNumber === 1 ? "" : ` (${forkNumber})`;
       const title = `Fork: ${sourceThread.title}${titleSuffix}`;
 
       const forkedThreadId = newThreadId();
-      const api = readNativeApi();
+      const api = readEnvironmentApi(environmentId);
       if (!api) return;
 
       try {
@@ -49,14 +52,14 @@ export function useHandleForkThread() {
         });
 
         await navigate({
-          to: "/$threadId",
-          params: { threadId: forkedThreadId },
+          to: "/$environmentId/$threadId",
+          params: { environmentId, threadId: forkedThreadId },
         });
       } catch (error) {
         console.error("[useHandleForkThread] Fork command failed:", error);
       }
     },
-    [threads, navigate],
+    [navigate],
   );
 
   return { handleForkThread };

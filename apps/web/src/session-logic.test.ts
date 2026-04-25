@@ -686,7 +686,7 @@ describe("deriveWorkLogEntries", () => {
       }),
     ];
 
-    const entries = deriveWorkLogEntries(activities, TurnId.makeUnsafe("turn-1"));
+    const entries = deriveWorkLogEntries(activities, TurnId.make("turn-1"));
     expect(entries.map((entry) => entry.id)).toEqual(["error-no-turn", "turn-1-work"]);
   });
 

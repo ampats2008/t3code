@@ -6,7 +6,7 @@
  * @module ConversationSearchRepository
  */
 import { MessageId, ThreadId, ProjectId, IsoDateTime } from "@t3tools/contracts";
-import { Schema, ServiceMap } from "effect";
+import { Context, Schema } from "effect";
 import type { Effect } from "effect";
 import type { ProjectionRepositoryError } from "../Errors.ts";
 
@@ -75,7 +75,7 @@ export interface ConversationSearchRepositoryShape {
 /**
  * ConversationSearchRepository - Service tag for FTS5 conversation search persistence.
  */
-export class ConversationSearchRepository extends ServiceMap.Service<
+export class ConversationSearchRepository extends Context.Service<
   ConversationSearchRepository,
   ConversationSearchRepositoryShape
 >()("t3/persistence/Services/ConversationSearch/ConversationSearchRepository") {}

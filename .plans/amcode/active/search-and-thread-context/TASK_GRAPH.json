@@ -1,0 +1,354 @@
+{
+  "tasks": [
+    {
+      "id": "migration-020-fts",
+      "name": "Migration 020: FTS5 Tables + Backfill",
+      "description": "Create a new migration file at `apps/server/src/persistence/Migrations/020_ConversationFTS.ts` that creates two FTS5 virtual tables and backfills them from existing projection data.\n\nThe migration should:\n1. Create `projection_messages_fts` using FTS5:\n   ```sql\n   CREATE VIRTUAL TABLE IF NOT EXISTS projection_messages_fts USING fts5(\n     thread_id UNINDEXED,\n     message_id UNINDEXED,\n     role UNINDEXED,\n     message_text,\n     content='projection_thread_messages',\n     content_rowid='rowid'\n   );\n   ```\n2. Create `projection_threads_fts` using FTS5:\n   ```sql\n   CREATE VIRTUAL TABLE IF NOT EXISTS projection_threads_fts USING fts5(\n     thread_id UNINDEXED,\n     title,\n     content='projection_threads',\n     content_rowid='rowid'\n   );\n   ```\n3. Backfill messages FTS from existing data:\n   ```sql\n   INSERT INTO projection_messages_fts(rowid, thread_id, message_id, role, message_text)\n     SELECT rowid, thread_id, message_id, role, text FROM projection_thread_messages;\n   ```\n4. Backfill threads FTS from existing data:\n   ```sql\n   INSERT INTO projection_threads_fts(rowid, thread_id, title)\n     SELECT rowid, thread_id, title FROM projection_threads WHERE deleted_at IS NULL;\n   ```\n\nFollow the exact migration pattern from existing migrations (e.g., `018_ProjectionThreadsArchivedAtIndex.ts`): export a default `Effect.gen()` that yields `SqlClient.SqlClient` and executes raw SQL.\n\nThen register the migration in `apps/server/src/persistence/Migrations.ts`:\n- Add import: `import Migration0020 from \"./Migrations/020_ConversationFTS.ts\";`\n- Add entry to `migrationEntries`: `[20, \"ConversationFTS\", Migration0020]` (note: skip 19, it's reserved for fork schema per plan)\n\nNote: Migration 019 is intentionally skipped (reserved). The entry array should go from `[18, ...]` to `[20, ...]`.",
+      "depends_on": [],
+      "files_to_create": [
+        "apps/server/src/persistence/Migrations/020_ConversationFTS.ts"
+      ],
+      "files_to_modify": [
+        "apps/server/src/persistence/Migrations.ts"
+      ],
+      "files_to_read": [
+        "apps/server/src/persistence/Migrations.ts",
+        "apps/server/src/persistence/Migrations/018_ProjectionThreadsArchivedAtIndex.ts",
+        "apps/server/src/persistence/Migrations/005_Projections.ts"
+      ],
+      "acceptance_criteria": [
+        "Migration file 020_ConversationFTS.ts exists and creates both FTS5 virtual tables",
+        "Migration includes backfill INSERT statements for both tables",
+        "Migration is registered in Migrations.ts as entry [20, 'ConversationFTS', Migration0020]",
+        "Migration follows the Effect.gen pattern used by other migrations",
+        "TypeScript compiles without errors"
+      ],
+      "tests_to_run": [
+        "cd apps/server && npx tsc --noEmit"
+      ],
+      "commit_message": "feat: add migration 020 for FTS5 conversation search tables",
+      "status": "completed",
+      "failure_reason": null,
+      "retry_count": 0
+    },
+    {
+      "id": "contracts-search-types",
+      "name": "Contracts: Search Types + ThreadMentionAttachment + WS Method",
+      "description": "Add search-related types and WS method to the contracts package.\n\n### 1. Modify `packages/contracts/src/orchestration.ts`\n\nAdd the following schemas AFTER the existing `ChatAttachment` union (around line 119) but BEFORE `ProjectScriptIcon`:\n\n```typescript\n// Thread mention attachment for cross-thread context\nexport const ThreadMentionAttachment = Schema.Struct({\n  type: Schema.Literal(\"thread-reference\"),\n  threadId: ThreadId,\n  threadTitle: TrimmedNonEmptyString,\n});\nexport type ThreadMentionAttachment = typeof ThreadMentionAttachment.Type;\n```\n\nUpdate the `ChatAttachment` union to include `ThreadMentionAttachment`:\n```typescript\nexport const ChatAttachment = Schema.Union([ChatImageAttachment, ThreadMentionAttachment]);\n```\n\nAt the bottom of the file (after `OrchestrationRpcSchemas`), add the search request/response schemas:\n\n```typescript\n// ── Conversation Search ───────────────────────────────────────────\n\nexport const ConversationSearchRequest = Schema.Struct({\n  projectId: ProjectId,\n  query: Schema.String,\n  limit: Schema.optional(NonNegativeInt),\n  filter: Schema.optional(Schema.Literals([\"all\", \"active\", \"archived\"])),\n});\nexport type ConversationSearchRequest = typeof ConversationSearchRequest.Type;\n\nexport const ConversationSearchMatch = Schema.Struct({\n  messageId: Schema.optional(MessageId),\n  snippet: Schema.String,\n  relevance: Schema.Number,\n});\nexport type ConversationSearchMatch = typeof ConversationSearchMatch.Type;\n\nexport const ConversationSearchResult = Schema.Struct({\n  threadId: ThreadId,\n  threadTitle: Schema.String,\n  createdAt: IsoDateTime,\n  updatedAt: IsoDateTime,\n  matches: Schema.Array(ConversationSearchMatch),\n});\nexport type ConversationSearchResult = typeof ConversationSearchResult.Type;\n\nexport const ConversationSearchResponse = Schema.Struct({\n  results: Schema.Array(ConversationSearchResult),\n});\nexport type ConversationSearchResponse = typeof ConversationSearchResponse.Type;\n```\n\nAlso add to `ORCHESTRATION_WS_METHODS`:\n```typescript\nexport const ORCHESTRATION_WS_METHODS = {\n  // ...existing\n  searchConversations: \"orchestration.searchConversations\",\n} as const;\n```\n\nAnd add to `OrchestrationRpcSchemas`:\n```typescript\nexport const OrchestrationRpcSchemas = {\n  // ...existing\n  searchConversations: {\n    input: ConversationSearchRequest,\n    output: ConversationSearchResponse,\n  },\n} as const;\n```\n\n### 2. Modify `packages/contracts/src/ws.ts`\n\nAdd to the `WebSocketRequestBody` union (around line 119), after the existing orchestration entries:\n```typescript\ntagRequestBody(ORCHESTRATION_WS_METHODS.searchConversations, ConversationSearchRequest),\n```\n\nMake sure to import `ConversationSearchRequest` and `ORCHESTRATION_WS_METHODS` (already imported) at the top.\n\n**IMPORTANT**: Adding `ThreadMentionAttachment` to the `ChatAttachment` union will affect all places that use `ChatAttachment`. The existing attachment handling in wsServer.ts processes `UploadChatAttachment` variants for turn.start commands — thread-reference attachments don't have `dataUrl` so they should be passed through without image processing. This is handled by the existing switch on `attachment.type` — only `\"image\"` type triggers the dataUrl processing. But double-check that the `UploadChatAttachment` union also includes a variant for thread references (it may need updating too).\n\nActually, looking more carefully: `UploadChatAttachment` is what the CLIENT sends (it has `dataUrl` for images). For thread references, the client sends the same schema as persisted — no upload transform needed. So we need:\n\n```typescript\nconst UploadChatAttachment = Schema.Union([UploadChatImageAttachment, ThreadMentionAttachment]);\n```\n\nThis way thread-reference attachments pass through the upload schema validation and reach the server-side normalization, where they get forwarded as-is (since the `normalizeDispatchCommand` in wsServer only processes image attachments).\n\nAlso update `normalizeDispatchCommand` in wsServer.ts? No — that's a different task's file. The contracts just need the schema union updates.",
+      "depends_on": [],
+      "files_to_create": [],
+      "files_to_modify": [
+        "packages/contracts/src/orchestration.ts",
+        "packages/contracts/src/ws.ts"
+      ],
+      "files_to_read": [
+        "packages/contracts/src/orchestration.ts",
+        "packages/contracts/src/ws.ts",
+        "packages/contracts/src/baseSchemas.ts"
+      ],
+      "acceptance_criteria": [
+        "ThreadMentionAttachment schema is defined and exported from orchestration.ts",
+        "ChatAttachment union includes ThreadMentionAttachment",
+        "UploadChatAttachment union includes ThreadMentionAttachment",
+        "ConversationSearchRequest, ConversationSearchMatch, ConversationSearchResult, ConversationSearchResponse schemas are defined and exported",
+        "ORCHESTRATION_WS_METHODS includes searchConversations",
+        "OrchestrationRpcSchemas includes searchConversations entry",
+        "WebSocketRequestBody in ws.ts includes the searchConversations tagged request body",
+        "TypeScript compiles without errors across the contracts package"
+      ],
+      "tests_to_run": [
+        "cd packages/contracts && npx tsc --noEmit"
+      ],
+      "commit_message": "feat: add conversation search contracts and thread mention attachment type",
+      "status": "completed",
+      "failure_reason": null,
+      "retry_count": 0
+    },
+    {
+      "id": "search-repository",
+      "name": "Search Repository: Service + Layer for FTS5 Queries",
+      "description": "Create a new repository service and layer for querying the FTS5 tables.\n\n### 1. Service interface: `apps/server/src/persistence/Services/ConversationSearch.ts`\n\nFollow the exact pattern from `ProjectionThreadMessages.ts` (service file):\n\n```typescript\nimport { MessageId, ThreadId, ProjectId, IsoDateTime } from \"@t3tools/contracts\";\nimport { Schema, ServiceMap } from \"effect\";\nimport type { Effect } from \"effect\";\nimport type { ProjectionRepositoryError } from \"../Errors.ts\";\n\nexport const ConversationSearchMatchRow = Schema.Struct({\n  threadId: ThreadId,\n  threadTitle: Schema.String,\n  messageId: Schema.NullOr(MessageId),\n  snippet: Schema.String,\n  relevance: Schema.Number,\n  threadCreatedAt: IsoDateTime,\n  threadUpdatedAt: IsoDateTime,\n});\nexport type ConversationSearchMatchRow = typeof ConversationSearchMatchRow.Type;\n\nexport const SearchAllInput = Schema.Struct({\n  query: Schema.String,\n  projectId: ProjectId,\n  limit: Schema.optional(Schema.Number),\n  filter: Schema.optional(Schema.Literals([\"all\", \"active\", \"archived\"])),\n});\nexport type SearchAllInput = typeof SearchAllInput.Type;\n\nexport interface ConversationSearchRepositoryShape {\n  readonly searchAll: (\n    input: SearchAllInput,\n  ) => Effect.Effect<ReadonlyArray<ConversationSearchMatchRow>, ProjectionRepositoryError>;\n\n  readonly indexMessage: (\n    input: { threadId: string; messageId: string; role: string; text: string; rowid: number },\n  ) => Effect.Effect<void, ProjectionRepositoryError>;\n\n  readonly updateThreadTitle: (\n    input: { threadId: string; title: string; rowid: number },\n  ) => Effect.Effect<void, ProjectionRepositoryError>;\n\n  readonly removeThread: (\n    input: { threadId: string },\n  ) => Effect.Effect<void, ProjectionRepositoryError>;\n}\n\nexport class ConversationSearchRepository extends ServiceMap.Service<\n  ConversationSearchRepository,\n  ConversationSearchRepositoryShape\n>()(\"t3/persistence/Services/ConversationSearch/ConversationSearchRepository\") {}\n```\n\n### 2. Layer implementation: `apps/server/src/persistence/Layers/ConversationSearch.ts`\n\nFollow the exact pattern from `ProjectionThreadMessages.ts` (layer file):\n\n```typescript\nimport * as SqlClient from \"effect/unstable/sql/SqlClient\";\nimport { Effect, Layer } from \"effect\";\nimport { toPersistenceSqlError } from \"../Errors.ts\";\nimport {\n  ConversationSearchRepository,\n  type ConversationSearchRepositoryShape,\n} from \"../Services/ConversationSearch.ts\";\n\nconst makeConversationSearchRepository = Effect.gen(function* () {\n  const sql = yield* SqlClient.SqlClient;\n\n  const searchAll: ConversationSearchRepositoryShape[\"searchAll\"] = (input) => {\n    const limit = input.limit ?? 20;\n    const filter = input.filter ?? \"all\";\n    \n    // Build the query: search both messages FTS and threads FTS, \n    // join with projection_threads for metadata, group by thread\n    // Use FTS5 snippet() for highlighted excerpts and bm25() for ranking\n    return sql.unsafe(`\n      WITH message_hits AS (\n        SELECT\n          fts.thread_id,\n          fts.message_id,\n          snippet(projection_messages_fts, 3, '<mark>', '</mark>', '...', 40) AS snippet,\n          bm25(projection_messages_fts) AS relevance\n        FROM projection_messages_fts AS fts\n        WHERE projection_messages_fts MATCH ${sql.literal(\"$1\")}\n        ORDER BY relevance\n        LIMIT ${sql.literal(\"$2\")}\n      ),\n      title_hits AS (\n        SELECT\n          fts.thread_id,\n          NULL AS message_id,\n          snippet(projection_threads_fts, 1, '<mark>', '</mark>', '...', 40) AS snippet,\n          bm25(projection_threads_fts) AS relevance\n        FROM projection_threads_fts AS fts\n        WHERE projection_threads_fts MATCH ${sql.literal(\"$3\")}\n        ORDER BY relevance\n        LIMIT ${sql.literal(\"$4\")}\n      ),\n      all_hits AS (\n        SELECT * FROM message_hits\n        UNION ALL\n        SELECT * FROM title_hits\n      )\n      SELECT\n        h.thread_id AS \"threadId\",\n        t.title AS \"threadTitle\",\n        h.message_id AS \"messageId\",\n        h.snippet,\n        h.relevance,\n        t.created_at AS \"threadCreatedAt\",\n        t.updated_at AS \"threadUpdatedAt\"\n      FROM all_hits h\n      JOIN projection_threads t ON t.thread_id = h.thread_id\n      WHERE t.project_id = ${sql.literal(\"$5\")}\n        AND t.deleted_at IS NULL\n        ${filter === \"active\" ? \"AND t.archived_at IS NULL\" : \"\"}\n        ${filter === \"archived\" ? \"AND t.archived_at IS NOT NULL\" : \"\"}\n      ORDER BY h.relevance\n      LIMIT ${sql.literal(\"$6\")}\n    `, [input.query, limit, input.query, limit, input.projectId, limit]).pipe(\n      Effect.mapError(toPersistenceSqlError(\"ConversationSearchRepository.searchAll:query\")),\n    );\n  };\n  // ... etc\n});\n```\n\n**IMPORTANT**: The above is pseudocode. The actual implementation must use the `sql` tagged template literal from `SqlClient.SqlClient` properly. Looking at how other repos work, you should use parameterized queries via the sql template tag. FTS5 MATCH queries use special syntax — the query string should be properly escaped.\n\nHere's a cleaner approach for `searchAll`:\n\n```typescript\nconst searchAll: ConversationSearchRepositoryShape[\"searchAll\"] = (input) => {\n  const limit = input.limit ?? 20;\n  const filter = input.filter ?? \"all\";\n  \n  // Escape FTS5 query: wrap terms in double quotes to prevent syntax errors\n  const ftsQuery = input.query\n    .replace(/\"/g, '\"\"')\n    .split(/\\s+/)\n    .filter(Boolean)\n    .map(term => `\"${term}\"`)\n    .join(' ');\n  \n  if (ftsQuery.length === 0) {\n    return Effect.succeed([]);\n  }\n  \n  // Use raw SQL since FTS5 MATCH requires special syntax\n  // Build filter clause\n  const filterClause = \n    filter === \"active\" ? \"AND t.archived_at IS NULL\" :\n    filter === \"archived\" ? \"AND t.archived_at IS NOT NULL\" : \"\";\n  \n  return Effect.tryPromise({\n    try: () => sql.unsafe(`\n      WITH message_hits AS (\n        SELECT\n          fts.thread_id,\n          fts.message_id,\n          snippet(projection_messages_fts, 3, '<mark>', '</mark>', '...', 40) AS snippet,\n          bm25(projection_messages_fts) AS relevance\n        FROM projection_messages_fts AS fts\n        WHERE projection_messages_fts MATCH '${ftsQuery}'\n        LIMIT ${limit * 3}\n      ),\n      title_hits AS (\n        SELECT\n          fts.thread_id,\n          NULL AS message_id,\n          snippet(projection_threads_fts, 1, '<mark>', '</mark>', '...', 40) AS snippet,\n          bm25(projection_threads_fts) AS relevance\n        FROM projection_threads_fts AS fts\n        WHERE projection_threads_fts MATCH '${ftsQuery}'\n        LIMIT ${limit}\n      ),\n      all_hits AS (\n        SELECT * FROM message_hits\n        UNION ALL\n        SELECT * FROM title_hits\n      )\n      SELECT\n        h.thread_id AS \"threadId\",\n        t.title AS \"threadTitle\",\n        h.message_id AS \"messageId\",\n        h.snippet,\n        h.relevance,\n        t.created_at AS \"threadCreatedAt\",\n        t.updated_at AS \"threadUpdatedAt\"\n      FROM all_hits h\n      JOIN projection_threads t ON t.thread_id = h.thread_id\n      WHERE t.project_id = '${input.projectId}'\n        AND t.deleted_at IS NULL\n        ${filterClause}\n      ORDER BY h.relevance\n      LIMIT ${limit}\n    `),\n    catch: (error) => toPersistenceSqlError(\"ConversationSearchRepository.searchAll:query\")(error as any),\n  });\n};\n```\n\nActually, you should use the Effect/SQL client properly. Look at how `sql` tagged template works in the codebase — it supports parameterized queries. However, FTS5 MATCH syntax may not work well with parameter binding. Use `sql.unsafe()` with manually escaped parameters for the FTS query, and the standard `sql` template for regular queries.\n\nFor `indexMessage`:\n```typescript\nconst indexMessage: ConversationSearchRepositoryShape[\"indexMessage\"] = (input) =>\n  sql`INSERT OR REPLACE INTO projection_messages_fts(rowid, thread_id, message_id, role, message_text)\n    VALUES (${input.rowid}, ${input.threadId}, ${input.messageId}, ${input.role}, ${input.text})`\n    .pipe(Effect.asVoid, Effect.mapError(toPersistenceSqlError(\"ConversationSearchRepository.indexMessage:query\")));\n```\n\nFor `updateThreadTitle`:\n```typescript\nconst updateThreadTitle: ConversationSearchRepositoryShape[\"updateThreadTitle\"] = (input) =>\n  sql`INSERT OR REPLACE INTO projection_threads_fts(rowid, thread_id, title)\n    VALUES (${input.rowid}, ${input.threadId}, ${input.title})`\n    .pipe(Effect.asVoid, Effect.mapError(toPersistenceSqlError(\"ConversationSearchRepository.updateThreadTitle:query\")));\n```\n\nFor `removeThread`:\n```typescript\nconst removeThread: ConversationSearchRepositoryShape[\"removeThread\"] = (input) =>\n  sql`DELETE FROM projection_messages_fts WHERE thread_id = ${input.threadId}`\n    .pipe(\n      Effect.flatMap(() => sql`DELETE FROM projection_threads_fts WHERE thread_id = ${input.threadId}`),\n      Effect.asVoid,\n      Effect.mapError(toPersistenceSqlError(\"ConversationSearchRepository.removeThread:query\")),\n    );\n```\n\nExport as:\n```typescript\nexport const ConversationSearchRepositoryLive = Layer.effect(\n  ConversationSearchRepository,\n  makeConversationSearchRepository,\n);\n```\n\n**Key considerations**:\n- FTS5 content tables use `content=` and `content_rowid=` — this means the FTS table is a \"content-sync\" table. We use `INSERT OR REPLACE` with explicit rowid to keep in sync.\n- The `rowid` parameter is needed for content-sync FTS tables. The caller (projector) must provide the rowid of the source row.\n- Actually, on reflection, since we're using `content='projection_thread_messages'`, FTS5 automatically looks up the content from the source table. But for INSERT/UPDATE, we still need to manually sync. Let me simplify: use a contentless FTS approach instead, or use explicit content management.\n- **Simplest approach**: Don't use `content=` at all. Create standalone FTS tables that store their own content. This avoids rowid sync complexity. Adjust the migration accordingly (remove `content=` and `content_rowid=` from CREATE VIRTUAL TABLE). The task for migration-020-fts should also be updated. Since tasks run in order (this depends on migration), the worker should check and adjust.\n\nActually, let's keep it simple. The FTS tables should be **standalone** (no content= or content_rowid= directives). This way they store their own copy of the indexed data, and we INSERT/UPDATE/DELETE directly without needing to sync rowids with the source tables. Update the approach:\n\n```sql\nCREATE VIRTUAL TABLE IF NOT EXISTS projection_messages_fts USING fts5(\n  thread_id UNINDEXED,\n  message_id UNINDEXED,\n  role UNINDEXED,\n  message_text\n);\n\nCREATE VIRTUAL TABLE IF NOT EXISTS projection_threads_fts USING fts5(\n  thread_id UNINDEXED,\n  title\n);\n```\n\nThen for indexMessage, use the message_id as a key for updates. FTS5 doesn't support UPSERT natively, so do DELETE + INSERT:\n```typescript\nconst indexMessage = (input) =>\n  sql`DELETE FROM projection_messages_fts WHERE message_id = ${input.messageId}`.pipe(\n    Effect.flatMap(() =>\n      sql`INSERT INTO projection_messages_fts(thread_id, message_id, role, message_text)\n        VALUES (${input.threadId}, ${input.messageId}, ${input.role}, ${input.text})`\n    ),\n    Effect.asVoid,\n    Effect.mapError(toPersistenceSqlError(\"...\"))\n  );\n```\n\nSimilarly for updateThreadTitle:\n```typescript\nconst updateThreadTitle = (input) =>\n  sql`DELETE FROM projection_threads_fts WHERE thread_id = ${input.threadId}`.pipe(\n    Effect.flatMap(() =>\n      sql`INSERT INTO projection_threads_fts(thread_id, title)\n        VALUES (${input.threadId}, ${input.title})`\n    ),\n    Effect.asVoid,\n    Effect.mapError(toPersistenceSqlError(\"...\"))\n  );\n```\n\nUpdate the service interface to remove the `rowid` parameter from `indexMessage` and `updateThreadTitle`.\n\n**Note**: The migration task may have already created content-synced tables. The worker for THIS task should check and adjust if needed. If the migration already ran and created content= tables, the worker should update the migration to remove content= directives. Since migration depends_on is empty and this task depends on it, the migration file will exist.",
+      "depends_on": [
+        "migration-020-fts",
+        "contracts-search-types"
+      ],
+      "files_to_create": [
+        "apps/server/src/persistence/Services/ConversationSearch.ts",
+        "apps/server/src/persistence/Layers/ConversationSearch.ts"
+      ],
+      "files_to_modify": [],
+      "files_to_read": [
+        "apps/server/src/persistence/Services/ProjectionThreadMessages.ts",
+        "apps/server/src/persistence/Layers/ProjectionThreadMessages.ts",
+        "apps/server/src/persistence/Layers/ProjectionThreads.ts",
+        "apps/server/src/persistence/Services/ProjectionThreads.ts",
+        "apps/server/src/persistence/Errors.ts",
+        "apps/server/src/persistence/Migrations/020_ConversationFTS.ts",
+        "packages/contracts/src/orchestration.ts"
+      ],
+      "acceptance_criteria": [
+        "ConversationSearchRepository service interface is defined in Services/ConversationSearch.ts",
+        "ConversationSearchRepositoryLive layer is exported from Layers/ConversationSearch.ts",
+        "searchAll method queries both FTS tables, joins with projection_threads, filters by projectId and archive status, returns BM25-ranked results with snippets",
+        "indexMessage method inserts/replaces a message entry in the messages FTS table",
+        "updateThreadTitle method inserts/replaces a thread title entry in the threads FTS table",
+        "removeThread method deletes all entries for a thread from both FTS tables",
+        "FTS5 query strings are properly escaped to prevent injection",
+        "TypeScript compiles without errors"
+      ],
+      "tests_to_run": [
+        "cd apps/server && npx tsc --noEmit"
+      ],
+      "commit_message": "feat: add ConversationSearchRepository for FTS5 full-text search",
+      "status": "completed",
+      "failure_reason": null,
+      "retry_count": 0
+    },
+    {
+      "id": "projector-fts-sync",
+      "name": "Projector: FTS Sync on Message/Thread Events",
+      "description": "Modify the projection pipeline to keep FTS tables in sync with projection data.\n\n### Modify: `apps/server/src/orchestration/Layers/ProjectionPipeline.ts`\n\n1. **Import** the new repository:\n   ```typescript\n   import { ConversationSearchRepository } from \"../../persistence/Services/ConversationSearch.ts\";\n   import { ConversationSearchRepositoryLive } from \"../../persistence/Layers/ConversationSearch.ts\";\n   ```\n\n2. **Yield** the repository in `makeOrchestrationProjectionPipeline`:\n   ```typescript\n   const conversationSearchRepository = yield* ConversationSearchRepository;\n   ```\n\n3. **Add a new projector** named `\"projection.conversation-search\"` to the `ORCHESTRATION_PROJECTOR_NAMES` const:\n   ```typescript\n   export const ORCHESTRATION_PROJECTOR_NAMES = {\n     // ...existing\n     conversationSearch: \"projection.conversation-search\",\n   } as const;\n   ```\n\n4. **Implement** `applyConversationSearchProjection`:\n   ```typescript\n   const applyConversationSearchProjection: ProjectorDefinition[\"apply\"] = (event, _attachmentSideEffects) =>\n     Effect.gen(function* () {\n       switch (event.type) {\n         case \"thread.message-sent\": {\n           // Index the message text in FTS\n           yield* conversationSearchRepository.indexMessage({\n             threadId: event.payload.threadId,\n             messageId: event.payload.messageId,\n             role: event.payload.role,\n             text: event.payload.text,\n           });\n           return;\n         }\n\n         case \"thread.created\": {\n           // Index the initial thread title\n           yield* conversationSearchRepository.updateThreadTitle({\n             threadId: event.payload.threadId,\n             title: event.payload.title,\n           });\n           return;\n         }\n\n         case \"thread.meta-updated\": {\n           // Update thread title in FTS if title changed\n           if (event.payload.title !== undefined) {\n             yield* conversationSearchRepository.updateThreadTitle({\n               threadId: event.payload.threadId,\n               title: event.payload.title,\n             });\n           }\n           return;\n         }\n\n         case \"thread.deleted\": {\n           // Remove all FTS entries for this thread\n           yield* conversationSearchRepository.removeThread({\n             threadId: event.payload.threadId,\n           });\n           return;\n         }\n\n         case \"thread.reverted\": {\n           // On revert, remove all messages for this thread from FTS\n           // and re-index the retained messages\n           const existingMessages = yield* projectionThreadMessageRepository.listByThreadId({\n             threadId: event.payload.threadId,\n           });\n           // Delete all message FTS entries for this thread\n           yield* sql`DELETE FROM projection_messages_fts WHERE thread_id = ${event.payload.threadId}`\n             .pipe(Effect.mapError(toPersistenceSqlError(\"ConversationSearchProjection.revert:delete\")));\n           // Re-index retained messages\n           yield* Effect.forEach(\n             existingMessages,\n             (msg) => conversationSearchRepository.indexMessage({\n               threadId: msg.threadId,\n               messageId: msg.messageId,\n               role: msg.role,\n               text: msg.text,\n             }),\n             { concurrency: 1 },\n           );\n           return;\n         }\n\n         default:\n           return;\n       }\n     });\n   ```\n\n5. **Register** the projector in the `projectors` array:\n   ```typescript\n   {\n     name: ORCHESTRATION_PROJECTOR_NAMES.conversationSearch,\n     apply: applyConversationSearchProjection,\n   },\n   ```\n\n6. **Add layer** to `OrchestrationProjectionPipelineLive`:\n   ```typescript\n   Layer.provideMerge(ConversationSearchRepositoryLive),\n   ```\n\nThis approach keeps FTS sync inline with the projection pipeline — no SQL triggers needed. Each projector runs inside a transaction, so FTS updates are atomic with the projection state update.",
+      "depends_on": [
+        "search-repository"
+      ],
+      "files_to_create": [],
+      "files_to_modify": [
+        "apps/server/src/orchestration/Layers/ProjectionPipeline.ts"
+      ],
+      "files_to_read": [
+        "apps/server/src/orchestration/Layers/ProjectionPipeline.ts",
+        "apps/server/src/orchestration/Services/ProjectionPipeline.ts",
+        "apps/server/src/persistence/Services/ConversationSearch.ts",
+        "apps/server/src/persistence/Layers/ConversationSearch.ts"
+      ],
+      "acceptance_criteria": [
+        "ConversationSearchRepository is imported and yielded in makeOrchestrationProjectionPipeline",
+        "A new projector 'projection.conversation-search' is registered in the projectors array",
+        "On thread.message-sent, the message text is indexed via indexMessage",
+        "On thread.created, the thread title is indexed via updateThreadTitle",
+        "On thread.meta-updated with title change, the title is updated via updateThreadTitle",
+        "On thread.deleted, all FTS entries are removed via removeThread",
+        "On thread.reverted, message FTS entries are rebuilt from retained messages",
+        "ConversationSearchRepositoryLive is provided in the pipeline layer",
+        "TypeScript compiles without errors"
+      ],
+      "tests_to_run": [
+        "cd apps/server && npx tsc --noEmit"
+      ],
+      "commit_message": "feat: sync FTS tables from projection pipeline on message/thread events",
+      "status": "completed",
+      "failure_reason": null,
+      "retry_count": 0
+    },
+    {
+      "id": "ws-search-endpoint",
+      "name": "WebSocket Handler: Search Conversations Endpoint",
+      "description": "Add a WS handler for the `orchestration.searchConversations` method.\n\n### Modify: `apps/server/src/wsServer.ts`\n\n1. **Import** the ConversationSearchRepository:\n   ```typescript\n   import { ConversationSearchRepository } from \"./persistence/Services/ConversationSearch.ts\";\n   ```\n\n2. **Yield** the repository in `createServer` (alongside existing service yields like `orchestrationEngine`, `projectionReadModelQuery`, etc.):\n   ```typescript\n   const conversationSearchRepository = yield* ConversationSearchRepository;\n   ```\n\n3. **Add a case** in the `routeRequest` function's switch statement, before the `default` case:\n   ```typescript\n   case ORCHESTRATION_WS_METHODS.searchConversations: {\n     const body = stripRequestTag(request.body);\n     const rows = yield* conversationSearchRepository.searchAll(body);\n     // Group results by thread\n     const threadMap = new Map<string, {\n       threadId: string;\n       threadTitle: string;\n       createdAt: string;\n       updatedAt: string;\n       matches: Array<{ messageId?: string; snippet: string; relevance: number }>;\n     }>();\n     for (const row of rows) {\n       let entry = threadMap.get(row.threadId);\n       if (!entry) {\n         entry = {\n           threadId: row.threadId,\n           threadTitle: row.threadTitle,\n           createdAt: row.threadCreatedAt,\n           updatedAt: row.threadUpdatedAt,\n           matches: [],\n         };\n         threadMap.set(row.threadId, entry);\n       }\n       entry.matches.push({\n         ...(row.messageId !== null ? { messageId: row.messageId } : {}),\n         snippet: row.snippet,\n         relevance: row.relevance,\n       });\n     }\n     return { results: Array.from(threadMap.values()) };\n   }\n   ```\n\n4. **Handle thread-reference attachments** in `normalizeDispatchCommand`: The existing code iterates over `turnStartCommand.message.attachments` and processes each one as an image (parseBase64DataUrl, write file, etc.). Now with `ThreadMentionAttachment` in the union, thread-reference attachments will also be iterated. We need to skip non-image attachments:\n\n   In the `normalizedAttachments` forEach handler, add an early return for non-image types:\n   ```typescript\n   const normalizedAttachments = yield* Effect.forEach(\n     turnStartCommand.message.attachments,\n     (attachment) =>\n       Effect.gen(function* () {\n         // Pass through non-image attachments (e.g., thread-reference) as-is\n         if (attachment.type !== \"image\") {\n           return attachment as any; // ChatAttachment\n         }\n         // ... existing image processing code ...\n       }),\n     { concurrency: 1 },\n   );\n   ```\n\n5. **Add ConversationSearchRepository** to the `ServerCoreRuntimeServices` type union (or `ServerRuntimeServices` if that's where other persistence services are resolved). Actually, looking at the code, the services are yielded directly in `createServer` via `Effect.services`. The ConversationSearchRepository just needs to be in the Effect environment. Add it to the layer composition in `serverLayers.ts`.\n\n### Modify: `apps/server/src/serverLayers.ts`\n\nImport and provide `ConversationSearchRepositoryLive` in the server layers so it's available in the wsServer Effect environment. Look at how other repository layers are provided there.\n\n**Note**: `ServerCoreRuntimeServices` in wsServer.ts is a type alias for service tags that must be in scope. Add `ConversationSearchRepository` to this union.",
+      "depends_on": [
+        "search-repository",
+        "contracts-search-types"
+      ],
+      "files_to_create": [],
+      "files_to_modify": [
+        "apps/server/src/wsServer.ts",
+        "apps/server/src/serverLayers.ts"
+      ],
+      "files_to_read": [
+        "apps/server/src/wsServer.ts",
+        "apps/server/src/serverLayers.ts",
+        "apps/server/src/persistence/Services/ConversationSearch.ts",
+        "apps/server/src/persistence/Layers/ConversationSearch.ts",
+        "packages/contracts/src/orchestration.ts",
+        "packages/contracts/src/ws.ts"
+      ],
+      "acceptance_criteria": [
+        "WS handler for orchestration.searchConversations is added to routeRequest switch",
+        "Handler calls ConversationSearchRepository.searchAll and groups results by thread",
+        "Returns ConversationSearchResponse-shaped data",
+        "normalizeDispatchCommand passes through thread-reference attachments without image processing",
+        "ConversationSearchRepository is available in the server's Effect environment",
+        "TypeScript compiles without errors"
+      ],
+      "tests_to_run": [
+        "cd apps/server && npx tsc --noEmit"
+      ],
+      "commit_message": "feat: add searchConversations WS endpoint and thread-reference attachment passthrough",
+      "status": "completed",
+      "failure_reason": null,
+      "retry_count": 0
+    },
+    {
+      "id": "client-search-api",
+      "name": "Client API: Search Conversations Method",
+      "description": "Add a client-side method to call the searchConversations WS endpoint.\n\n### Modify: `apps/web/src/wsNativeApi.ts`\n\nIn the `createWsNativeApi` function (or wherever the `NativeApi` object is constructed), add a new method under the `orchestration` namespace:\n\n```typescript\nsearchConversations: (request: {\n  projectId: string;\n  query: string;\n  limit?: number;\n  filter?: \"all\" | \"active\" | \"archived\";\n}) => transport.request(ORCHESTRATION_WS_METHODS.searchConversations, request),\n```\n\nMake sure to import `ORCHESTRATION_WS_METHODS` if not already (it should already be imported at the top of the file).\n\n### Modify: NativeApi interface (if applicable)\n\nCheck if there's a `NativeApi` interface/type that needs to be extended. It might be in `packages/contracts/src/nativeApi.ts` or similar. Add the `searchConversations` method to the interface.\n\nLook for where the existing orchestration methods (getSnapshot, dispatchCommand, etc.) are typed in the NativeApi interface and add the new one there.\n\nThe method signature should match the ConversationSearchRequest input and return ConversationSearchResponse.",
+      "depends_on": [
+        "ws-search-endpoint"
+      ],
+      "files_to_create": [],
+      "files_to_modify": [
+        "apps/web/src/wsNativeApi.ts"
+      ],
+      "files_to_read": [
+        "apps/web/src/wsNativeApi.ts",
+        "packages/contracts/src/orchestration.ts"
+      ],
+      "acceptance_criteria": [
+        "searchConversations method is added to the client API",
+        "Method accepts projectId, query, optional limit and filter",
+        "Method calls the ORCHESTRATION_WS_METHODS.searchConversations WS endpoint",
+        "NativeApi interface is updated if applicable",
+        "TypeScript compiles without errors"
+      ],
+      "tests_to_run": [
+        "cd apps/web && npx tsc --noEmit"
+      ],
+      "commit_message": "feat: add searchConversations client API method",
+      "status": "completed",
+      "failure_reason": null,
+      "retry_count": 0
+    },
+    {
+      "id": "composer-thread-mention",
+      "name": "Composer: @Threads Mention Type + Trigger + Command Menu",
+      "description": "Add thread mention support to the composer system.\n\n### 6a: Mention Type — Modify: `apps/web/src/composer-editor-mentions.ts`\n\nAdd a new segment type for thread mentions:\n\n```typescript\nexport type ComposerPromptSegment =\n  | { type: \"text\"; text: string }\n  | { type: \"mention\"; path: string }\n  | { type: \"terminal-context\"; context: TerminalContextDraft | null }\n  | { type: \"thread-mention\"; threadId: string; threadTitle: string };\n```\n\nUpdate `splitPromptIntoComposerSegments` to detect `@Thread:` prefixed tokens:\n- Pattern: `@Thread:<threadId>` or similar\n- When detected, emit a `{ type: \"thread-mention\", threadId, threadTitle }` segment\n\n### 6b: Trigger Detection — Modify: `apps/web/src/composer-logic.ts`\n\nExtend `ComposerTriggerKind` to include `\"thread-mention\"`:\n```typescript\nexport type ComposerTriggerKind = \"path\" | \"slash-command\" | \"slash-model\" | \"thread-mention\";\n```\n\nUpdate the trigger detection logic so that when the user types `@Threads` (case-insensitive), it opens the thread search sub-menu. The detection should work similarly to the `@` path trigger but check if the token starts with `@Threads` or `@threads`.\n\n### 6c: Command Menu — Modify: `apps/web/src/components/chat/ComposerCommandMenu.tsx`\n\nAdd a new state/mode to the command menu for thread search:\n\n1. When `trigger.kind === \"thread-mention\"`, render the thread search UI:\n   - A search input at the top (pre-populated with trigger.query if any)\n   - On keystroke, debounce (200ms) and call `nativeApi.orchestration.searchConversations()`\n   - Display results: thread title, last activity date, snippet of matching content\n   - Filter toggle: All / Active / Archived\n   \n2. When a thread result is selected:\n   - Insert a `@Thread:<title>` chip into the composer text\n   - Add a `ThreadMentionAttachment` to the message attachments\n\nThis is the most complex UI task. The thread search sub-menu should feel similar to the existing command menu items but with a live search experience.\n\n**Implementation notes**:\n- Use `useCallback` for the debounced search\n- The search results should show thread title and a snippet from the matching content\n- Include the filter toggle (All/Active/Archived) as tabs or a dropdown\n- On selection, replace the `@Threads:query` text with a chip representation\n\nCheck existing patterns in ComposerCommandMenu.tsx for how other menu items work and follow the same approach.",
+      "depends_on": [
+        "client-search-api"
+      ],
+      "files_to_create": [],
+      "files_to_modify": [
+        "apps/web/src/composer-editor-mentions.ts",
+        "apps/web/src/composer-logic.ts",
+        "apps/web/src/components/chat/ComposerCommandMenu.tsx"
+      ],
+      "files_to_read": [
+        "apps/web/src/composer-editor-mentions.ts",
+        "apps/web/src/composer-logic.ts",
+        "apps/web/src/components/chat/ComposerCommandMenu.tsx",
+        "apps/web/src/wsNativeApi.ts",
+        "packages/contracts/src/orchestration.ts"
+      ],
+      "acceptance_criteria": [
+        "ComposerPromptSegment type includes thread-mention variant",
+        "ComposerTriggerKind includes 'thread-mention'",
+        "Typing @Threads in composer triggers the thread search sub-menu",
+        "Thread search sub-menu calls searchConversations API with debounced input",
+        "Search results show thread title, date, and snippet",
+        "Selecting a result inserts a @Thread:title chip in the composer",
+        "Filter toggle (All/Active/Archived) is available",
+        "TypeScript compiles without errors"
+      ],
+      "tests_to_run": [
+        "cd apps/web && npx tsc --noEmit"
+      ],
+      "commit_message": "feat: add @Threads mention support in composer with search sub-menu",
+      "status": "completed",
+      "failure_reason": null,
+      "retry_count": 0
+    },
+    {
+      "id": "thread-summarizer",
+      "name": "Thread Summarizer: LLM Summary on Turn Start",
+      "description": "Create a thread summarizer service that generates LLM summaries of referenced threads and inject them into the conversation context.\n\n### 1. New file: `apps/server/src/orchestration/Layers/ThreadSummarizer.ts`\n\nCreate a service that:\n1. Takes a threadId and loads the full message history\n2. Calls the configured text-generation model with a summarization prompt\n3. Returns the summary text\n\n```typescript\nimport { Effect, Layer, ServiceMap } from \"effect\";\nimport type { ProjectionThreadMessage } from \"../../persistence/Services/ProjectionThreadMessages.ts\";\nimport { ProjectionThreadMessageRepository } from \"../../persistence/Services/ProjectionThreadMessages.ts\";\nimport { ProjectionThreadRepository } from \"../../persistence/Services/ProjectionThreads.ts\";\n\nexport interface ThreadSummarizerShape {\n  readonly summarizeThread: (input: {\n    threadId: string;\n    threadTitle: string;\n  }) => Effect.Effect<string, Error>;\n}\n\nexport class ThreadSummarizer extends ServiceMap.Service<\n  ThreadSummarizer,\n  ThreadSummarizerShape\n>()(\"t3/orchestration/ThreadSummarizer\") {}\n```\n\nThe implementation should:\n- Load all messages for the thread via `ProjectionThreadMessageRepository.listByThreadId`\n- Format messages into a conversation transcript\n- For now, generate a simple extractive summary (first N messages + key content) rather than calling an LLM, since LLM integration would require significant additional infrastructure (model routing, API keys, etc.)\n- Return formatted summary: `\"Context from thread '[title]' (created [date]):\\n[summary]\"`\n\n**Pragmatic approach**: Since calling an external LLM from within the projection/command pipeline adds significant complexity (async, failure handling, model selection), implement a simpler extractive summary for v1:\n- Take the first 5 user messages and first 5 assistant messages\n- Truncate each to 500 chars\n- Format as a condensed transcript\n- This can be upgraded to LLM-powered summarization later\n\n### 2. Modify: `apps/server/src/orchestration/Layers/OrchestrationEngine.ts` (or the ProviderCommandReactor)\n\nFind the turn start flow — when a `thread.turn.start` command is dispatched. Before the provider processes the user's message, check for `thread-reference` attachments in the message.\n\nFor each thread-reference attachment:\n1. Call `ThreadSummarizer.summarizeThread({ threadId, threadTitle })`\n2. Inject the summary as a system message preceding the user's turn\n\nThe injection point should be AFTER the user message is persisted but BEFORE it's sent to the provider. Look at how `ProviderCommandReactor` or `ProviderRuntimeIngestion` processes the turn start and find the right hook point.\n\nAlternatively, the simplest integration point may be in the provider adapter itself — when building the messages array for the API call, detect thread-reference attachments and prepend summary context.\n\n**Note**: This is a complex integration point. If the worker finds it too complex to inject summaries into the turn flow, a simpler approach is acceptable for v1:\n- Generate the summary\n- Dispatch an additional `thread.message-sent` event with role `system` containing the summary text\n- This appears as a system message in the conversation before the user's message\n\nProvide the ThreadSummarizer layer in the server layers composition.",
+      "depends_on": [
+        "contracts-search-types"
+      ],
+      "files_to_create": [
+        "apps/server/src/orchestration/Layers/ThreadSummarizer.ts",
+        "apps/server/src/orchestration/Services/ThreadSummarizer.ts"
+      ],
+      "files_to_modify": [
+        "apps/server/src/serverLayers.ts"
+      ],
+      "files_to_read": [
+        "apps/server/src/orchestration/Layers/OrchestrationEngine.ts",
+        "apps/server/src/orchestration/Services/OrchestrationEngine.ts",
+        "apps/server/src/persistence/Services/ProjectionThreadMessages.ts",
+        "apps/server/src/persistence/Services/ProjectionThreads.ts",
+        "apps/server/src/persistence/Layers/ProjectionThreadMessages.ts",
+        "apps/server/src/serverLayers.ts",
+        "packages/contracts/src/orchestration.ts"
+      ],
+      "acceptance_criteria": [
+        "ThreadSummarizer service interface is defined",
+        "ThreadSummarizer layer implementation loads thread messages and generates extractive summary",
+        "Summary format is: Context from thread '[title]' (created [date]):\\n[summary content]",
+        "Summary truncates appropriately for long threads (first 5 user + 5 assistant messages, 500 chars each)",
+        "ThreadSummarizer is provided in server layers",
+        "TypeScript compiles without errors"
+      ],
+      "tests_to_run": [
+        "cd apps/server && npx tsc --noEmit"
+      ],
+      "commit_message": "feat: add ThreadSummarizer service for cross-thread context injection",
+      "status": "completed",
+      "failure_reason": null,
+      "retry_count": 0
+    },
+    {
+      "id": "agent-search-tool",
+      "name": "Agent Tool: search-conversations for Provider",
+      "description": "Register a `search-conversations` custom tool that the AI agent can call to search past conversation threads.\n\n### Modify: Provider adapter or tool registration\n\nFind where custom/dynamic tools are registered for the provider session. This is likely in `apps/server/src/provider/Layers/ClaudeAdapter.ts` or a related file.\n\nRegister a new tool:\n```typescript\n{\n  name: \"search-conversations\",\n  description: \"Search past conversation threads by keyword. Use when the user asks you to find or reference previous conversations.\",\n  input_schema: {\n    type: \"object\",\n    properties: {\n      query: { type: \"string\", description: \"Search keywords\" },\n      limit: { type: \"number\", description: \"Max results (default 5)\" },\n    },\n    required: [\"query\"],\n  },\n}\n```\n\nIntercept in the tool execution callback:\n1. Parse input (query, optional limit)\n2. Call `ConversationSearchRepository.searchAll()` with the current project's projectId\n3. Format results as structured text:\n   ```\n   Found N results across M threads:\n   \n   ## Thread: \"<title>\" (created <date>)\n   - Match: <snippet>\n   - Match: <snippet>\n   \n   ## Thread: \"<title>\" (created <date>)\n   - Match: <snippet>\n   ```\n4. Return as tool result text\n\nThe tool should be:\n- **Explicit only** — the agent only calls it when the user asks to search past conversations\n- Classified as a `dynamic_tool_call` per existing tool patterns\n- Available in all provider sessions (Claude and Codex adapters)\n\n**Finding the right integration point**: \n- Check `apps/server/src/provider/Layers/ClaudeAdapter.ts` for how `canUseTool` or tool handlers work\n- Check if there's a `tools` array or registration mechanism\n- The tool needs access to `ConversationSearchRepository` and the current thread's `projectId`\n\nIf the adapter architecture makes it difficult to inject repository dependencies, consider:\n- Creating a tool handler module that receives the repository as a dependency\n- Or using the Effect service resolution pattern to access the repository at tool execution time",
+      "depends_on": [
+        "search-repository"
+      ],
+      "files_to_create": [],
+      "files_to_modify": [
+        "apps/server/src/provider/Layers/ClaudeAdapter.ts"
+      ],
+      "files_to_read": [
+        "apps/server/src/provider/Layers/ClaudeAdapter.ts",
+        "apps/server/src/provider/Services/ProviderService.ts",
+        "apps/server/src/persistence/Services/ConversationSearch.ts",
+        "apps/server/src/serverLayers.ts"
+      ],
+      "acceptance_criteria": [
+        "search-conversations tool is registered with proper schema (query: string required, limit: number optional)",
+        "Tool execution calls ConversationSearchRepository.searchAll with the current project's projectId",
+        "Results are formatted as human-readable structured text",
+        "Tool is available in provider sessions",
+        "TypeScript compiles without errors"
+      ],
+      "tests_to_run": [
+        "cd apps/server && npx tsc --noEmit"
+      ],
+      "commit_message": "feat: add search-conversations agent tool for cross-thread search",
+      "status": "completed",
+      "failure_reason": null,
+      "retry_count": 0
+    },
+    {
+      "id": "integration",
+      "name": "Integration Verification",
+      "description": "Verify all tasks integrate correctly: type checking, lint, and cross-task coherence.",
+      "depends_on": [
+        "migration-020-fts",
+        "contracts-search-types",
+        "search-repository",
+        "projector-fts-sync",
+        "ws-search-endpoint",
+        "client-search-api",
+        "composer-thread-mention",
+        "thread-summarizer",
+        "agent-search-tool"
+      ],
+      "files_to_create": [],
+      "files_to_modify": [],
+      "files_to_read": [],
+      "acceptance_criteria": [
+        "pnpm typecheck passes across all packages",
+        "pnpm lint passes",
+        "All imports resolve correctly across package boundaries",
+        "No circular dependencies introduced"
+      ],
+      "tests_to_run": [
+        "npx tsc --noEmit",
+        "pnpm lint"
+      ],
+      "commit_message": "chore: verify integration of conversation search and thread context feature",
+      "status": "completed",
+      "failure_reason": null,
+      "retry_count": 0
+    }
+  ],
+  "summary_context": "This feature adds two tightly coupled capabilities: (1) FTS5-based full-text search across conversation threads and messages, exposed via a WS endpoint and repository layer, and (2) cross-thread context via @Threads mentions in the composer that inject summarized thread content into conversations. The search infrastructure (migration → repository → projector sync → WS endpoint → client API) serves both the @Threads UI and a search-conversations agent tool. The foundation tasks (migration, contracts, repository) feed into parallel consumer paths: the WS/client/composer path for user-facing @Threads mentions, the projector sync for keeping FTS in sync, and the agent tool for AI-facing search."
+}

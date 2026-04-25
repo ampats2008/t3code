@@ -482,8 +482,11 @@ const makeOpenCodeTextGeneration = Effect.gen(function* () {
       });
     }
 
+    const concatenatedMessage = input.messages
+      .map((m) => `${m.role}: ${m.text}`)
+      .join("\n");
     const { prompt, outputSchema } = buildThreadTitlePrompt({
-      message: input.message,
+      message: concatenatedMessage,
       attachments: input.attachments,
     });
     const generated = yield* runOpenCodeJson({

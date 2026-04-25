@@ -105,7 +105,7 @@ export function useDiffReviewPanel({
         description: `${orphanedIds.length} comment(s) are no longer valid due to code changes.`,
         type: 'warning',
         data: {
-          threadId: ThreadId.makeUnsafe(activeThreadId),
+          threadId: ThreadId.make(activeThreadId),
           dismissAfterVisibleMs: 5000,
         },
       });

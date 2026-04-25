@@ -52,6 +52,8 @@ const clientSettings: ClientSettings = {
   autoOpenPlanSidebar: false,
   confirmThreadArchive: true,
   confirmThreadDelete: false,
+  diffDefaultCollapsed: true,
+  diffDefaultView: "tree",
   diffWordWrap: true,
   favorites: [],
   sidebarProjectGroupingMode: "repository_path",

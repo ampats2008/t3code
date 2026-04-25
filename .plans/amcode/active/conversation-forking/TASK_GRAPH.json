@@ -1,0 +1,324 @@
+{
+  "tasks": [
+    {
+      "id": "migration-019-thread-forks",
+      "name": "Migration 019 \u00e2\u20ac\u201d Fork Schema",
+      "description": "Create a new migration file `apps/server/src/persistence/Migrations/019_ThreadForks.ts` following the exact pattern of existing migrations (e.g., 017_ProjectionThreadsArchivedAt.ts).\n\nThe migration must:\n1. Use `Effect.gen(function* () { ... })` as the default export\n2. Get `const sql = yield* SqlClient.SqlClient;`\n3. Check idempotency before each ALTER TABLE (use `PRAGMA table_info(projection_threads)` and check if column already exists)\n4. Add columns to `projection_threads`:\n   - `fork_source_thread_id TEXT DEFAULT NULL`\n   - `fork_source_message_id TEXT DEFAULT NULL`\n5. Create the `projection_thread_forks` table:\n   ```sql\n   CREATE TABLE IF NOT EXISTS projection_thread_forks (\n     id INTEGER PRIMARY KEY AUTOINCREMENT,\n     source_thread_id TEXT NOT NULL,\n     source_message_id TEXT NOT NULL,\n     forked_thread_id TEXT NOT NULL,\n     fork_number INTEGER NOT NULL DEFAULT 1,\n     created_at TEXT NOT NULL,\n     UNIQUE(source_thread_id, source_message_id, forked_thread_id)\n   );\n   ```\n6. Create index: `CREATE INDEX IF NOT EXISTS idx_thread_forks_source ON projection_thread_forks(source_thread_id, source_message_id);`\n\nThen register in `apps/server/src/persistence/Migrations.ts`:\n- Add static import: `import Migration0019 from \"./Migrations/019_ThreadForks.ts\";`\n- Add to `migrationEntries` array: `[19, \"ThreadForks\", Migration0019]`\n\nImports needed in migration file:\n```typescript\nimport * as SqlClient from \"effect/SqlClient\";\nimport * as Effect from \"effect/Effect\";\n```",
+      "depends_on": [],
+      "files_to_create": [
+        "apps/server/src/persistence/Migrations/019_ThreadForks.ts"
+      ],
+      "files_to_modify": [
+        "apps/server/src/persistence/Migrations.ts"
+      ],
+      "files_to_read": [
+        "apps/server/src/persistence/Migrations.ts",
+        "apps/server/src/persistence/Migrations/017_ProjectionThreadsArchivedAt.ts",
+        "apps/server/src/persistence/Migrations/018_ProjectionThreadsArchivedAtIndex.ts"
+      ],
+      "acceptance_criteria": [
+        "Migration file exists at apps/server/src/persistence/Migrations/019_ThreadForks.ts",
+        "Migration adds fork_source_thread_id and fork_source_message_id columns to projection_threads with idempotency checks",
+        "Migration creates projection_thread_forks table with correct schema",
+        "Migration creates idx_thread_forks_source index",
+        "Migration is registered in Migrations.ts as entry [19, \"ThreadForks\", Migration0019]",
+        "TypeScript compiles without errors"
+      ],
+      "tests_to_run": [],
+      "commit_message": "feat: add migration 019 for thread fork schema",
+      "status": "completed",
+      "failure_reason": null,
+      "retry_count": 0
+    },
+    {
+      "id": "contracts-fork-schemas",
+      "name": "Contracts \u00e2\u20ac\u201d Fork Command + Event Schemas",
+      "description": "Modify `packages/contracts/src/orchestration.ts` to add all fork-related schemas.\n\n### 1. ThreadForkCommand (add after ThreadSessionStopCommand, around line 465)\n\n```typescript\nconst ThreadForkCommand = Schema.Struct({\n  type: Schema.Literal(\"thread.fork\"),\n  commandId: CommandId,\n  sourceThreadId: ThreadId,\n  forkAtMessageId: MessageId,\n  threadId: ThreadId,\n  projectId: ProjectId,\n  title: TrimmedNonEmptyString,\n  modelSelection: ModelSelection,\n  runtimeMode: RuntimeMode.pipe(Schema.withDecodingDefault(() => DEFAULT_RUNTIME_MODE)),\n  interactionMode: ProviderInteractionMode.pipe(\n    Schema.withDecodingDefault(() => DEFAULT_PROVIDER_INTERACTION_MODE),\n  ),\n  branch: Schema.NullOr(TrimmedNonEmptyString),\n  worktreePath: Schema.NullOr(TrimmedNonEmptyString),\n  createdAt: IsoDateTime,\n});\n```\n\n### 2. Add ThreadForkCommand to command unions\n\nAdd `ThreadForkCommand` to BOTH:\n- `DispatchableClientOrchestrationCommand` union array (around line 467)\n- `ClientOrchestrationCommand` union array (around line 488)\n\nDo NOT add to `InternalOrchestrationCommand` \u00e2\u20ac\u201d fork is a client-dispatchable command.\n\n### 3. ThreadForkedPayload (add after existing payload schemas, before OrchestrationEventMetadata)\n\n```typescript\nexport const ThreadForkedPayload = Schema.Struct({\n  threadId: ThreadId,\n  projectId: ProjectId,\n  sourceThreadId: ThreadId,\n  forkAtMessageId: MessageId,\n  title: TrimmedNonEmptyString,\n  modelSelection: ModelSelection,\n  runtimeMode: RuntimeMode.pipe(Schema.withDecodingDefault(() => DEFAULT_RUNTIME_MODE)),\n  interactionMode: ProviderInteractionMode.pipe(\n    Schema.withDecodingDefault(() => DEFAULT_PROVIDER_INTERACTION_MODE),\n  ),\n  branch: Schema.NullOr(TrimmedNonEmptyString),\n  worktreePath: Schema.NullOr(TrimmedNonEmptyString),\n  copiedMessageIds: Schema.Array(MessageId),\n  forkNumber: Schema.Number,\n  createdAt: IsoDateTime,\n  updatedAt: IsoDateTime,\n});\n```\n\n### 4. Add \"thread.forked\" to OrchestrationEventType literals\n\nIn the `OrchestrationEventType = Schema.Literals([...])` array, add `\"thread.forked\"` (e.g., after `\"thread.unarchived\"`).\n\n### 5. Add thread.forked event to OrchestrationEvent union\n\nAdd this entry to the `OrchestrationEvent = Schema.Union([...])` array:\n```typescript\nSchema.Struct({\n  ...EventBaseFields,\n  type: Schema.Literal(\"thread.forked\"),\n  payload: ThreadForkedPayload,\n}),\n```\n\n### 6. Add forkSource and forks to OrchestrationThread\n\nAdd these fields to the `OrchestrationThread = Schema.Struct({...})` schema (after `archivedAt` and before `deletedAt`):\n```typescript\nforkSource: Schema.optional(Schema.Struct({\n  threadId: ThreadId,\n  messageId: MessageId,\n})),\nforks: Schema.Array(Schema.Struct({\n  sourceMessageId: MessageId,\n  forkedThreadId: ThreadId,\n  forkedThreadTitle: TrimmedNonEmptyString,\n  forkNumber: Schema.Number,\n})).pipe(Schema.withDecodingDefault(() => [])),\n```\n\n### 7. Export ThreadForkInfo type\n\nAdd after the OrchestrationThread type export:\n```typescript\nexport const ThreadForkInfo = Schema.Struct({\n  sourceMessageId: MessageId,\n  forkedThreadId: ThreadId,\n  forkedThreadTitle: TrimmedNonEmptyString,\n  forkNumber: Schema.Number,\n});\nexport type ThreadForkInfo = typeof ThreadForkInfo.Type;\n```\n\nIMPORTANT: The `command satisfies never` check in decider.ts means adding to the command union here will cause a type error in the decider until the fork case is handled there. That's expected and will be resolved by a dependent task.",
+      "depends_on": [],
+      "files_to_create": [],
+      "files_to_modify": [
+        "packages/contracts/src/orchestration.ts"
+      ],
+      "files_to_read": [
+        "packages/contracts/src/orchestration.ts"
+      ],
+      "acceptance_criteria": [
+        "ThreadForkCommand schema is defined with all specified fields",
+        "ThreadForkCommand is added to both DispatchableClientOrchestrationCommand and ClientOrchestrationCommand unions",
+        "ThreadForkedPayload schema is defined and exported",
+        "\"thread.forked\" is added to OrchestrationEventType literals",
+        "thread.forked event entry is added to OrchestrationEvent union",
+        "OrchestrationThread has forkSource optional field and forks array field with default",
+        "ThreadForkInfo schema is defined and exported with its type"
+      ],
+      "tests_to_run": [],
+      "commit_message": "feat: add thread.fork command and thread.forked event schemas to contracts",
+      "status": "completed",
+      "failure_reason": null,
+      "retry_count": 0
+    },
+    {
+      "id": "decider-fork-handler",
+      "name": "Decider + Invariants \u00e2\u20ac\u201d Fork Command Handler",
+      "description": "Modify two server files to handle the `thread.fork` command.\n\n### 1. Command Invariants (`apps/server/src/orchestration/commandInvariants.ts`)\n\nAdd a new exported function `requireMessageInThread` that validates a message exists in a thread:\n\n```typescript\nexport function requireMessageInThread(input: {\n  readonly readModel: OrchestrationReadModel;\n  readonly command: OrchestrationCommand;\n  readonly threadId: ThreadId;\n  readonly messageId: MessageId;\n}): Effect.Effect<OrchestrationThread, OrchestrationCommandInvariantError> {\n  const thread = findThreadById(input.readModel, input.threadId);\n  if (!thread) {\n    return Effect.fail(\n      invariantError(input.command.type, `Thread '${input.threadId}' does not exist.`),\n    );\n  }\n  const message = thread.messages.find((m) => m.id === input.messageId);\n  if (!message) {\n    return Effect.fail(\n      invariantError(\n        input.command.type,\n        `Message '${input.messageId}' does not exist in thread '${input.threadId}'.`,\n      ),\n    );\n  }\n  return Effect.succeed(thread);\n}\n```\n\nYou'll need to add `MessageId` to the imports from `@t3tools/contracts`.\n\n### 2. Decider (`apps/server/src/orchestration/decider.ts`)\n\nAdd `requireMessageInThread` to the imports from `./commandInvariants.ts`.\n\nAdd a new case in the switch statement (before the `default` case):\n\n```typescript\ncase \"thread.fork\": {\n  yield* requireProject({\n    readModel,\n    command,\n    projectId: command.projectId,\n  });\n  const sourceThread = yield* requireMessageInThread({\n    readModel,\n    command,\n    threadId: command.sourceThreadId,\n    messageId: command.forkAtMessageId,\n  });\n  yield* requireThreadAbsent({\n    readModel,\n    command,\n    threadId: command.threadId,\n  });\n\n  // Collect messages up to and including forkAtMessageId\n  const forkMessageIndex = sourceThread.messages.findIndex(\n    (m) => m.id === command.forkAtMessageId,\n  );\n  const copiedMessages = sourceThread.messages.slice(0, forkMessageIndex + 1);\n  const copiedMessageIds = copiedMessages.map((m) => m.id);\n\n  // Count existing forks at this message to determine fork number\n  const existingForks = readModel.threads.filter(\n    (t) =>\n      t.forkSource?.threadId === command.sourceThreadId &&\n      t.forkSource?.messageId === command.forkAtMessageId,\n  );\n  const forkNumber = existingForks.length + 1;\n\n  return {\n    ...withEventBase({\n      aggregateKind: \"thread\",\n      aggregateId: command.threadId,\n      occurredAt: command.createdAt,\n      commandId: command.commandId,\n    }),\n    type: \"thread.forked\",\n    payload: {\n      threadId: command.threadId,\n      projectId: command.projectId,\n      sourceThreadId: command.sourceThreadId,\n      forkAtMessageId: command.forkAtMessageId,\n      title: command.title,\n      modelSelection: command.modelSelection,\n      runtimeMode: command.runtimeMode,\n      interactionMode: command.interactionMode,\n      branch: command.branch,\n      worktreePath: command.worktreePath,\n      copiedMessageIds,\n      forkNumber,\n      createdAt: command.createdAt,\n      updatedAt: command.createdAt,\n    },\n  };\n}\n```\n\nIMPORTANT: The `default` case has `command satisfies never` \u00e2\u20ac\u201d your new case MUST be added before it to ensure exhaustive type checking passes.",
+      "depends_on": [
+        "contracts-fork-schemas"
+      ],
+      "files_to_create": [],
+      "files_to_modify": [
+        "apps/server/src/orchestration/decider.ts",
+        "apps/server/src/orchestration/commandInvariants.ts"
+      ],
+      "files_to_read": [
+        "apps/server/src/orchestration/decider.ts",
+        "apps/server/src/orchestration/commandInvariants.ts",
+        "packages/contracts/src/orchestration.ts"
+      ],
+      "acceptance_criteria": [
+        "requireMessageInThread function is exported from commandInvariants.ts",
+        "thread.fork case is added to decider switch before default case",
+        "Fork case validates: project exists, source message exists in source thread, target thread absent",
+        "Fork case computes copiedMessageIds by slicing source messages up to forkAtMessageId",
+        "Fork case computes forkNumber from existing forks in readModel",
+        "Emits thread.forked event with all required payload fields",
+        "TypeScript compiles without errors (command satisfies never check passes)"
+      ],
+      "tests_to_run": [],
+      "commit_message": "feat: add thread.fork command handler to decider and invariants",
+      "status": "completed",
+      "failure_reason": null,
+      "retry_count": 0
+    },
+    {
+      "id": "projector-fork-event",
+      "name": "Projector \u00e2\u20ac\u201d Handle thread.forked Event",
+      "description": "Modify the projector and schemas to handle the `thread.forked` event.\n\n### 1. Schemas (`apps/server/src/orchestration/Schemas.ts`)\n\nAdd import and re-export for the new payload:\n```typescript\n// Add to the imports from \"@t3tools/contracts\":\nimport { ThreadForkedPayload as ContractsThreadForkedPayloadSchema } from \"@t3tools/contracts\";\n\n// Add export:\nexport const ThreadForkedPayload = ContractsThreadForkedPayloadSchema;\n```\n\n### 2. Projector (`apps/server/src/orchestration/projector.ts`)\n\nAdd import of `ThreadForkedPayload` from `./Schemas.ts` (add to existing import block).\n\nAdd a new case in the `projectEvent` switch statement (add it after `thread.unarchived` and before `thread.meta-updated`, to keep logical grouping):\n\n```typescript\ncase \"thread.forked\":\n  return Effect.gen(function* () {\n    const payload = yield* decodeForEvent(\n      ThreadForkedPayload,\n      event.payload,\n      event.type,\n      \"payload\",\n    );\n\n    // Find source thread to copy messages from\n    const sourceThread = nextBase.threads.find(\n      (entry) => entry.id === payload.sourceThreadId,\n    );\n\n    // Build messages for the new forked thread\n    const copiedMessageIdSet = new Set(payload.copiedMessageIds as string[]);\n    const copiedMessages: OrchestrationMessage[] = sourceThread\n      ? sourceThread.messages\n          .filter((msg) => copiedMessageIdSet.has(msg.id))\n          .map((msg) => ({ ...msg }))\n      : [];\n\n    // Create the new forked thread\n    const forkedThread: OrchestrationThread = yield* decodeForEvent(\n      OrchestrationThread,\n      {\n        id: payload.threadId,\n        projectId: payload.projectId,\n        title: payload.title,\n        modelSelection: payload.modelSelection,\n        runtimeMode: payload.runtimeMode,\n        interactionMode: payload.interactionMode,\n        branch: payload.branch,\n        worktreePath: payload.worktreePath,\n        latestTurn: null,\n        createdAt: payload.createdAt,\n        updatedAt: payload.updatedAt,\n        archivedAt: null,\n        forkSource: {\n          threadId: payload.sourceThreadId,\n          messageId: payload.forkAtMessageId,\n        },\n        forks: [],\n        deletedAt: null,\n        messages: copiedMessages,\n        proposedPlans: [],\n        activities: [],\n        checkpoints: [],\n        session: null,\n      },\n      event.type,\n      \"forkedThread\",\n    );\n\n    // Add fork info to the source thread's forks array\n    const updatedThreads = nextBase.threads.map((thread) => {\n      if (thread.id === payload.sourceThreadId) {\n        return {\n          ...thread,\n          forks: [\n            ...thread.forks,\n            {\n              sourceMessageId: payload.forkAtMessageId,\n              forkedThreadId: payload.threadId,\n              forkedThreadTitle: payload.title,\n              forkNumber: payload.forkNumber,\n            },\n          ],\n        };\n      }\n      return thread;\n    });\n\n    return {\n      ...nextBase,\n      threads: [...updatedThreads, forkedThread],\n    };\n  });\n```\n\nIMPORTANT: The existing `default: return Effect.succeed(nextBase);` case will handle unknown events gracefully, but the `thread.forked` case must come before it to be matched.",
+      "depends_on": [
+        "contracts-fork-schemas"
+      ],
+      "files_to_create": [],
+      "files_to_modify": [
+        "apps/server/src/orchestration/projector.ts",
+        "apps/server/src/orchestration/Schemas.ts"
+      ],
+      "files_to_read": [
+        "apps/server/src/orchestration/projector.ts",
+        "apps/server/src/orchestration/Schemas.ts",
+        "packages/contracts/src/orchestration.ts"
+      ],
+      "acceptance_criteria": [
+        "ThreadForkedPayload is imported and re-exported in Schemas.ts",
+        "thread.forked case is added to projector switch",
+        "Forked thread is created with forkSource set to { threadId: sourceThreadId, messageId: forkAtMessageId }",
+        "Messages from source thread are copied into forked thread (filtered by copiedMessageIds)",
+        "Source thread's forks array is updated with fork info",
+        "New forked thread is appended to threads array",
+        "TypeScript compiles without errors"
+      ],
+      "tests_to_run": [],
+      "commit_message": "feat: add thread.forked event projection to projector",
+      "status": "completed",
+      "failure_reason": null,
+      "retry_count": 0
+    },
+    {
+      "id": "web-fork-hook",
+      "name": "Web \u00e2\u20ac\u201d useHandleForkThread Hook",
+      "description": "Create a new hook file `apps/web/src/hooks/useHandleForkThread.ts` that provides the fork dispatch + navigation logic.\n\nFollow the patterns from `useHandleNewThread.ts` and `useThreadActions.ts`.\n\n```typescript\nimport { type MessageId, type ThreadId } from \"@t3tools/contracts\";\nimport { useNavigate } from \"@tanstack/react-router\";\nimport { useCallback } from \"react\";\nimport { newCommandId, newThreadId } from \"../lib/utils\";\nimport { readNativeApi } from \"../nativeApi\";\nimport { useStore } from \"../store\";\n\nexport function useHandleForkThread() {\n  const threads = useStore((store) => store.threads);\n  const navigate = useNavigate();\n\n  const handleForkThread = useCallback(\n    async (sourceThreadId: ThreadId, forkAtMessageId?: MessageId) => {\n      const sourceThread = threads.find((t) => t.id === sourceThreadId);\n      if (!sourceThread) return;\n\n      // If no messageId specified, use the last message\n      const targetMessageId =\n        forkAtMessageId ?? sourceThread.messages[sourceThread.messages.length - 1]?.id;\n      if (!targetMessageId) return;\n\n      // Count existing forks at this message for title numbering\n      const existingForksAtMessage = sourceThread.forks.filter(\n        (f) => f.sourceMessageId === targetMessageId,\n      );\n      const forkNumber = existingForksAtMessage.length + 1;\n      const titleSuffix = forkNumber === 1 ? \"\" : ` (${forkNumber})`;\n      const title = `Fork: ${sourceThread.title}${titleSuffix}`;\n\n      const forkedThreadId = newThreadId();\n      const api = readNativeApi();\n      if (!api) return;\n\n      await api.orchestration.dispatchCommand({\n        type: \"thread.fork\",\n        commandId: newCommandId(),\n        sourceThreadId,\n        forkAtMessageId: targetMessageId,\n        threadId: forkedThreadId,\n        projectId: sourceThread.projectId,\n        title,\n        modelSelection: sourceThread.modelSelection,\n        runtimeMode: sourceThread.runtimeMode,\n        interactionMode: sourceThread.interactionMode,\n        branch: sourceThread.branch,\n        worktreePath: sourceThread.worktreePath,\n        createdAt: new Date().toISOString(),\n      });\n\n      await navigate({\n        to: \"/$threadId\",\n        params: { threadId: forkedThreadId },\n      });\n    },\n    [threads, navigate],\n  );\n\n  return { handleForkThread };\n}\n```\n\nCheck `apps/web/src/lib/utils.ts` and `apps/web/src/nativeApi.ts` to confirm exact import paths for `newCommandId`, `newThreadId`, and `readNativeApi`.",
+      "depends_on": [
+        "contracts-fork-schemas"
+      ],
+      "files_to_create": [
+        "apps/web/src/hooks/useHandleForkThread.ts"
+      ],
+      "files_to_modify": [],
+      "files_to_read": [
+        "apps/web/src/hooks/useHandleNewThread.ts",
+        "apps/web/src/hooks/useThreadActions.ts",
+        "apps/web/src/lib/utils.ts",
+        "apps/web/src/nativeApi.ts",
+        "apps/web/src/store.ts"
+      ],
+      "acceptance_criteria": [
+        "Hook file exists at apps/web/src/hooks/useHandleForkThread.ts",
+        "useHandleForkThread returns { handleForkThread } function",
+        "handleForkThread accepts sourceThreadId (required) and forkAtMessageId (optional)",
+        "When forkAtMessageId is omitted, uses the last message in the thread",
+        "Computes fork title as 'Fork: [title]' with numbering for subsequent forks",
+        "Dispatches thread.fork command via nativeApi",
+        "Navigates to new thread after dispatch",
+        "TypeScript compiles without errors"
+      ],
+      "tests_to_run": [],
+      "commit_message": "feat: add useHandleForkThread hook for fork dispatch and navigation",
+      "status": "completed",
+      "failure_reason": null,
+      "retry_count": 0
+    },
+    {
+      "id": "web-slash-command-fork",
+      "name": "Web \u00e2\u20ac\u201d /fork Slash Command",
+      "description": "Add the `/fork` slash command to the composer system.\n\n### 1. Modify `apps/web/src/composer-logic.ts`\n\n- Add `\"fork\"` to the `ComposerSlashCommand` type union:\n  ```typescript\n  type ComposerSlashCommand = \"model\" | \"plan\" | \"default\" | \"rename\" | \"fork\";\n  ```\n- Add `\"fork\"` to the `_SLASH_COMMANDS` array:\n  ```typescript\n  const _SLASH_COMMANDS: readonly ComposerSlashCommand[] = [\"model\", \"plan\", \"default\", \"rename\", \"fork\"];\n  ```\n- Update `parseStandaloneComposerSlashCommand` to handle fork. The function currently uses a regex like `/^\\/(plan|default|rename)\\s*$/i`. Update the regex to include `fork`:\n  ```typescript\n  const match = /^\\/(plan|default|rename|fork)\\s*$/i.exec(text.trim());\n  ```\n  And add the case:\n  ```typescript\n  if (command === \"fork\") return \"fork\";\n  ```\n  IMPORTANT: Also update the function's return type to include `\"fork\"` \u00e2\u20ac\u201d it currently returns `Exclude<ComposerSlashCommand, \"model\"> | null`.\n\n### 2. Modify `apps/web/src/components/chat/ComposerCommandMenu.tsx`\n\nFind where slash command items are created (look for where items of type `\"slash-command\"` are built). Add an entry for `/fork`:\n```typescript\n{ id: \"fork\", type: \"slash-command\" as const, command: \"fork\" as ComposerSlashCommand, label: \"/fork\", description: \"Fork this conversation\" }\n```\n\nThe exact location depends on how items are generated \u00e2\u20ac\u201d look for the pattern in the existing code and match it.\n\n### 3. Wire into chat view\n\nCheck `apps/web/src/components/chat/ChatView.tsx` (or wherever slash commands are handled). Find where `parseStandaloneComposerSlashCommand` results are processed. Add handling for the `\"fork\"` case that calls `handleForkThread(currentThreadId)` from the `useHandleForkThread` hook.\n\nIMPORTANT: The fork command is \"standalone\" \u00e2\u20ac\u201d it takes no arguments. When `/fork` is typed and submitted, it should:\n1. Fork from the latest message in the current thread\n2. Navigate to the new thread\n3. Clear the composer input",
+      "depends_on": [
+        "web-fork-hook"
+      ],
+      "files_to_create": [],
+      "files_to_modify": [
+        "apps/web/src/composer-logic.ts",
+        "apps/web/src/components/chat/ComposerCommandMenu.tsx"
+      ],
+      "files_to_read": [
+        "apps/web/src/composer-logic.ts",
+        "apps/web/src/components/chat/ComposerCommandMenu.tsx",
+        "apps/web/src/components/chat/ChatView.tsx",
+        "apps/web/src/hooks/useHandleForkThread.ts"
+      ],
+      "acceptance_criteria": [
+        "\"fork\" is added to ComposerSlashCommand type union",
+        "\"fork\" is added to _SLASH_COMMANDS array",
+        "parseStandaloneComposerSlashCommand recognizes /fork and returns \"fork\"",
+        "/fork entry appears in ComposerCommandMenu with label and description",
+        "TypeScript compiles without errors"
+      ],
+      "tests_to_run": [],
+      "commit_message": "feat: add /fork slash command to composer",
+      "status": "completed",
+      "failure_reason": null,
+      "retry_count": 0
+    },
+    {
+      "id": "web-message-fork-menu",
+      "name": "Web \u00e2\u20ac\u201d Message Overflow Menu with Fork Action",
+      "description": "Add a `...` overflow menu to each message row in MessagesTimeline.tsx with a \"Fork here\" action.\n\n### Modify `apps/web/src/components/chat/MessagesTimeline.tsx`\n\n#### 1. Add new prop to MessagesTimelineProps\n\n```typescript\nonForkAtMessage: (messageId: MessageId) => void;\n```\n\n#### 2. Add imports\n\nAdd these imports at the top:\n```typescript\nimport { MoreVerticalIcon, GitForkIcon } from \"lucide-react\";\nimport {\n  DropdownMenu,\n  DropdownMenuContent,\n  DropdownMenuItem,\n  DropdownMenuTrigger,\n} from \"../ui/dropdown-menu\";\n```\n\nCheck if `dropdown-menu` exists in `apps/web/src/components/ui/`. If not, you'll need to check what UI primitives are available. The project uses shadcn/ui components.\n\n#### 3. User message row \u00e2\u20ac\u201d add overflow menu\n\nIn the user message action area (around line 425-442, the `<div className=\"mt-1.5 flex items-center justify-end gap-2\">` section), add the overflow menu button INSIDE the opacity group div, after the revert button:\n\n```tsx\n<DropdownMenu>\n  <DropdownMenuTrigger asChild>\n    <Button type=\"button\" size=\"xs\" variant=\"outline\">\n      <MoreVerticalIcon className=\"size-3\" />\n    </Button>\n  </DropdownMenuTrigger>\n  <DropdownMenuContent align=\"end\">\n    <DropdownMenuItem onClick={() => onForkAtMessage(row.message.id)}>\n      <GitForkIcon className=\"mr-2 size-3.5\" />\n      Fork here\n    </DropdownMenuItem>\n  </DropdownMenuContent>\n</DropdownMenu>\n```\n\n#### 4. Assistant message row \u00e2\u20ac\u201d add overflow menu\n\nFind the assistant message rendering section (starts around line 452). Look for where the assistant message metadata/actions are rendered. Add a similar overflow menu button. If there's no existing action area for assistant messages, create a small action row after the markdown content:\n\n```tsx\n<div className=\"mt-1 flex items-center gap-1.5 opacity-0 transition-opacity duration-200 group-hover:opacity-100\">\n  <DropdownMenu>\n    <DropdownMenuTrigger asChild>\n      <Button type=\"button\" size=\"xs\" variant=\"ghost\">\n        <MoreVerticalIcon className=\"size-3\" />\n      </Button>\n    </DropdownMenuTrigger>\n    <DropdownMenuContent align=\"start\">\n      <DropdownMenuItem onClick={() => onForkAtMessage(row.message.id)}>\n        <GitForkIcon className=\"mr-2 size-3.5\" />\n        Fork here\n      </DropdownMenuItem>\n    </DropdownMenuContent>\n  </DropdownMenu>\n</div>\n```\n\n#### 5. Wire the prop from parent\n\nFind where `MessagesTimeline` is rendered (likely in ChatView.tsx or similar) and pass the `onForkAtMessage` prop. Use the `useHandleForkThread` hook:\n\n```typescript\nconst { handleForkThread } = useHandleForkThread();\n// ...\nonForkAtMessage={(messageId) => handleForkThread(threadId, messageId)}\n```",
+      "depends_on": [
+        "web-fork-hook"
+      ],
+      "files_to_create": [],
+      "files_to_modify": [
+        "apps/web/src/components/chat/MessagesTimeline.tsx"
+      ],
+      "files_to_read": [
+        "apps/web/src/components/chat/MessagesTimeline.tsx",
+        "apps/web/src/components/chat/ChatView.tsx",
+        "apps/web/src/hooks/useHandleForkThread.ts",
+        "apps/web/src/components/ui/dropdown-menu.tsx",
+        "apps/web/src/components/ui/button.tsx"
+      ],
+      "acceptance_criteria": [
+        "onForkAtMessage prop is added to MessagesTimelineProps",
+        "User message rows have a ... overflow menu with 'Fork here' action",
+        "Assistant message rows have a ... overflow menu with 'Fork here' action",
+        "Overflow menus use DropdownMenu from shadcn/ui",
+        "Fork action calls onForkAtMessage with the message's ID",
+        "Overflow menu button is styled consistently with existing action buttons",
+        "TypeScript compiles without errors"
+      ],
+      "tests_to_run": [],
+      "commit_message": "feat: add message overflow menu with 'Fork here' action",
+      "status": "completed",
+      "failure_reason": null,
+      "retry_count": 0
+    },
+    {
+      "id": "web-fork-badge",
+      "name": "Web — Fork Badge Component on Source Messages",
+      "description": "Create a ForkBadge component and render it on messages that have been forked from.\n\n### 1. Create `apps/web/src/components/chat/ForkBadge.tsx`\n\n```typescript\nimport { GitForkIcon } from \"lucide-react\";\nimport type { ThreadForkInfo } from \"@t3tools/contracts\";\nimport type { ThreadId } from \"@t3tools/contracts\";\nimport { Badge } from \"../ui/badge\";\nimport {\n  Popover,\n  PopoverContent,\n  PopoverTrigger,\n} from \"../ui/popover\";\n\ninterface ForkBadgeProps {\n  forks: ThreadForkInfo[];\n  onNavigate: (threadId: ThreadId) => void;\n}\n\nexport function ForkBadge({ forks, onNavigate }: ForkBadgeProps) {\n  if (forks.length === 0) return null;\n\n  return (\n    <Popover>\n      <PopoverTrigger asChild>\n        <Badge\n          variant=\"outline\"\n          className=\"cursor-pointer gap-1 text-[10px] hover:bg-accent\"\n        >\n          <GitForkIcon className=\"size-3\" />\n          Forked{forks.length > 1 ? ` (${forks.length})` : \"\"}\n        </Badge>\n      </PopoverTrigger>\n      <PopoverContent className=\"w-56 p-2\" align=\"start\">\n        <div className=\"space-y-1\">\n          <p className=\"px-1 text-xs font-medium text-muted-foreground\">\n            Forked threads\n          </p>\n          {forks\n            .toSorted((a, b) => a.forkNumber - b.forkNumber)\n            .map((fork) => (\n              <button\n                key={fork.forkedThreadId}\n                type=\"button\"\n                className=\"w-full rounded-sm px-2 py-1.5 text-left text-xs hover:bg-accent\"\n                onClick={() => onNavigate(fork.forkedThreadId)}\n              >\n                {fork.forkedThreadTitle}\n              </button>\n            ))}\n        </div>\n      </PopoverContent>\n    </Popover>\n  );\n}\n```\n\nCheck if `Badge` and `Popover` components exist in `apps/web/src/components/ui/`. If `badge.tsx` or `popover.tsx` doesn't exist, check what's available and use alternatives (e.g., a simple styled button/span for badge, and a custom dropdown or the DropdownMenu for the popover).\n\n### 2. Render ForkBadge in MessagesTimeline.tsx\n\nModify `apps/web/src/components/chat/MessagesTimeline.tsx`:\n\n- Import `ForkBadge` from `./ForkBadge`\n- Add a new prop: `onNavigateToThread: (threadId: ThreadId) => void`\n- Add a new prop: `threadForks: ThreadForkInfo[]` (the forks array from the current thread)\n\nFor BOTH user and assistant message rows, render the ForkBadge. Place it in the action/metadata area of each message row:\n\n```tsx\n{(() => {\n  const messageForks = threadForks.filter(\n    (f) => f.sourceMessageId === row.message.id,\n  );\n  if (messageForks.length === 0) return null;\n  return (\n    <ForkBadge\n      forks={messageForks}\n      onNavigate={onNavigateToThread}\n    />\n  );\n})()}\n```\n\nFor user messages: place in the action row div (`mt-1.5 flex items-center justify-end gap-2`), before the timestamp.\nFor assistant messages: place after the markdown content, in the metadata area.\n\n### 3. Wire from parent\n\nIn the parent component that renders MessagesTimeline, pass:\n- `threadForks={currentThread.forks ?? []}`\n- `onNavigateToThread={(threadId) => navigate({ to: '/$threadId', params: { threadId } })}`",
+      "depends_on": [
+        "web-message-fork-menu"
+      ],
+      "files_to_create": [
+        "apps/web/src/components/chat/ForkBadge.tsx"
+      ],
+      "files_to_modify": [
+        "apps/web/src/components/chat/MessagesTimeline.tsx"
+      ],
+      "files_to_read": [
+        "apps/web/src/components/chat/MessagesTimeline.tsx",
+        "apps/web/src/components/chat/ChatView.tsx",
+        "apps/web/src/components/ui/badge.tsx",
+        "apps/web/src/components/ui/popover.tsx"
+      ],
+      "acceptance_criteria": [
+        "ForkBadge.tsx component exists and renders a badge with GitForkIcon",
+        "Clicking badge opens a popover listing forked threads",
+        "Each thread in popover is clickable and calls onNavigate",
+        "ForkBadge is rendered in MessagesTimeline for messages that have forks",
+        "Both user and assistant messages show fork badges when applicable",
+        "threadForks and onNavigateToThread props are added to MessagesTimeline",
+        "TypeScript compiles without errors"
+      ],
+      "tests_to_run": [],
+      "commit_message": "feat: add ForkBadge component and render on forked messages",
+      "status": "completed",
+      "failure_reason": null,
+      "retry_count": 0
+    },
+    {
+      "id": "wire-chat-view",
+      "name": "Wire Fork Actions in ChatView",
+      "description": "Wire all fork-related props and handlers in the ChatView component (or wherever MessagesTimeline is rendered) to connect the fork feature end-to-end.\n\n### Find the parent component\n\nLook at `apps/web/src/components/chat/ChatView.tsx` \u00e2\u20ac\u201d this is where `MessagesTimeline` is rendered.\n\n### Add hook usage\n\n```typescript\nimport { useHandleForkThread } from \"../../hooks/useHandleForkThread\";\n// ...\nconst { handleForkThread } = useHandleForkThread();\n```\n\n### Pass props to MessagesTimeline\n\nWhere `<MessagesTimeline ... />` is rendered, add:\n```typescript\nonForkAtMessage={(messageId) => {\n  if (threadId) handleForkThread(threadId, messageId);\n}}\nthreadForks={thread?.forks ?? []}\nonNavigateToThread={(targetThreadId) => navigate({ to: '/$threadId', params: { threadId: targetThreadId } })}\n```\n\n### Handle /fork slash command\n\nFind where `parseStandaloneComposerSlashCommand` is called in ChatView. Add handling for the `\"fork\"` result:\n\n```typescript\ncase \"fork\": {\n  if (threadId) {\n    handleForkThread(threadId);\n  }\n  return; // prevent sending the message\n}\n```\n\nThis connects all the pieces: the hook dispatches the command, MessagesTimeline shows the overflow menus and fork badges, and the /fork slash command triggers from the composer.",
+      "depends_on": [
+        "web-slash-command-fork",
+        "web-fork-badge"
+      ],
+      "files_to_create": [],
+      "files_to_modify": [
+        "apps/web/src/components/chat/ChatView.tsx"
+      ],
+      "files_to_read": [
+        "apps/web/src/components/chat/ChatView.tsx",
+        "apps/web/src/components/chat/MessagesTimeline.tsx",
+        "apps/web/src/hooks/useHandleForkThread.ts",
+        "apps/web/src/composer-logic.ts"
+      ],
+      "acceptance_criteria": [
+        "useHandleForkThread hook is used in ChatView",
+        "onForkAtMessage prop is passed to MessagesTimeline with handler that calls handleForkThread",
+        "threadForks prop is passed to MessagesTimeline from the current thread's forks array",
+        "onNavigateToThread prop is passed to MessagesTimeline",
+        "/fork slash command is handled in ChatView to call handleForkThread",
+        "TypeScript compiles without errors"
+      ],
+      "tests_to_run": [],
+      "commit_message": "feat: wire fork actions in ChatView for end-to-end fork feature",
+      "status": "completed",
+      "failure_reason": null,
+      "retry_count": 0
+    },
+    {
+      "id": "integration",
+      "name": "Integration Verification",
+      "description": "Verify that all fork feature tasks integrate correctly. Run type checks, lint, and verify cross-task coherence.",
+      "depends_on": [
+        "migration-019-thread-forks",
+        "contracts-fork-schemas",
+        "decider-fork-handler",
+        "projector-fork-event",
+        "web-fork-hook",
+        "web-slash-command-fork",
+        "web-message-fork-menu",
+        "web-fork-badge",
+        "wire-chat-view"
+      ],
+      "files_to_create": [],
+      "files_to_modify": [],
+      "files_to_read": [],
+      "acceptance_criteria": [
+        "TypeScript compiles without errors across all packages",
+        "Lint passes",
+        "All imports are correct and resolve",
+        "Command/event flow is coherent: command \u00e2\u2020\u2019 decider \u00e2\u2020\u2019 event \u00e2\u2020\u2019 projector \u00e2\u2020\u2019 read model",
+        "Web layer correctly consumes read model data for fork badges"
+      ],
+      "tests_to_run": [
+        "pnpm typecheck",
+        "pnpm lint"
+      ],
+      "commit_message": "chore: verify fork feature integration",
+      "status": "completed",
+      "failure_reason": null,
+      "retry_count": 0
+    }
+  ],
+  "summary_context": "Conversation forking feature for T3Code: allows users to fork a thread at any message, creating a new thread with all context up to that point. The feature spans the full stack: a SQLite migration for fork tracking tables, Effect-based command/event schemas in the contracts package, a decider that validates and emits fork events, a projector that creates forked threads with copied messages, and React UI components including a /fork slash command, per-message overflow menus with 'Fork here', and fork badges on source messages linking to forked threads."
+}

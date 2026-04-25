@@ -95,9 +95,9 @@ interface TimelineRowSharedState {
   onRevertUserMessage: (messageId: MessageId) => void;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
-  onForkAtMessage?: (messageId: MessageId) => void;
+  onForkAtMessage?: ((messageId: MessageId) => void) | undefined;
   threadForks: ThreadForkInfo[];
-  onNavigateToThread?: (threadId: ThreadId) => void;
+  onNavigateToThread?: ((threadId: ThreadId) => void) | undefined;
 }
 
 const TimelineRowCtx = createContext<TimelineRowSharedState>(null!);

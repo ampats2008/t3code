@@ -262,7 +262,7 @@ it.layer(ClaudeTextGenerationTestLayer)("ClaudeTextGenerationLive", (it) => {
 
         const generated = yield* textGeneration.generateThreadTitle({
           cwd: process.cwd(),
-          message: "Please investigate reconnect failures after restarting the session.",
+          messages: [{ role: "user", text: "Please investigate reconnect failures after restarting the session." }],
           modelSelection: {
             provider: "claudeAgent",
             model: "claude-sonnet-4-6",
@@ -292,7 +292,7 @@ it.layer(ClaudeTextGenerationTestLayer)("ClaudeTextGenerationLive", (it) => {
 
         const generated = yield* textGeneration.generateThreadTitle({
           cwd: process.cwd(),
-          message: "Name this thread.",
+          messages: [{ role: "user", text: "Name this thread." }],
           modelSelection: {
             provider: "claudeAgent",
             model: "claude-sonnet-4-6",

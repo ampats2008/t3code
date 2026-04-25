@@ -136,6 +136,7 @@ export function getThreadFromEnvironmentState(
     activities,
     proposedPlans,
     turnDiffSummaries,
+    forks: [],
   };
 
   threadCache.set(shell, {

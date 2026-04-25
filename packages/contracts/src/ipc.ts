@@ -270,6 +270,11 @@ export interface EnvironmentApi {
       },
     ) => () => void;
   };
+  thread: {
+    generateTitle: (input: {
+      messages: Array<{ role: string; text: string }>;
+    }) => Promise<{ title: string }>;
+  };
   orchestration: {
     dispatchCommand: (command: ClientOrchestrationCommand) => Promise<{ sequence: number }>;
     getTurnDiff: (input: OrchestrationGetTurnDiffInput) => Promise<OrchestrationGetTurnDiffResult>;

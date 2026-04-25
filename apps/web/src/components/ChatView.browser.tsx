@@ -204,6 +204,11 @@ function createMockEnvironmentApi(input: {
       browse: input.browse,
     },
     git: {} as EnvironmentApi["git"],
+    thread: {
+      generateTitle: (() => {
+        throw new Error("Not implemented in browser test.");
+      }) as EnvironmentApi["thread"]["generateTitle"],
+    },
     orchestration: {
       dispatchCommand: input.dispatchCommand,
       getTurnDiff: (() => {
@@ -354,6 +359,7 @@ function createSnapshotForTargetUser(options: {
         activities: [],
         proposedPlans: [],
         checkpoints: [],
+        forks: [],
         session: {
           threadId: THREAD_ID,
           status: options.sessionStatus ?? "ready",
@@ -419,6 +425,7 @@ function addThreadToSnapshot(
         activities: [],
         proposedPlans: [],
         checkpoints: [],
+        forks: [],
         session: {
           threadId,
           status: "ready",
@@ -753,6 +760,7 @@ function createSnapshotWithSecondaryProject(options?: {
           activities: [],
           proposedPlans: [],
           checkpoints: [],
+          forks: [],
           session: {
             threadId: "thread-secondary-project" as ThreadId,
             status: "ready",
@@ -785,6 +793,7 @@ function createSnapshotWithSecondaryProject(options?: {
           activities: [],
           proposedPlans: [],
           checkpoints: [],
+          forks: [],
           session: {
             threadId: ARCHIVED_SECONDARY_THREAD_ID,
             status: "ready",

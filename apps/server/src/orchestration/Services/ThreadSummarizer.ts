@@ -6,7 +6,7 @@
  *
  * @module ThreadSummarizer
  */
-import { ServiceMap } from "effect";
+import { Context } from "effect";
 import type { Effect } from "effect";
 
 export interface ThreadSummarizerShape {
@@ -16,7 +16,7 @@ export interface ThreadSummarizerShape {
   }) => Effect.Effect<string, Error>;
 }
 
-export class ThreadSummarizer extends ServiceMap.Service<
+export class ThreadSummarizer extends Context.Service<
   ThreadSummarizer,
   ThreadSummarizerShape
 >()("t3/orchestration/ThreadSummarizer") {}

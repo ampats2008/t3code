@@ -1298,6 +1298,18 @@ describe("ClaudeAdapterLive", () => {
       Layer.provideMerge(ServerConfig.layerTest("/tmp/claude-adapter-test", "/tmp")),
       Layer.provideMerge(ServerSettingsService.layerTest()),
       Layer.provideMerge(NodeServices.layer),
+      Layer.provideMerge(Layer.succeed(ConversationSearchRepository, {
+        searchAll: () => Effect.succeed([]),
+        indexMessage: () => Effect.void,
+        updateThreadTitle: () => Effect.void,
+        removeThread: () => Effect.void,
+      })),
+      Layer.provideMerge(Layer.succeed(ProjectionThreadRepository, {
+        upsert: () => Effect.void,
+        getById: () => Effect.succeed(Option.none()),
+        listByProjectId: () => Effect.succeed([]),
+        deleteById: () => Effect.void,
+      })),
     );
 
     return Effect.gen(function* () {

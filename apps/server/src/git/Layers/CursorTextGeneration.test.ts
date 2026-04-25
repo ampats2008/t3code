@@ -246,7 +246,7 @@ it.layer(CursorTextGenerationTestLayer)("CursorTextGenerationLive", (it) => {
 
         const generated = yield* textGeneration.generateThreadTitle({
           cwd: process.cwd(),
-          message: "Fix the reconnect spinner after a resumed session.",
+          messages: [{ role: "user", text: "Fix the reconnect spinner after a resumed session." }],
           modelSelection: {
             provider: "cursor",
             model: "composer-2",

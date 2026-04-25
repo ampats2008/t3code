@@ -92,6 +92,7 @@ function makeReadModel(
       activities: [],
       proposedPlans: [],
       checkpoints: [],
+      forks: [],
       deletedAt: null,
     })),
   };

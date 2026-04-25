@@ -1730,13 +1730,19 @@ export const makeGitManager = Effect.fn("makeGitManager")(function* () {
 
     // Force low effort — thread title generation is a trivial task and
     // should not spend time on heavy reasoning.
+    const effortOption = modelSelection.provider === "claudeAgent"
+      ? { id: "effort", value: "low" }
+      : modelSelection.provider === "codex"
+        ? { id: "reasoningEffort", value: "low" }
+        : null;
     const titleModelSelection: ModelSelection = {
       ...modelSelection,
-      options: {
-        ...modelSelection.options,
-        ...(modelSelection.provider === "claudeAgent" ? { effort: "low" as const } : {}),
-        ...(modelSelection.provider === "codex" ? { reasoningEffort: "low" as const } : {}),
-      },
+      options: [
+        ...(modelSelection.options ?? []).filter(
+          (o) => o.id !== "effort" && o.id !== "reasoningEffort",
+        ),
+        ...(effortOption ? [effortOption] : []),
+      ],
     };
 
     const result = yield* textGeneration

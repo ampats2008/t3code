@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+
 
 import ThreadSidebar from "./Sidebar";
 import { Sidebar, SidebarProvider, SidebarRail, useSidebar } from "./ui/sidebar";
@@ -9,10 +9,7 @@ import {
   syncShortcutModifierStateFromKeyboardEvent,
 } from "../shortcutModifierState";
 import { resolveShortcutCommand } from "../keybindings";
-import { serverConfigQueryOptions } from "../lib/serverReactQuery";
-import type { ResolvedKeybindingsConfig } from "@t3tools/contracts";
-
-const EMPTY_KEYBINDINGS: ResolvedKeybindingsConfig = [];
+import { useServerKeybindings } from "../rpc/serverState";
 const THREAD_SIDEBAR_WIDTH_STORAGE_KEY = "chat_thread_sidebar_width";
 const THREAD_SIDEBAR_MIN_WIDTH = 13 * 16;
 const THREAD_MAIN_CONTENT_MIN_WIDTH = 40 * 16;
@@ -20,8 +17,7 @@ const THREAD_MAIN_CONTENT_MIN_WIDTH = 40 * 16;
 
 function SidebarToggleHandler() {
   const { toggleSidebar } = useSidebar();
-  const serverConfigQuery = useQuery(serverConfigQueryOptions());
-  const keybindings = serverConfigQuery.data?.keybindings ?? EMPTY_KEYBINDINGS;
+  const keybindings = useServerKeybindings();
 
   useEffect(() => {
     const handler = (event: globalThis.KeyboardEvent) => {

@@ -521,7 +521,7 @@ const make = Effect.gen(function* () {
 
         const generated = yield* textGeneration.generateThreadTitle({
           cwd: input.cwd,
-          message: input.messageText,
+          messages: [{ role: "user", text: input.messageText }],
           ...(attachments.length > 0 ? { attachments } : {}),
           modelSelection,
         });

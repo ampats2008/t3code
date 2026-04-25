@@ -854,7 +854,7 @@ function makeCursorAdapter(options?: CursorAdapterLiveOptions) {
           promptParts.push({ type: "text", text: input.input.trim() });
         }
         if (input.attachments && input.attachments.length > 0) {
-          for (const attachment of input.attachments) {
+          for (const attachment of input.attachments.filter((a): a is Extract<typeof a, { type: "image" }> => a.type === "image")) {
             const attachmentPath = resolveAttachmentPath({
               attachmentsDir: serverConfig.attachmentsDir,
               attachment,

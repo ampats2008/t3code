@@ -2442,7 +2442,7 @@ export default function ChatView(props: ChatViewProps) {
       if (standaloneSlashCommand === "rename") {
         void handleRenameThread();
       } else if (standaloneSlashCommand === "fork") {
-        void handleForkThread(threadId);
+        void handleForkThread(environmentId, threadId);
       } else {
         handleInteractionModeChange(standaloneSlashCommand);
       }
@@ -2663,8 +2663,8 @@ export default function ChatView(props: ChatViewProps) {
       });
       turnStartSucceeded = true;
 
-      // Queue auto-rename after the first message if the setting is enabled.
-      if (isFirstMessage && settings.autoRenameOnFirstMessage) {
+      // Queue auto-rename after the first message.
+      if (isFirstMessage) {
         pendingAutoRenameRef.current = true;
       }
     })().catch(async (err: unknown) => {
@@ -3223,7 +3223,7 @@ export default function ChatView(props: ChatViewProps) {
   const { handleForkThread } = useHandleForkThread();
 
   const handleRenameThread = useCallback(async () => {
-    const api = readNativeApi();
+    const api = readEnvironmentApi(environmentId);
     if (!api || !activeThread) return;
     const threadMessages = activeThread.messages;
     if (threadMessages.length === 0) {
@@ -3260,7 +3260,7 @@ export default function ChatView(props: ChatViewProps) {
         description: error instanceof Error ? error.message : "Failed to generate thread title.",
       });
     }
-  }, [activeThread]);
+  }, [activeThread, environmentId]);
 
   // Trigger auto-rename once the first message appears in the thread state.
   useEffect(() => {
@@ -3390,11 +3390,11 @@ export default function ChatView(props: ChatViewProps) {
               isRevertingCheckpoint={isRevertingCheckpoint}
               onImageExpand={onExpandTimelineImage}
               onForkAtMessage={(messageId) => {
-                void handleForkThread(threadId, messageId);
+                void handleForkThread(environmentId, threadId, messageId);
               }}
               threadForks={activeThread?.forks ?? []}
               onNavigateToThread={(targetThreadId) =>
-                void navigate({ to: "/$threadId", params: { threadId: targetThreadId } })
+                void navigate({ to: "/$environmentId/$threadId", params: { environmentId, threadId: targetThreadId } })
               }
               markdownCwd={gitCwd ?? undefined}
               resolvedTheme={resolvedTheme}
@@ -3541,6 +3541,7 @@ export default function ChatView(props: ChatViewProps) {
             <PlanReviewPanel
               activePlan={activePlan}
               activeProposedPlan={sidebarProposedPlan}
+              environmentId={environmentId}
               markdownCwd={gitCwd ?? undefined}
               workspaceRoot={activeWorkspaceRoot}
               timestampFormat={timestampFormat}
@@ -3589,6 +3590,7 @@ export default function ChatView(props: ChatViewProps) {
             <PlanReviewPanel
               activePlan={activePlan}
               activeProposedPlan={sidebarProposedPlan}
+              environmentId={environmentId}
               markdownCwd={gitCwd ?? undefined}
               workspaceRoot={activeWorkspaceRoot}
               timestampFormat={timestampFormat}
