@@ -1,11 +1,12 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
 import { Effect, FileSystem, Layer, Path, Result } from "effect";
+import { createModelSelection } from "@t3tools/shared/model";
 import { expect } from "vitest";
 
 import { ServerConfig } from "../../config.ts";
 import { CodexTextGenerationLive } from "./CodexTextGeneration.ts";
-import { TextGenerationError } from "../Errors.ts";
+import { TextGenerationError } from "@t3tools/contracts";
 import { TextGeneration } from "../Services/TextGeneration.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 
@@ -244,14 +245,10 @@ it.layer(CodexTextGenerationTestLayer)("CodexTextGenerationLive", (it) => {
             branch: "feature/codex-effect",
             stagedSummary: "M README.md",
             stagedPatch: "diff --git a/README.md b/README.md",
-            modelSelection: {
-              provider: "codex",
-              model: "gpt-5.4",
-              options: {
-                reasoningEffort: "xhigh",
-                fastMode: true,
-              },
-            },
+            modelSelection: createModelSelection("codex", "gpt-5.4", [
+              { id: "reasoningEffort", value: "xhigh" },
+              { id: "fastMode", value: true },
+            ]),
           });
         }),
       ),
@@ -354,6 +351,70 @@ it.layer(CodexTextGenerationTestLayer)("CodexTextGenerationLive", (it) => {
         });
 
         expect(generated.branch).toBe("feat/session");
+      }),
+    ),
+  );
+
+  it.effect("generates thread titles and trims them for sidebar use", () =>
+    withFakeCodexEnv(
+      {
+        output: JSON.stringify({
+          title:
+            '  "Investigate websocket reconnect regressions after worktree restore"  \nignored line',
+        }),
+      },
+      Effect.gen(function* () {
+        const textGeneration = yield* TextGeneration;
+
+        const generated = yield* textGeneration.generateThreadTitle({
+          cwd: process.cwd(),
+          message: "Please investigate websocket reconnect regressions after a worktree restore.",
+          modelSelection: DEFAULT_TEST_MODEL_SELECTION,
+        });
+
+        expect(generated.title).toBe("Investigate websocket reconnect regressions aft...");
+      }),
+    ),
+  );
+
+  it.effect("falls back when thread title normalization becomes whitespace-only", () =>
+    withFakeCodexEnv(
+      {
+        output: JSON.stringify({
+          title: '  """   """  ',
+        }),
+      },
+      Effect.gen(function* () {
+        const textGeneration = yield* TextGeneration;
+
+        const generated = yield* textGeneration.generateThreadTitle({
+          cwd: process.cwd(),
+          message: "Name this thread.",
+          modelSelection: DEFAULT_TEST_MODEL_SELECTION,
+        });
+
+        expect(generated.title).toBe("New thread");
+      }),
+    ),
+  );
+
+  it.effect("trims whitespace exposed after quote removal in thread titles", () =>
+    withFakeCodexEnv(
+      {
+        output: JSON.stringify({
+          title: `  "' hello world '"  `,
+        }),
+      },
+      Effect.gen(function* () {
+        const textGeneration = yield* TextGeneration;
+
+        const generated = yield* textGeneration.generateThreadTitle({
+          cwd: process.cwd(),
+          message: "Name this thread.",
+          modelSelection: DEFAULT_TEST_MODEL_SELECTION,
+        });
+
+        expect(generated.title).toBe("hello world");
       }),
     ),
   );

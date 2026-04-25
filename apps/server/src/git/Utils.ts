@@ -5,7 +5,7 @@
  */
 import { Schema } from "effect";
 
-import { TextGenerationError } from "./Errors.ts";
+import { TextGenerationError } from "@t3tools/contracts";
 
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -30,6 +30,54 @@ export function limitSection(value: string, maxChars: number): string {
   return `${truncated}\n\n[truncated]`;
 }
 
+export function extractJsonObject(raw: string): string {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) {
+    return trimmed;
+  }
+
+  const start = trimmed.indexOf("{");
+  if (start < 0) {
+    return trimmed;
+  }
+
+  let depth = 0;
+  let inString = false;
+  let escaping = false;
+  for (let index = start; index < trimmed.length; index += 1) {
+    const char = trimmed[index];
+    if (inString) {
+      if (escaping) {
+        escaping = false;
+      } else if (char === "\\") {
+        escaping = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (char === "{") {
+      depth += 1;
+      continue;
+    }
+
+    if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return trimmed.slice(start, index + 1);
+      }
+    }
+  }
+
+  return trimmed.slice(start);
+}
+
 /** Normalise a raw commit subject to imperative-mood, ≤72 chars, no trailing period. */
 export function sanitizeCommitSubject(raw: string): string {
   const singleLine = raw.trim().split(/\r?\n/g)[0]?.trim() ?? "";
@@ -51,6 +99,27 @@ export function sanitizePrTitle(raw: string): string {
     return singleLine;
   }
   return "Update project changes";
+}
+
+/** Normalise a raw thread title to a compact single-line sidebar-safe label. */
+export function sanitizeThreadTitle(raw: string): string {
+  const normalized = raw
+    .trim()
+    .split(/\r?\n/g)[0]
+    ?.trim()
+    .replace(/^['"`]+|['"`]+$/g, "")
+    .trim()
+    .replace(/\s+/g, " ");
+
+  if (!normalized || normalized.trim().length === 0) {
+    return "New thread";
+  }
+
+  if (normalized.length <= 50) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, 47).trimEnd()}...`;
 }
 
 /** CLI name to human-readable label, e.g. "codex" → "Codex CLI (`codex`)" */

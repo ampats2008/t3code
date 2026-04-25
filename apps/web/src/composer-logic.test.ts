@@ -36,16 +36,23 @@ describe("detectComposerTrigger", () => {
     });
   });
 
-  it("detects slash model query after /model", () => {
-    const text = "/model spark";
+  it("keeps /model as a slash command item", () => {
+    const text = "/model";
     const trigger = detectComposerTrigger(text, text.length);
 
     expect(trigger).toEqual({
-      kind: "slash-model",
-      query: "spark",
+      kind: "slash-command",
+      query: "model",
       rangeStart: 0,
       rangeEnd: text.length,
     });
+  });
+
+  it("does not keep a subcommand trigger active after /model arguments", () => {
+    const text = "/model spark";
+    const trigger = detectComposerTrigger(text, text.length);
+
+    expect(trigger).toBeNull();
   });
 
   it("detects non-model slash commands while typing", () => {
@@ -72,19 +79,7 @@ describe("detectComposerTrigger", () => {
     });
   });
 
-  it("detects unknown slash commands (skills) as slash-command triggers", () => {
-    const text = "/commit";
-    const trigger = detectComposerTrigger(text, text.length);
-
-    expect(trigger).toEqual({
-      kind: "slash-command",
-      query: "commit",
-      rangeStart: 0,
-      rangeEnd: text.length,
-    });
-  });
-
-  it("detects partial unknown slash commands for skill filtering", () => {
+  it("keeps slash command detection active for provider commands", () => {
     const text = "/rev";
     const trigger = detectComposerTrigger(text, text.length);
 
@@ -96,14 +91,14 @@ describe("detectComposerTrigger", () => {
     });
   });
 
-  it("detects bare slash as slash-command trigger", () => {
-    const text = "/";
+  it("detects $skill trigger at cursor", () => {
+    const text = "Use $gh-fi";
     const trigger = detectComposerTrigger(text, text.length);
 
     expect(trigger).toEqual({
-      kind: "slash-command",
-      query: "",
-      rangeStart: 0,
+      kind: "skill",
+      query: "gh-fi",
+      rangeStart: "Use ".length,
       rangeEnd: text.length,
     });
   });
@@ -181,6 +176,16 @@ describe("expandCollapsedComposerCursor", () => {
 
     expect(detectComposerTrigger(text, expandedCursor)).toBeNull();
   });
+
+  it("maps collapsed skill cursor to expanded text cursor", () => {
+    const text = "run $review-follow-up then";
+    const collapsedCursorAfterSkill = "run ".length + 2;
+    const expandedCursorAfterSkill = "run $review-follow-up ".length;
+
+    expect(expandCollapsedComposerCursor(text, collapsedCursorAfterSkill)).toBe(
+      expandedCursorAfterSkill,
+    );
+  });
 });
 
 describe("collapseExpandedComposerCursor", () => {
@@ -205,6 +210,16 @@ describe("collapseExpandedComposerCursor", () => {
 
     expect(collapsedCursor).toBe("open ".length + 1 + " then ".length + 2);
     expect(expandCollapsedComposerCursor(text, collapsedCursor)).toBe(expandedCursor);
+  });
+
+  it("maps expanded skill cursor back to collapsed cursor", () => {
+    const text = "run $review-follow-up then";
+    const collapsedCursorAfterSkill = "run ".length + 2;
+    const expandedCursorAfterSkill = "run $review-follow-up ".length;
+
+    expect(collapseExpandedComposerCursor(text, expandedCursorAfterSkill)).toBe(
+      collapsedCursorAfterSkill,
+    );
   });
 });
 
@@ -276,6 +291,15 @@ describe("isCollapsedCursorAdjacentToInlineToken", () => {
   it("treats terminal pills as inline tokens for adjacency checks", () => {
     const text = `open ${INLINE_TERMINAL_CONTEXT_PLACEHOLDER} next`;
     const tokenStart = "open ".length;
+    const tokenEnd = tokenStart + 1;
+
+    expect(isCollapsedCursorAdjacentToInlineToken(text, tokenEnd, "left")).toBe(true);
+    expect(isCollapsedCursorAdjacentToInlineToken(text, tokenStart, "right")).toBe(true);
+  });
+
+  it("treats skill pills as inline tokens for adjacency checks", () => {
+    const text = "run $review-follow-up next";
+    const tokenStart = "run ".length;
     const tokenEnd = tokenStart + 1;
 
     expect(isCollapsedCursorAdjacentToInlineToken(text, tokenEnd, "left")).toBe(true);

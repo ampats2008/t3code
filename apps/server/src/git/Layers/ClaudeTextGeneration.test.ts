@@ -1,10 +1,12 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
 import { Effect, FileSystem, Layer, Path } from "effect";
+import { createModelSelection } from "@t3tools/shared/model";
 import { expect } from "vitest";
 
 import { ServerConfig } from "../../config.ts";
 import { TextGeneration } from "../Services/TextGeneration.ts";
+import { sanitizeThreadTitle } from "../Utils.ts";
 import { ClaudeTextGenerationLive } from "./ClaudeTextGeneration.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 
@@ -198,12 +200,10 @@ it.layer(ClaudeTextGenerationTestLayer)("ClaudeTextGenerationLive", (it) => {
           stagedSummary: "M README.md",
           stagedPatch: "diff --git a/README.md b/README.md",
           modelSelection: {
-            provider: "claudeAgent",
-            model: "claude-haiku-4-5",
-            options: {
-              thinking: false,
-              effort: "high",
-            },
+            ...createModelSelection("claudeAgent", "claude-haiku-4-5", [
+              { id: "thinking", value: false },
+              { id: "effort", value: "high" },
+            ]),
           },
         });
 
@@ -234,12 +234,10 @@ it.layer(ClaudeTextGenerationTestLayer)("ClaudeTextGenerationLive", (it) => {
           diffSummary: "1 file changed",
           diffPatch: "diff --git a/README.md b/README.md",
           modelSelection: {
-            provider: "claudeAgent",
-            model: "claude-opus-4-6",
-            options: {
-              effort: "max",
-              fastMode: true,
-            },
+            ...createModelSelection("claudeAgent", "claude-opus-4-6", [
+              { id: "effort", value: "max" },
+              { id: "fastMode", value: true },
+            ]),
           },
         });
 
@@ -248,32 +246,60 @@ it.layer(ClaudeTextGenerationTestLayer)("ClaudeTextGenerationLive", (it) => {
     ),
   );
 
-  it.effect("generates thread title from conversation messages", () =>
+  it.effect("generates thread titles through the Claude provider", () =>
     withFakeClaudeEnv(
       {
         output: JSON.stringify({
           structured_output: {
-            title: "Fix login timeout handling",
+            title:
+              '  "Reconnect failures after restart because the session state does not recover"  ',
           },
         }),
-        stdinMustContain: "user: Fix the login bug",
+        stdinMustContain: "You write concise thread titles for coding conversations.",
       },
       Effect.gen(function* () {
         const textGeneration = yield* TextGeneration;
 
         const generated = yield* textGeneration.generateThreadTitle({
           cwd: process.cwd(),
-          messages: [
-            { role: "user", text: "Fix the login bug" },
-            { role: "assistant", text: "I'll look into the login timeout issue." },
-          ],
+          message: "Please investigate reconnect failures after restarting the session.",
           modelSelection: {
             provider: "claudeAgent",
-            model: "claude-haiku-4-5",
+            model: "claude-sonnet-4-6",
           },
         });
 
-        expect(generated.title).toBe("Fix login timeout handling");
+        expect(generated.title).toBe(
+          sanitizeThreadTitle(
+            '"Reconnect failures after restart because the session state does not recover"',
+          ),
+        );
+      }),
+    ),
+  );
+
+  it.effect("falls back when Claude thread title normalization becomes whitespace-only", () =>
+    withFakeClaudeEnv(
+      {
+        output: JSON.stringify({
+          structured_output: {
+            title: '  """   """  ',
+          },
+        }),
+      },
+      Effect.gen(function* () {
+        const textGeneration = yield* TextGeneration;
+
+        const generated = yield* textGeneration.generateThreadTitle({
+          cwd: process.cwd(),
+          message: "Name this thread.",
+          modelSelection: {
+            provider: "claudeAgent",
+            model: "claude-sonnet-4-6",
+          },
+        });
+
+        expect(generated.title).toBe("New thread");
       }),
     ),
   );

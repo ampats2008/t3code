@@ -16,6 +16,7 @@ import {
   type ModelSelection,
   type ProviderKind,
   ServerSettings,
+  ServerSettingsError,
   type ServerSettingsPatch,
 } from "@t3tools/contracts";
 import {
@@ -27,31 +28,22 @@ import {
   FileSystem,
   Layer,
   Path,
+  Equal,
   PubSub,
   Ref,
   Schema,
   SchemaIssue,
   Scope,
-  ServiceMap,
+  Context,
   Stream,
+  Cause,
 } from "effect";
 import * as Semaphore from "effect/Semaphore";
-import { ServerConfig } from "./config";
+import { writeFileStringAtomically } from "./atomicWrite.ts";
+import { ServerConfig } from "./config.ts";
 import { type DeepPartial, deepMerge } from "@t3tools/shared/Struct";
 import { fromLenientJson } from "@t3tools/shared/schemaJson";
-
-export class ServerSettingsError extends Schema.TaggedErrorClass<ServerSettingsError>()(
-  "ServerSettingsError",
-  {
-    settingsPath: Schema.String,
-    detail: Schema.String,
-    cause: Schema.optional(Schema.Defect),
-  },
-) {
-  override get message(): string {
-    return `Server settings error at ${this.settingsPath}: ${this.detail}`;
-  }
-}
+import { applyServerSettingsPatch } from "@t3tools/shared/serverSettings";
 
 export interface ServerSettingsShape {
   /** Start the settings runtime and attach file watching. */
@@ -72,7 +64,7 @@ export interface ServerSettingsShape {
   readonly streamChanges: Stream.Stream<ServerSettings>;
 }
 
-export class ServerSettingsService extends ServiceMap.Service<
+export class ServerSettingsService extends Context.Service<
   ServerSettingsService,
   ServerSettingsShape
 >()("t3/serverSettings/ServerSettingsService") {
@@ -90,7 +82,20 @@ export class ServerSettingsService extends ServiceMap.Service<
           getSettings: Ref.get(currentSettingsRef),
           updateSettings: (patch) =>
             Ref.get(currentSettingsRef).pipe(
-              Effect.map((currentSettings) => deepMerge(currentSettings, patch)),
+              Effect.flatMap((currentSettings) =>
+                Schema.decodeEffect(ServerSettings)(
+                  applyServerSettingsPatch(currentSettings, patch),
+                ).pipe(
+                  Effect.mapError(
+                    (cause) =>
+                      new ServerSettingsError({
+                        settingsPath: "<memory>",
+                        detail: `failed to normalize server settings: ${SchemaIssue.makeFormatterDefault()(cause.issue)}`,
+                        cause,
+                      }),
+                  ),
+                ),
+              ),
               Effect.tap((nextSettings) => Ref.set(currentSettingsRef, nextSettings)),
             ),
           streamChanges: Stream.empty,
@@ -101,7 +106,7 @@ export class ServerSettingsService extends ServiceMap.Service<
 
 const ServerSettingsJson = fromLenientJson(ServerSettings);
 
-const PROVIDER_ORDER: readonly ProviderKind[] = ["codex", "claudeAgent"];
+const PROVIDER_ORDER: readonly ProviderKind[] = ["codex", "claudeAgent", "opencode", "cursor"];
 
 /**
  * Ensure the `textGenerationModelSelection` points to an enabled provider.
@@ -130,9 +135,12 @@ function resolveTextGenerationProvider(settings: ServerSettings): ServerSettings
   };
 }
 
+// Values under these keys are compared as a whole — never stripped field-by-field.
+const ATOMIC_SETTINGS_KEYS: ReadonlySet<string> = new Set(["textGenerationModelSelection"]);
+
 function stripDefaultServerSettings(current: unknown, defaults: unknown): unknown | undefined {
   if (Array.isArray(current) || Array.isArray(defaults)) {
-    return JSON.stringify(current) === JSON.stringify(defaults) ? undefined : current;
+    return Equal.equals(current, defaults) ? undefined : current;
   }
 
   if (
@@ -146,9 +154,15 @@ function stripDefaultServerSettings(current: unknown, defaults: unknown): unknow
     const next: Record<string, unknown> = {};
 
     for (const key of Object.keys(currentRecord)) {
-      const stripped = stripDefaultServerSettings(currentRecord[key], defaultsRecord[key]);
-      if (stripped !== undefined) {
-        next[key] = stripped;
+      if (ATOMIC_SETTINGS_KEYS.has(key)) {
+        if (!Equal.equals(currentRecord[key], defaultsRecord[key])) {
+          next[key] = currentRecord[key];
+        }
+      } else {
+        const stripped = stripDefaultServerSettings(currentRecord[key], defaultsRecord[key]);
+        if (stripped !== undefined) {
+          next[key] = stripped;
+        }
       }
     }
 
@@ -205,6 +219,7 @@ const makeServerSettings = Effect.gen(function* () {
     if (decoded._tag === "Failure") {
       yield* Effect.logWarning("failed to parse settings.json, using defaults", {
         path: settingsPath,
+        issues: Cause.pretty(decoded.cause),
       });
       return DEFAULT_SERVER_SETTINGS;
     }
@@ -219,14 +234,14 @@ const makeServerSettings = Effect.gen(function* () {
   const getSettingsFromCache = Cache.get(settingsCache, cacheKey);
 
   const writeSettingsAtomically = (settings: ServerSettings) => {
-    const tempPath = `${settingsPath}.${process.pid}.${Date.now()}.tmp`;
     const sparseSettings = stripDefaultServerSettings(settings, DEFAULT_SERVER_SETTINGS) ?? {};
 
-    return Effect.succeed(`${JSON.stringify(sparseSettings, null, 2)}\n`).pipe(
-      Effect.tap(() => fs.makeDirectory(pathService.dirname(settingsPath), { recursive: true })),
-      Effect.tap((encoded) => fs.writeFileString(tempPath, encoded)),
-      Effect.flatMap(() => fs.rename(tempPath, settingsPath)),
-      Effect.ensuring(fs.remove(tempPath, { force: true }).pipe(Effect.ignore({ log: true }))),
+    return writeFileStringAtomically({
+      filePath: settingsPath,
+      contents: `${JSON.stringify(sparseSettings, null, 2)}\n`,
+    }).pipe(
+      Effect.provideService(FileSystem.FileSystem, fs),
+      Effect.provideService(Path.Path, pathService),
       Effect.mapError(
         (cause) =>
           new ServerSettingsError({
@@ -314,7 +329,9 @@ const makeServerSettings = Effect.gen(function* () {
       writeSemaphore.withPermits(1)(
         Effect.gen(function* () {
           const current = yield* getSettingsFromCache;
-          const next = yield* Schema.decodeEffect(ServerSettings)(deepMerge(current, patch)).pipe(
+          const next = yield* Schema.decodeEffect(ServerSettings)(
+            applyServerSettingsPatch(current, patch),
+          ).pipe(
             Effect.mapError(
               (cause) =>
                 new ServerSettingsError({

@@ -6,51 +6,82 @@ import {
   LoaderIcon,
   PlusIcon,
   RefreshCwIcon,
-  Undo2Icon,
   XIcon,
 } from "lucide-react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
 import {
-  PROVIDER_DISPLAY_NAMES,
+  type DesktopUpdateChannel,
+  type ScopedThreadRef,
   type ProviderKind,
   type ServerProvider,
   type ServerProviderModel,
-  ThreadId,
 } from "@t3tools/contracts";
+import { scopeThreadRef } from "@t3tools/client-runtime";
 import {
   DEFAULT_CLAUDE_MAX_BUDGET_USD,
   DEFAULT_CLAUDE_MAX_TURNS,
   DEFAULT_UNIFIED_SETTINGS,
 } from "@t3tools/contracts/settings";
-import { normalizeModelSlug } from "@t3tools/shared/model";
+import { createModelSelection, normalizeModelSlug } from "@t3tools/shared/model";
 import { Equal } from "effect";
 import { APP_VERSION } from "../../branding";
+import {
+  canCheckForUpdate,
+  getDesktopUpdateButtonTooltip,
+  getDesktopUpdateInstallConfirmationMessage,
+  isDesktopUpdateButtonDisabled,
+  resolveDesktopUpdateButtonAction,
+} from "../../components/desktopUpdate.logic";
 import { ProviderModelPicker } from "../chat/ProviderModelPicker";
 import { TraitsPicker } from "../chat/TraitsPicker";
 import { resolveAndPersistPreferredEditor } from "../../editorPreferences";
+import { isElectron } from "../../env";
 import { useTheme, type Theme } from "../../hooks/useTheme";
 import { useSettings, useUpdateSettings } from "../../hooks/useSettings";
 import { useThreadActions } from "../../hooks/useThreadActions";
-import { serverConfigQueryOptions, serverQueryKeys } from "../../lib/serverReactQuery";
+import {
+  setDesktopUpdateStateQueryData,
+  useDesktopUpdateState,
+} from "../../lib/desktopUpdateReactQuery";
 import {
   MAX_CUSTOM_MODEL_LENGTH,
   getCustomModelOptionsByProvider,
   resolveAppModelSelectionState,
 } from "../../modelSelection";
-import { ensureNativeApi, readNativeApi } from "../../nativeApi";
-import { useStore } from "../../store";
+import { ensureLocalApi, readLocalApi } from "../../localApi";
+import { useShallow } from "zustand/react/shallow";
+import {
+  selectProjectsAcrossEnvironments,
+  selectThreadShellsAcrossEnvironments,
+  useStore,
+} from "../../store";
 import { formatRelativeTime, formatRelativeTimeLabel } from "../../timestampFormat";
 import { cn } from "../../lib/utils";
+import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Collapsible, CollapsibleContent } from "../ui/collapsible";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../ui/empty";
 import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Switch } from "../ui/switch";
-import { toastManager } from "../ui/toast";
+import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import {
+  SettingResetButton,
+  SettingsPageContainer,
+  SettingsRow,
+  SettingsSection,
+  useRelativeTimeTick,
+} from "./settingsLayout";
 import { ProjectFavicon } from "../ProjectFavicon";
+import {
+  useServerAvailableEditors,
+  useServerKeybindingsConfigPath,
+  useServerObservability,
+  useServerProviders,
+} from "../../rpc/serverState";
+import { formatProviderKindLabel } from "../../providerModels";
 
 type ThemeOption = {
   value: Theme;
@@ -189,13 +220,16 @@ const TIMESTAMP_FORMAT_LABELS = {
   "24-hour": "24-hour",
 } as const;
 
-const EMPTY_SERVER_PROVIDERS: ReadonlyArray<ServerProvider> = [];
-
 type InstallProviderSettings = {
   provider: ProviderKind;
   title: string;
+  badgeLabel?: string;
   binaryPlaceholder: string;
   binaryDescription: ReactNode;
+  serverUrlPlaceholder?: string;
+  serverUrlDescription?: ReactNode;
+  serverPasswordPlaceholder?: string;
+  serverPasswordDescription?: ReactNode;
   homePathKey?: "codexHomePath";
   homePlaceholder?: string;
   homeDescription?: ReactNode;
@@ -216,6 +250,24 @@ const PROVIDER_SETTINGS: readonly InstallProviderSettings[] = [
     title: "Claude",
     binaryPlaceholder: "Claude binary path",
     binaryDescription: "Path to the Claude binary",
+  },
+  {
+    provider: "cursor",
+    title: "Cursor",
+    badgeLabel: "Early Access",
+    binaryPlaceholder: "Cursor agent binary path",
+    binaryDescription: "Path to the Cursor agent binary",
+  },
+  {
+    provider: "opencode",
+    title: "OpenCode",
+    binaryPlaceholder: "OpenCode binary path",
+    binaryDescription: "Path to the OpenCode binary",
+    serverUrlPlaceholder: "http://127.0.0.1:4096",
+    serverUrlDescription: "Leave blank to let T3 Code spawn the server when needed",
+    serverPasswordPlaceholder: "Server password (optional)",
+    serverPasswordDescription:
+      "If your OpenCode server requires authentication, enter the password here. NOTE: Stored in plain text on disk",
   },
 ] as const;
 
@@ -254,13 +306,14 @@ function getProviderSummary(provider: ServerProvider | undefined) {
       detail: provider.message ?? "CLI not detected on PATH.",
     };
   }
-  if (provider.authStatus === "authenticated") {
+  if (provider.auth.status === "authenticated") {
+    const authLabel = provider.auth.label ?? provider.auth.type;
     return {
-      headline: "Authenticated",
+      headline: authLabel ? `Authenticated · ${authLabel}` : "Authenticated",
       detail: provider.message ?? null,
     };
   }
-  if (provider.authStatus === "unauthenticated") {
+  if (provider.auth.status === "unauthenticated") {
     return {
       headline: "Not authenticated",
       detail: provider.message ?? null,
@@ -290,15 +343,6 @@ function getProviderVersionLabel(version: string | null | undefined) {
   return version.startsWith("v") ? version : `v${version}`;
 }
 
-function useRelativeTimeTick(intervalMs = 1_000) {
-  const [tick, setTick] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setTick(Date.now()), intervalMs);
-    return () => clearInterval(id);
-  }, [intervalMs]);
-  return tick;
-}
-
 function ProviderLastChecked({ lastCheckedAt }: { lastCheckedAt: string | null }) {
   useRelativeTimeTick();
   const lastCheckedRelative = lastCheckedAt ? formatRelativeTime(lastCheckedAt) : null;
@@ -321,101 +365,206 @@ function ProviderLastChecked({ lastCheckedAt }: { lastCheckedAt: string | null }
   );
 }
 
-function SettingsSection({
-  title,
-  icon,
-  headerAction,
-  children,
-}: {
-  title: string;
-  icon?: ReactNode;
-  headerAction?: ReactNode;
-  children: ReactNode;
-}) {
+function AboutVersionTitle() {
   return (
-    <section className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-          {icon}
-          {title}
-        </h2>
-        {headerAction}
-      </div>
-      <div className="relative overflow-hidden rounded-2xl border bg-card text-card-foreground shadow-xs/5 not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-2xl)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] dark:before:shadow-[0_-1px_--theme(--color-white/6%)]">
-        {children}
-      </div>
-    </section>
+    <span className="inline-flex items-center gap-2">
+      <span>Version</span>
+      <code className="text-[11px] font-medium text-muted-foreground">{APP_VERSION}</code>
+    </span>
   );
 }
 
-function SettingsRow({
-  title,
-  description,
-  status,
-  resetAction,
-  control,
-  children,
-}: {
-  title: string;
-  description: string;
-  status?: ReactNode;
-  resetAction?: ReactNode;
-  control?: ReactNode;
-  children?: ReactNode;
-}) {
-  return (
-    <div className="border-t border-border px-4 py-4 first:border-t-0 sm:px-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0 flex-1 space-y-1">
-          <div className="flex min-h-5 items-center gap-1.5">
-            <h3 className="text-sm font-medium text-foreground">{title}</h3>
-            <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center">
-              {resetAction}
-            </span>
-          </div>
-          <p className="text-xs text-muted-foreground">{description}</p>
-          {status ? <div className="pt-1 text-[11px] text-muted-foreground">{status}</div> : null}
-        </div>
-        {control ? (
-          <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto sm:justify-end">
-            {control}
-          </div>
-        ) : null}
-      </div>
-      {children}
-    </div>
-  );
-}
+function AboutVersionSection() {
+  const queryClient = useQueryClient();
+  const updateStateQuery = useDesktopUpdateState();
+  const [isChangingUpdateChannel, setIsChangingUpdateChannel] = useState(false);
 
-function SettingResetButton({ label, onClick }: { label: string; onClick: () => void }) {
+  const updateState = updateStateQuery.data ?? null;
+  const hasDesktopBridge = typeof window !== "undefined" && Boolean(window.desktopBridge);
+  const selectedUpdateChannel = updateState?.channel ?? "latest";
+
+  const handleUpdateChannelChange = useCallback(
+    (channel: DesktopUpdateChannel) => {
+      const bridge = window.desktopBridge;
+      if (
+        !bridge ||
+        typeof bridge.setUpdateChannel !== "function" ||
+        channel === selectedUpdateChannel
+      ) {
+        return;
+      }
+
+      setIsChangingUpdateChannel(true);
+      void bridge
+        .setUpdateChannel(channel)
+        .then((state) => {
+          setDesktopUpdateStateQueryData(queryClient, state);
+        })
+        .catch((error: unknown) => {
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Could not change update track",
+              description: error instanceof Error ? error.message : "Update track change failed.",
+            }),
+          );
+        })
+        .finally(() => {
+          setIsChangingUpdateChannel(false);
+        });
+    },
+    [queryClient, selectedUpdateChannel],
+  );
+
+  const handleButtonClick = useCallback(() => {
+    const bridge = window.desktopBridge;
+    if (!bridge) return;
+
+    const action = updateState ? resolveDesktopUpdateButtonAction(updateState) : "none";
+
+    if (action === "download") {
+      void bridge
+        .downloadUpdate()
+        .then((result) => {
+          setDesktopUpdateStateQueryData(queryClient, result.state);
+        })
+        .catch((error: unknown) => {
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Could not download update",
+              description: error instanceof Error ? error.message : "Download failed.",
+            }),
+          );
+        });
+      return;
+    }
+
+    if (action === "install") {
+      const confirmed = window.confirm(
+        getDesktopUpdateInstallConfirmationMessage(
+          updateState ?? { availableVersion: null, downloadedVersion: null },
+        ),
+      );
+      if (!confirmed) return;
+      void bridge
+        .installUpdate()
+        .then((result) => {
+          setDesktopUpdateStateQueryData(queryClient, result.state);
+        })
+        .catch((error: unknown) => {
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Could not install update",
+              description: error instanceof Error ? error.message : "Install failed.",
+            }),
+          );
+        });
+      return;
+    }
+
+    if (typeof bridge.checkForUpdate !== "function") return;
+    void bridge
+      .checkForUpdate()
+      .then((result) => {
+        setDesktopUpdateStateQueryData(queryClient, result.state);
+        if (!result.checked) {
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Could not check for updates",
+              description:
+                result.state.message ?? "Automatic updates are not available in this build.",
+            }),
+          );
+        }
+      })
+      .catch((error: unknown) => {
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: "Could not check for updates",
+            description: error instanceof Error ? error.message : "Update check failed.",
+          }),
+        );
+      });
+  }, [queryClient, updateState]);
+
+  const action = updateState ? resolveDesktopUpdateButtonAction(updateState) : "none";
+  const buttonTooltip = updateState ? getDesktopUpdateButtonTooltip(updateState) : null;
+  const buttonDisabled =
+    action === "none"
+      ? !canCheckForUpdate(updateState)
+      : isDesktopUpdateButtonDisabled(updateState);
+
+  const actionLabel: Record<string, string> = { download: "Download", install: "Install" };
+  const statusLabel: Record<string, string> = {
+    checking: "Checking…",
+    downloading: "Downloading…",
+    "up-to-date": "Up to Date",
+  };
+  const buttonLabel =
+    actionLabel[action] ?? statusLabel[updateState?.status ?? ""] ?? "Check for Updates";
+  const description =
+    action === "download" || action === "install"
+      ? "Update available."
+      : "Current version of the application.";
+
   return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            aria-label={`Reset ${label} to default`}
-            className="size-5 rounded-sm p-0 text-muted-foreground hover:text-foreground"
-            onClick={(event) => {
-              event.stopPropagation();
-              onClick();
-            }}
-          >
-            <Undo2Icon className="size-3" />
-          </Button>
+    <>
+      <SettingsRow
+        title={<AboutVersionTitle />}
+        description={description}
+        control={
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  size="xs"
+                  variant={action === "install" ? "default" : "outline"}
+                  disabled={buttonDisabled}
+                  onClick={handleButtonClick}
+                >
+                  {buttonLabel}
+                </Button>
+              }
+            />
+            {buttonTooltip ? <TooltipPopup>{buttonTooltip}</TooltipPopup> : null}
+          </Tooltip>
         }
       />
-      <TooltipPopup side="top">Reset to default</TooltipPopup>
-    </Tooltip>
-  );
-}
-
-function SettingsPageContainer({ children }: { children: ReactNode }) {
-  return (
-    <div className="flex-1 overflow-y-auto p-6">
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">{children}</div>
-    </div>
+      <SettingsRow
+        title="Update track"
+        description="Stable follows full releases. Nightly follows the nightly desktop channel and can switch back to stable immediately."
+        control={
+          <Select
+            value={selectedUpdateChannel}
+            onValueChange={(value) => {
+              handleUpdateChannelChange(value as DesktopUpdateChannel);
+            }}
+          >
+            <SelectTrigger
+              className="w-full sm:w-40"
+              aria-label="Update track"
+              disabled={!hasDesktopBridge || isChangingUpdateChannel}
+            >
+              <SelectValue>
+                {selectedUpdateChannel === "nightly" ? "Nightly" : "Stable"}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectPopup align="end" alignItemWithTrigger={false}>
+              <SelectItem hideIndicator value="latest">
+                Stable
+              </SelectItem>
+              <SelectItem hideIndicator value="nightly">
+                Nightly
+              </SelectItem>
+            </SelectPopup>
+          </Select>
+        }
+      />
+    </>
   );
 }
 
@@ -449,11 +598,17 @@ export function useSettingsRestore(onRestored?: () => void) {
       ...(settings.diffWordWrap !== DEFAULT_UNIFIED_SETTINGS.diffWordWrap
         ? ["Diff line wrapping"]
         : []),
+      ...(settings.autoOpenPlanSidebar !== DEFAULT_UNIFIED_SETTINGS.autoOpenPlanSidebar
+        ? ["Task sidebar"]
+        : []),
       ...(settings.enableAssistantStreaming !== DEFAULT_UNIFIED_SETTINGS.enableAssistantStreaming
         ? ["Assistant output"]
         : []),
       ...(settings.defaultThreadEnvMode !== DEFAULT_UNIFIED_SETTINGS.defaultThreadEnvMode
         ? ["New thread mode"]
+        : []),
+      ...(settings.addProjectBaseDirectory !== DEFAULT_UNIFIED_SETTINGS.addProjectBaseDirectory
+        ? ["Add project base directory"]
         : []),
       ...(settings.confirmThreadArchive !== DEFAULT_UNIFIED_SETTINGS.confirmThreadArchive
         ? ["Archive confirmation"]
@@ -471,8 +626,10 @@ export function useSettingsRestore(onRestored?: () => void) {
       areProviderSettingsDirty,
       isGitWritingModelDirty,
       settings.autoRenameOnFirstMessage,
+      settings.autoOpenPlanSidebar,
       settings.confirmThreadArchive,
       settings.confirmThreadDelete,
+      settings.addProjectBaseDirectory,
       settings.defaultThreadEnvMode,
       settings.diffDefaultCollapsed,
       settings.diffDefaultView,
@@ -485,8 +642,8 @@ export function useSettingsRestore(onRestored?: () => void) {
 
   const restoreDefaults = useCallback(async () => {
     if (changedSettingLabels.length === 0) return;
-    const api = readNativeApi();
-    const confirmed = await (api ?? ensureNativeApi()).dialogs.confirm(
+    const api = readLocalApi();
+    const confirmed = await (api ?? ensureLocalApi()).dialogs.confirm(
       ["Restore default settings?", `This will reset: ${changedSettingLabels.join(", ")}.`].join(
         "\n",
       ),
@@ -508,9 +665,13 @@ export function GeneralSettingsPanel() {
   const { theme, setTheme } = useTheme();
   const settings = useSettings();
   const { updateSettings } = useUpdateSettings();
-  const serverConfigQuery = useQuery(serverConfigQueryOptions());
-  const [isOpeningKeybindings, setIsOpeningKeybindings] = useState(false);
-  const [openKeybindingsError, setOpenKeybindingsError] = useState<string | null>(null);
+  const [openingPathByTarget, setOpeningPathByTarget] = useState({
+    keybindings: false,
+    logsDirectory: false,
+  });
+  const [openPathErrorByTarget, setOpenPathErrorByTarget] = useState<
+    Partial<Record<"keybindings" | "logsDirectory", string | null>>
+  >({});
   const [openProviderDetails, setOpenProviderDetails] = useState<Record<ProviderKind, boolean>>({
     codex: Boolean(
       settings.providers.codex.binaryPath !== DEFAULT_UNIFIED_SETTINGS.providers.codex.binaryPath ||
@@ -520,7 +681,22 @@ export function GeneralSettingsPanel() {
     claudeAgent: Boolean(
       settings.providers.claudeAgent.binaryPath !==
         DEFAULT_UNIFIED_SETTINGS.providers.claudeAgent.binaryPath ||
-      settings.providers.claudeAgent.customModels.length > 0,
+      settings.providers.claudeAgent.customModels.length > 0 ||
+      settings.providers.claudeAgent.launchArgs !== "",
+    ),
+    cursor: Boolean(
+      settings.providers.cursor.binaryPath !==
+        DEFAULT_UNIFIED_SETTINGS.providers.cursor.binaryPath ||
+      settings.providers.cursor.customModels.length > 0,
+    ),
+    opencode: Boolean(
+      settings.providers.opencode.binaryPath !==
+        DEFAULT_UNIFIED_SETTINGS.providers.opencode.binaryPath ||
+      settings.providers.opencode.serverUrl !==
+        DEFAULT_UNIFIED_SETTINGS.providers.opencode.serverUrl ||
+      settings.providers.opencode.serverPassword !==
+        DEFAULT_UNIFIED_SETTINGS.providers.opencode.serverPassword ||
+      settings.providers.opencode.customModels.length > 0,
     ),
   });
   const [customModelInputByProvider, setCustomModelInputByProvider] = useState<
@@ -528,21 +704,21 @@ export function GeneralSettingsPanel() {
   >({
     codex: "",
     claudeAgent: "",
+    cursor: "",
+    opencode: "",
   });
   const [customModelErrorByProvider, setCustomModelErrorByProvider] = useState<
     Partial<Record<ProviderKind, string | null>>
   >({});
   const [isRefreshingProviders, setIsRefreshingProviders] = useState(false);
   const refreshingRef = useRef(false);
-  const queryClient = useQueryClient();
   const modelListRefs = useRef<Partial<Record<ProviderKind, HTMLDivElement | null>>>({});
   const refreshProviders = useCallback(() => {
     if (refreshingRef.current) return;
     refreshingRef.current = true;
     setIsRefreshingProviders(true);
-    void ensureNativeApi()
+    void ensureLocalApi()
       .server.refreshProviders()
-      .then(() => queryClient.invalidateQueries({ queryKey: serverQueryKeys.config() }))
       .catch((error: unknown) => {
         console.warn("Failed to refresh providers", error);
       })
@@ -550,12 +726,30 @@ export function GeneralSettingsPanel() {
         refreshingRef.current = false;
         setIsRefreshingProviders(false);
       });
-  }, [queryClient]);
+  }, []);
 
-  const keybindingsConfigPath = serverConfigQuery.data?.keybindingsConfigPath ?? null;
-  const availableEditors = serverConfigQuery.data?.availableEditors;
-  const serverProviders = serverConfigQuery.data?.providers ?? EMPTY_SERVER_PROVIDERS;
+  const keybindingsConfigPath = useServerKeybindingsConfigPath();
+  const availableEditors = useServerAvailableEditors();
+  const observability = useServerObservability();
+  const serverProviders = useServerProviders();
+  const visibleProviderSettings = PROVIDER_SETTINGS.filter(
+    (providerSettings) =>
+      providerSettings.provider !== "cursor" ||
+      serverProviders.some((provider) => provider.provider === "cursor"),
+  );
   const codexHomePath = settings.providers.codex.homePath;
+  const logsDirectoryPath = observability?.logsDirectoryPath ?? null;
+  const diagnosticsDescription = (() => {
+    const exports: string[] = [];
+    if (observability?.otlpTracesEnabled && observability.otlpTracesUrl) {
+      exports.push(`traces to ${observability.otlpTracesUrl}`);
+    }
+    if (observability?.otlpMetricsEnabled && observability.otlpMetricsUrl) {
+      exports.push(`metrics to ${observability.otlpMetricsUrl}`);
+    }
+    const mode = observability?.localTracingEnabled ? "Local trace file" : "Terminal logs only";
+    return exports.length > 0 ? `${mode}. OTLP exporting ${exports.join(" and ")}.` : `${mode}.`;
+  })();
 
   const textGenerationModelSelection = resolveAppModelSelectionState(settings, serverProviders);
   const textGenProvider = textGenerationModelSelection.provider;
@@ -572,27 +766,49 @@ export function GeneralSettingsPanel() {
     DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection ?? null,
   );
 
+  const openInPreferredEditor = useCallback(
+    (target: "keybindings" | "logsDirectory", path: string | null, failureMessage: string) => {
+      if (!path) return;
+      setOpenPathErrorByTarget((existing) => ({ ...existing, [target]: null }));
+      setOpeningPathByTarget((existing) => ({ ...existing, [target]: true }));
+
+      const editor = resolveAndPersistPreferredEditor(availableEditors ?? []);
+      if (!editor) {
+        setOpenPathErrorByTarget((existing) => ({
+          ...existing,
+          [target]: "No available editors found.",
+        }));
+        setOpeningPathByTarget((existing) => ({ ...existing, [target]: false }));
+        return;
+      }
+
+      void ensureLocalApi()
+        .shell.openInEditor(path, editor)
+        .catch((error) => {
+          setOpenPathErrorByTarget((existing) => ({
+            ...existing,
+            [target]: error instanceof Error ? error.message : failureMessage,
+          }));
+        })
+        .finally(() => {
+          setOpeningPathByTarget((existing) => ({ ...existing, [target]: false }));
+        });
+    },
+    [availableEditors],
+  );
+
   const openKeybindingsFile = useCallback(() => {
-    if (!keybindingsConfigPath) return;
-    setOpenKeybindingsError(null);
-    setIsOpeningKeybindings(true);
-    const editor = resolveAndPersistPreferredEditor(availableEditors ?? []);
-    if (!editor) {
-      setOpenKeybindingsError("No available editors found.");
-      setIsOpeningKeybindings(false);
-      return;
-    }
-    void ensureNativeApi()
-      .shell.openInEditor(keybindingsConfigPath, editor)
-      .catch((error) => {
-        setOpenKeybindingsError(
-          error instanceof Error ? error.message : "Unable to open keybindings file.",
-        );
-      })
-      .finally(() => {
-        setIsOpeningKeybindings(false);
-      });
-  }, [availableEditors, keybindingsConfigPath]);
+    openInPreferredEditor("keybindings", keybindingsConfigPath, "Unable to open keybindings file.");
+  }, [keybindingsConfigPath, openInPreferredEditor]);
+
+  const openLogsDirectory = useCallback(() => {
+    openInPreferredEditor("logsDirectory", logsDirectoryPath, "Unable to open logs folder.");
+  }, [logsDirectoryPath, openInPreferredEditor]);
+
+  const openKeybindingsError = openPathErrorByTarget.keybindings ?? null;
+  const openDiagnosticsError = openPathErrorByTarget.logsDirectory ?? null;
+  const isOpeningKeybindings = openingPathByTarget.keybindings;
+  const isOpeningLogsDirectory = openingPathByTarget.logsDirectory;
 
   const addCustomModel = useCallback(
     (provider: ProviderKind) => {
@@ -685,7 +901,7 @@ export function GeneralSettingsPanel() {
     [settings, updateSettings],
   );
 
-  const providerCards = PROVIDER_SETTINGS.map((providerSettings) => {
+  const providerCards = visibleProviderSettings.map((providerSettings) => {
     const liveProvider = serverProviders.find(
       (candidate) => candidate.provider === providerSettings.provider,
     );
@@ -705,12 +921,19 @@ export function GeneralSettingsPanel() {
     return {
       provider: providerSettings.provider,
       title: providerSettings.title,
+      badgeLabel: providerSettings.badgeLabel,
       binaryPlaceholder: providerSettings.binaryPlaceholder,
       binaryDescription: providerSettings.binaryDescription,
+      serverUrlPlaceholder: providerSettings.serverUrlPlaceholder,
+      serverUrlDescription: providerSettings.serverUrlDescription,
+      serverPasswordPlaceholder: providerSettings.serverPasswordPlaceholder,
+      serverPasswordDescription: providerSettings.serverPasswordDescription,
       homePathKey: providerSettings.homePathKey,
       homePlaceholder: providerSettings.homePlaceholder,
       homeDescription: providerSettings.homeDescription,
       binaryPathValue: providerConfig.binaryPath,
+      serverUrlValue: "serverUrl" in providerConfig ? providerConfig.serverUrl : "",
+      serverPasswordValue: "serverPassword" in providerConfig ? providerConfig.serverPassword : "",
       isDirty: !Equal.equals(providerConfig, defaultProviderConfig),
       liveProvider,
       models,
@@ -728,6 +951,7 @@ export function GeneralSettingsPanel() {
           serverProviders[0]!.checkedAt,
         )
       : null;
+
   return (
     <SettingsPageContainer>
       <SettingsSection title="General">
@@ -911,6 +1135,32 @@ export function GeneralSettingsPanel() {
         />
 
         <SettingsRow
+          title="Task sidebar"
+          description="Open the plan and task sidebar automatically when steps appear."
+          resetAction={
+            settings.autoOpenPlanSidebar !== DEFAULT_UNIFIED_SETTINGS.autoOpenPlanSidebar ? (
+              <SettingResetButton
+                label="task sidebar"
+                onClick={() =>
+                  updateSettings({
+                    autoOpenPlanSidebar: DEFAULT_UNIFIED_SETTINGS.autoOpenPlanSidebar,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.autoOpenPlanSidebar}
+              onCheckedChange={(checked) =>
+                updateSettings({ autoOpenPlanSidebar: Boolean(checked) })
+              }
+              aria-label="Open the task sidebar automatically"
+            />
+          }
+        />
+
+        <SettingsRow
           title="New threads"
           description="Pick the default workspace mode for newly created draft threads."
           resetAction={
@@ -948,6 +1198,34 @@ export function GeneralSettingsPanel() {
                 </SelectItem>
               </SelectPopup>
             </Select>
+          }
+        />
+
+        <SettingsRow
+          title="Add project starts in"
+          description='Leave empty to use "~/" when the Add Project browser opens.'
+          resetAction={
+            settings.addProjectBaseDirectory !==
+            DEFAULT_UNIFIED_SETTINGS.addProjectBaseDirectory ? (
+              <SettingResetButton
+                label="add project base directory"
+                onClick={() =>
+                  updateSettings({
+                    addProjectBaseDirectory: DEFAULT_UNIFIED_SETTINGS.addProjectBaseDirectory,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Input
+              className="w-full sm:w-72"
+              value={settings.addProjectBaseDirectory}
+              onChange={(event) => updateSettings({ addProjectBaseDirectory: event.target.value })}
+              placeholder="~/"
+              spellCheck={false}
+              aria-label="Add project base directory"
+            />
           }
         />
 
@@ -1061,7 +1339,7 @@ export function GeneralSettingsPanel() {
                     textGenerationModelSelection: resolveAppModelSelectionState(
                       {
                         ...settings,
-                        textGenerationModelSelection: { provider, model },
+                        textGenerationModelSelection: createModelSelection(provider, model),
                       },
                       serverProviders,
                     ),
@@ -1086,11 +1364,11 @@ export function GeneralSettingsPanel() {
                     textGenerationModelSelection: resolveAppModelSelectionState(
                       {
                         ...settings,
-                        textGenerationModelSelection: {
-                          provider: textGenProvider,
-                          model: textGenModel,
-                          ...(nextOptions ? { options: nextOptions } : {}),
-                        },
+                        textGenerationModelSelection: createModelSelection(
+                          textGenProvider,
+                          textGenModel,
+                          nextOptions,
+                        ),
                       },
                       serverProviders,
                     ),
@@ -1135,7 +1413,9 @@ export function GeneralSettingsPanel() {
           const customModelInput = customModelInputByProvider[providerCard.provider];
           const customModelError = customModelErrorByProvider[providerCard.provider] ?? null;
           const providerDisplayName =
-            PROVIDER_DISPLAY_NAMES[providerCard.provider] ?? providerCard.title;
+            providerCard.liveProvider?.displayName?.trim() ||
+            providerCard.title ||
+            formatProviderKindLabel(providerCard.provider);
 
           return (
             <div key={providerCard.provider} className="border-t border-border first:border-t-0">
@@ -1147,6 +1427,11 @@ export function GeneralSettingsPanel() {
                         className={cn("size-2 shrink-0 rounded-full", providerCard.statusStyle.dot)}
                       />
                       <h3 className="text-sm font-medium text-foreground">{providerDisplayName}</h3>
+                      {providerCard.badgeLabel ? (
+                        <Badge variant="warning" size="sm" className="shrink-0">
+                          {providerCard.badgeLabel}
+                        </Badge>
+                      ) : null}
                       {providerCard.versionLabel ? (
                         <code className="text-xs text-muted-foreground">
                           {providerCard.versionLabel}
@@ -1269,6 +1554,151 @@ export function GeneralSettingsPanel() {
                       </label>
                     </div>
 
+                    {providerCard.serverUrlPlaceholder ? (
+                      <div className="border-t border-border/60 px-4 py-3 sm:px-5">
+                        <label
+                          htmlFor={`provider-install-${providerCard.provider}-server-url`}
+                          className="block"
+                        >
+                          <span className="text-xs font-medium text-foreground">
+                            {providerDisplayName} server URL
+                          </span>
+                          <Input
+                            id={`provider-install-${providerCard.provider}-server-url`}
+                            className="mt-1.5"
+                            value={providerCard.serverUrlValue}
+                            onChange={(event) =>
+                              updateSettings({
+                                providers: {
+                                  ...settings.providers,
+                                  [providerCard.provider]: {
+                                    ...settings.providers[providerCard.provider],
+                                    ...(providerCard.provider === "opencode"
+                                      ? { serverUrl: event.target.value }
+                                      : {}),
+                                  },
+                                },
+                              })
+                            }
+                            placeholder={providerCard.serverUrlPlaceholder}
+                            spellCheck={false}
+                          />
+                          {providerCard.serverUrlDescription ? (
+                            <span className="mt-1 block text-xs text-muted-foreground">
+                              {providerCard.serverUrlDescription}
+                            </span>
+                          ) : null}
+                        </label>
+                      </div>
+                    ) : null}
+
+                    {providerCard.serverPasswordPlaceholder ? (
+                      <div className="border-t border-border/60 px-4 py-3 sm:px-5">
+                        <label
+                          htmlFor={`provider-install-${providerCard.provider}-server-password`}
+                          className="block"
+                        >
+                          <span className="text-xs font-medium text-foreground">
+                            {providerDisplayName} server password
+                          </span>
+                          <Input
+                            id={`provider-install-${providerCard.provider}-server-password`}
+                            className="mt-1.5"
+                            type="password"
+                            autoComplete="off"
+                            value={providerCard.serverPasswordValue}
+                            onChange={(event) =>
+                              updateSettings({
+                                providers: {
+                                  ...settings.providers,
+                                  [providerCard.provider]: {
+                                    ...settings.providers[providerCard.provider],
+                                    ...(providerCard.provider === "opencode"
+                                      ? { serverPassword: event.target.value }
+                                      : {}),
+                                  },
+                                },
+                              })
+                            }
+                            placeholder={providerCard.serverPasswordPlaceholder}
+                            spellCheck={false}
+                          />
+                          {providerCard.serverPasswordDescription ? (
+                            <span className="mt-1 block text-xs text-muted-foreground">
+                              {providerCard.serverPasswordDescription}
+                            </span>
+                          ) : null}
+                        </label>
+                      </div>
+                    ) : null}
+
+                    {providerCard.homePathKey ? (
+                      <div className="border-t border-border/60 px-4 py-3 sm:px-5">
+                        <label
+                          htmlFor={`provider-install-${providerCard.homePathKey}`}
+                          className="block"
+                        >
+                          <span className="text-xs font-medium text-foreground">
+                            CODEX_HOME path
+                          </span>
+                          <Input
+                            id={`provider-install-${providerCard.homePathKey}`}
+                            className="mt-1.5"
+                            value={codexHomePath}
+                            onChange={(event) =>
+                              updateSettings({
+                                providers: {
+                                  ...settings.providers,
+                                  codex: {
+                                    ...settings.providers.codex,
+                                    homePath: event.target.value,
+                                  },
+                                },
+                              })
+                            }
+                            placeholder={providerCard.homePlaceholder}
+                            spellCheck={false}
+                          />
+                          {providerCard.homeDescription ? (
+                            <span className="mt-1 block text-xs text-muted-foreground">
+                              {providerCard.homeDescription}
+                            </span>
+                          ) : null}
+                        </label>
+                      </div>
+                    ) : null}
+
+                    {providerCard.provider === "claudeAgent" ? (
+                      <div className="border-t border-border/60 px-4 py-3 sm:px-5">
+                        <label htmlFor="provider-install-claudeAgent-launch-args" className="block">
+                          <span className="text-xs font-medium text-foreground">
+                            Launch arguments
+                          </span>
+                          <Input
+                            id="provider-install-claudeAgent-launch-args"
+                            className="mt-1.5"
+                            value={settings.providers.claudeAgent.launchArgs}
+                            onChange={(event) =>
+                              updateSettings({
+                                providers: {
+                                  ...settings.providers,
+                                  claudeAgent: {
+                                    ...settings.providers.claudeAgent,
+                                    launchArgs: event.target.value,
+                                  },
+                                },
+                              })
+                            }
+                            placeholder="e.g. --chrome"
+                            spellCheck={false}
+                          />
+                          <span className="mt-1 block text-xs text-muted-foreground">
+                            Additional CLI arguments passed to Claude Code on session start.
+                          </span>
+                        </label>
+                      </div>
+                    ) : null}
+
                     {providerCard.provider === "claudeAgent" ? (
                       <>
                         <div className="border-t border-border/60 px-4 py-3 sm:px-5">
@@ -1345,42 +1775,6 @@ export function GeneralSettingsPanel() {
                       </>
                     ) : null}
 
-                    {providerCard.homePathKey ? (
-                      <div className="border-t border-border/60 px-4 py-3 sm:px-5">
-                        <label
-                          htmlFor={`provider-install-${providerCard.homePathKey}`}
-                          className="block"
-                        >
-                          <span className="text-xs font-medium text-foreground">
-                            CODEX_HOME path
-                          </span>
-                          <Input
-                            id={`provider-install-${providerCard.homePathKey}`}
-                            className="mt-1.5"
-                            value={codexHomePath}
-                            onChange={(event) =>
-                              updateSettings({
-                                providers: {
-                                  ...settings.providers,
-                                  codex: {
-                                    ...settings.providers.codex,
-                                    homePath: event.target.value,
-                                  },
-                                },
-                              })
-                            }
-                            placeholder={providerCard.homePlaceholder}
-                            spellCheck={false}
-                          />
-                          {providerCard.homeDescription ? (
-                            <span className="mt-1 block text-xs text-muted-foreground">
-                              {providerCard.homeDescription}
-                            </span>
-                          ) : null}
-                        </label>
-                      </div>
-                    ) : null}
-
                     <div className="border-t border-border/60 px-4 py-3 sm:px-5">
                       <div className="text-xs font-medium text-foreground">Models</div>
                       <div className="mt-1 text-xs text-muted-foreground">
@@ -1396,11 +1790,22 @@ export function GeneralSettingsPanel() {
                         {providerCard.models.map((model) => {
                           const caps = model.capabilities;
                           const capLabels: string[] = [];
-                          if (caps?.supportsFastMode) capLabels.push("Fast mode");
-                          if (caps?.supportsThinkingToggle) capLabels.push("Thinking");
+                          const descriptors = caps?.optionDescriptors ?? [];
+                          if (descriptors.some((descriptor) => descriptor.id === "fastMode")) {
+                            capLabels.push("Fast mode");
+                          }
+                          if (descriptors.some((descriptor) => descriptor.id === "thinking")) {
+                            capLabels.push("Thinking");
+                          }
                           if (
-                            caps?.reasoningEffortLevels &&
-                            caps.reasoningEffortLevels.length > 0
+                            descriptors.some(
+                              (descriptor) =>
+                                descriptor.type === "select" &&
+                                (descriptor.id === "reasoningEffort" ||
+                                  descriptor.id === "effort" ||
+                                  descriptor.id === "reasoning" ||
+                                  descriptor.id === "variant"),
+                            )
                           ) {
                             capLabels.push("Reasoning");
                           }
@@ -1493,7 +1898,9 @@ export function GeneralSettingsPanel() {
                           placeholder={
                             providerCard.provider === "codex"
                               ? "gpt-6.7-codex-ultra-preview"
-                              : "claude-sonnet-5-0"
+                              : providerCard.provider === "opencode"
+                                ? "openai/gpt-5"
+                                : "claude-sonnet-5-0"
                           }
                           spellCheck={false}
                         />
@@ -1546,11 +1953,40 @@ export function GeneralSettingsPanel() {
             </Button>
           }
         />
+      </SettingsSection>
 
+      <SettingsSection title="About">
+        {isElectron ? (
+          <AboutVersionSection />
+        ) : (
+          <SettingsRow
+            title={<AboutVersionTitle />}
+            description="Current version of the application."
+          />
+        )}
         <SettingsRow
-          title="Version"
-          description="Current application version."
-          control={<code className="text-xs font-medium text-muted-foreground">{APP_VERSION}</code>}
+          title="Diagnostics"
+          description={diagnosticsDescription}
+          status={
+            <>
+              <span className="block break-all font-mono text-[11px] text-foreground">
+                {logsDirectoryPath ?? "Resolving logs directory..."}
+              </span>
+              {openDiagnosticsError ? (
+                <span className="mt-1 block text-destructive">{openDiagnosticsError}</span>
+              ) : null}
+            </>
+          }
+          control={
+            <Button
+              size="xs"
+              variant="outline"
+              disabled={!logsDirectoryPath || isOpeningLogsDirectory}
+              onClick={openLogsDirectory}
+            >
+              {isOpeningLogsDirectory ? "Opening..." : "Open logs folder"}
+            </Button>
+          }
         />
       </SettingsSection>
     </SettingsPageContainer>
@@ -1558,12 +1994,11 @@ export function GeneralSettingsPanel() {
 }
 
 export function ArchivedThreadsPanel() {
-  const projects = useStore((store) => store.projects);
-  const threads = useStore((store) => store.threads);
+  const projects = useStore(useShallow(selectProjectsAcrossEnvironments));
+  const threads = useStore(useShallow(selectThreadShellsAcrossEnvironments));
   const { unarchiveThread, confirmAndDeleteThread } = useThreadActions();
   const archivedGroups = useMemo(() => {
-    const projectById = new Map(projects.map((project) => [project.id, project] as const));
-    return [...projectById.values()]
+    return projects
       .map((project) => ({
         project,
         threads: threads
@@ -1578,8 +2013,8 @@ export function ArchivedThreadsPanel() {
   }, [projects, threads]);
 
   const handleArchivedThreadContextMenu = useCallback(
-    async (threadId: ThreadId, position: { x: number; y: number }) => {
-      const api = readNativeApi();
+    async (threadRef: ScopedThreadRef, position: { x: number; y: number }) => {
+      const api = readLocalApi();
       if (!api) return;
       const clicked = await api.contextMenu.show(
         [
@@ -1591,19 +2026,21 @@ export function ArchivedThreadsPanel() {
 
       if (clicked === "unarchive") {
         try {
-          await unarchiveThread(threadId);
+          await unarchiveThread(threadRef);
         } catch (error) {
-          toastManager.add({
-            type: "error",
-            title: "Failed to unarchive thread",
-            description: error instanceof Error ? error.message : "An error occurred.",
-          });
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Failed to unarchive thread",
+              description: error instanceof Error ? error.message : "An error occurred.",
+            }),
+          );
         }
         return;
       }
 
       if (clicked === "delete") {
-        await confirmAndDeleteThread(threadId);
+        await confirmAndDeleteThread(threadRef);
       }
     },
     [confirmAndDeleteThread, unarchiveThread],
@@ -1613,7 +2050,7 @@ export function ArchivedThreadsPanel() {
     <SettingsPageContainer>
       {archivedGroups.length === 0 ? (
         <SettingsSection title="Archived threads">
-          <Empty className="min-h-[22rem]">
+          <Empty className="min-h-88">
             <EmptyMedia variant="icon">
               <ArchiveIcon />
             </EmptyMedia>
@@ -1628,7 +2065,7 @@ export function ArchivedThreadsPanel() {
           <SettingsSection
             key={project.id}
             title={project.name}
-            icon={<ProjectFavicon cwd={project.cwd} />}
+            icon={<ProjectFavicon environmentId={project.environmentId} cwd={project.cwd} />}
           >
             {projectThreads.map((thread) => (
               <div
@@ -1636,10 +2073,13 @@ export function ArchivedThreadsPanel() {
                 className="flex items-center justify-between gap-3 border-t border-border px-4 py-3 first:border-t-0 sm:px-5"
                 onContextMenu={(event) => {
                   event.preventDefault();
-                  void handleArchivedThreadContextMenu(thread.id, {
-                    x: event.clientX,
-                    y: event.clientY,
-                  });
+                  void handleArchivedThreadContextMenu(
+                    scopeThreadRef(thread.environmentId, thread.id),
+                    {
+                      x: event.clientX,
+                      y: event.clientY,
+                    },
+                  );
                 }}
               >
                 <div className="min-w-0 flex-1">
@@ -1656,13 +2096,18 @@ export function ArchivedThreadsPanel() {
                   size="sm"
                   className="h-7 shrink-0 cursor-pointer gap-1.5 px-2.5"
                   onClick={() =>
-                    void unarchiveThread(thread.id).catch((error) => {
-                      toastManager.add({
-                        type: "error",
-                        title: "Failed to unarchive thread",
-                        description: error instanceof Error ? error.message : "An error occurred.",
-                      });
-                    })
+                    void unarchiveThread(scopeThreadRef(thread.environmentId, thread.id)).catch(
+                      (error) => {
+                        toastManager.add(
+                          stackedThreadToast({
+                            type: "error",
+                            title: "Failed to unarchive thread",
+                            description:
+                              error instanceof Error ? error.message : "An error occurred.",
+                          }),
+                        );
+                      },
+                    )
                   }
                 >
                   <ArchiveX className="size-3.5" />

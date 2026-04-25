@@ -5,7 +5,7 @@
     "source.fixAll.oxc": "always"
   },
   "oxc.unusedDisableDirectives": "warn",
-  "typescript.tsdk": "node_modules/typescript/lib",
+  "js/ts.tsdk.path": "node_modules/typescript/lib",
   "workbench.colorCustomizations": {
     "activityBar.background": "#511C1C",
     "titleBar.activeBackground": "#712727",

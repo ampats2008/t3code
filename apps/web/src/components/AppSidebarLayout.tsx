@@ -4,6 +4,10 @@ import { useQuery } from "@tanstack/react-query";
 
 import ThreadSidebar from "./Sidebar";
 import { Sidebar, SidebarProvider, SidebarRail, useSidebar } from "./ui/sidebar";
+import {
+  clearShortcutModifierState,
+  syncShortcutModifierStateFromKeyboardEvent,
+} from "../shortcutModifierState";
 import { resolveShortcutCommand } from "../keybindings";
 import { serverConfigQueryOptions } from "../lib/serverReactQuery";
 import type { ResolvedKeybindingsConfig } from "@t3tools/contracts";
@@ -12,6 +16,7 @@ const EMPTY_KEYBINDINGS: ResolvedKeybindingsConfig = [];
 const THREAD_SIDEBAR_WIDTH_STORAGE_KEY = "chat_thread_sidebar_width";
 const THREAD_SIDEBAR_MIN_WIDTH = 13 * 16;
 const THREAD_MAIN_CONTENT_MIN_WIDTH = 40 * 16;
+
 
 function SidebarToggleHandler() {
   const { toggleSidebar } = useSidebar();
@@ -35,8 +40,31 @@ function SidebarToggleHandler() {
   return null;
 }
 
+
 export function AppSidebarLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const onWindowKeyDown = (event: KeyboardEvent) => {
+      syncShortcutModifierStateFromKeyboardEvent(event);
+    };
+    const onWindowKeyUp = (event: KeyboardEvent) => {
+      syncShortcutModifierStateFromKeyboardEvent(event);
+    };
+    const onWindowBlur = () => {
+      clearShortcutModifierState();
+    };
+
+    window.addEventListener("keydown", onWindowKeyDown, true);
+    window.addEventListener("keyup", onWindowKeyUp, true);
+    window.addEventListener("blur", onWindowBlur);
+
+    return () => {
+      window.removeEventListener("keydown", onWindowKeyDown, true);
+      window.removeEventListener("keyup", onWindowKeyUp, true);
+      window.removeEventListener("blur", onWindowBlur);
+    };
+  }, []);
 
   useEffect(() => {
     const onMenuAction = window.desktopBridge?.onMenuAction;
@@ -45,8 +73,9 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
     }
 
     const unsubscribe = onMenuAction((action) => {
-      if (action !== "open-settings") return;
-      void navigate({ to: "/settings" });
+      if (action === "open-settings") {
+        void navigate({ to: "/settings" });
+      }
     });
 
     return () => {
