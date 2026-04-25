@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/hooks/validate-2am-commit.js"
+            "command": "node \"$(git rev-parse --show-toplevel)/.claude/hooks/validate-2am-commit.js\""
           }
         ]
       }
