@@ -5,7 +5,7 @@ Merge 255 commits from `pingdotgg/t3code:main` into `feature/main/2am-code` whil
 
 **searchConversations feature has been dropped** — no longer needed.
 
-## Status: Phase 1 COMPLETE, Phase 2 IN PROGRESS
+## Status: Phase 3 — CORE FUNCTIONALITY RESTORED, polishing remaining features
 
 ### What's Done
 - [x] **Merge commit** — 255 upstream commits merged, ~60 conflicts resolved
@@ -16,10 +16,16 @@ Merge 255 commits from `pingdotgg/t3code:main` into `feature/main/2am-code` whil
 - [x] **DiffDefaultView/diffDefaultCollapsed** settings preserved
 - [x] **threadGenerateTitle** RPC wired into contracts and server ws.ts
 - [x] **Database migrations patched** — upstream migrations 19-26 applied to dev DB, fork migrations renumbered
+- [x] **Thread loading fixed** — missing `fork_source_thread_id`/`fork_source_message_id` columns in `getActiveThreadRowById` SQL query
+- [x] **Provider turn start fixed** — removed dropped searchConversations MCP tool (fake Zod schema rejected by updated SDK)
+- [x] **autoGenerateThreadTitle setting** — new client setting with toggle in General settings panel
+- [x] **Conversations load and prompts work** — confirmed working end-to-end
 
-### What's Broken (current blockers)
-- [ ] **Thread loading fails** — "Failed to load thread" on existing threads. Root cause: data decode errors in `ProjectionSnapshotQuery.getThreadDetailById`. Migration 026 (CanonicalizeModelSelectionOptions) SQL was run manually but threads still fail. Need to investigate further — may be additional decode issues beyond model_selection_json (e.g., event replay, message attachments, or other schema changes).
-- [ ] **Inspector WS** — `ws://127.0.0.1:27182/` connection refused. Expected — `startInspectorWs()` was in old `main.ts` which was deleted. Phase 2 item.
+### Remaining Issues
+- [ ] **Inspector WS** — `ws://127.0.0.1:27182/` connection refused. `startInspectorWs()` was in old `main.ts` which was deleted.
+- [x] **`@ts-expect-error` tech debt** — RESOLVED: `useHandleForkThread.ts` and `ChatView.tsx` are clean
+- [x] **PlanReviewPanel.tsx** — RESOLVED: already uses `readEnvironmentApi()` not old `nativeApi`
+- [x] **Test suite** — all tests pass (2 fixed: appBranding expected "2AM Code", clientPersistence missing autoGenerateThreadTitle)
 
 ## Key Architecture Changes (Upstream)
 
@@ -34,7 +40,7 @@ Merge 255 commits from `pingdotgg/t3code:main` into `feature/main/2am-code` whil
 
 ## Phase 2: Re-integrate Features into Effect RPC
 
-### 2a. ~~searchConversations~~ — DROPPED (user decision)
+### 2a. ~~searchConversations~~ — DROPPED (removed fake Zod tool from ClaudeAdapter)
 
 ### 2b. `threadGenerateTitle` endpoint — DONE (wired in contracts + ws.ts)
 
@@ -55,23 +61,18 @@ Merge 255 commits from `pingdotgg/t3code:main` into `feature/main/2am-code` whil
 
 ## Phase 3: Fix & Verify
 
-### 3a. Debug thread loading failure (CURRENT BLOCKER)
-The `subscribeThread` RPC stream fails with "Failed to load thread". Steps to debug:
-1. Add temporary logging to `ProjectionSnapshotQuery.getThreadDetailById` to surface the actual decode error
-2. Check if the issue is in thread row decode, message decode, activity decode, or event replay
-3. May need to run additional data migrations (024 backfill SQL was skipped, 025 cleanup was skipped)
-4. The `model_selection_json` was fixed (migration 026 run manually) but there may be other schema mismatches
+### 3a. ~~Debug thread loading failure~~ — FIXED
+Root cause: `getActiveThreadRowById` SQL was missing `fork_source_thread_id`/`fork_source_message_id` columns that `ProjectionThreadDbRowSchema` requires. Also removed the dropped searchConversations MCP tool whose fake Zod schema was rejected by the updated SDK, causing "Provider turn start failed".
 
 ### 3b. Auth pairing flow
 - Upstream added auth pairing (migrations 020-022). Dev mode now requires opening a pairing URL on each server restart. This is working but annoying for dev.
 
-### 3c. Route changes
+### 3c. Route changes — DONE
 - Routes changed from `/$threadId` to `/$environmentId/$threadId`
-- `useHandleForkThread.ts` and `ChatView.tsx` updated with `@ts-expect-error` — need proper fix
+- `useHandleForkThread.ts` and `ChatView.tsx` are clean — no `@ts-expect-error` remaining
 
-### 3d. Run full test suite
-- `bun run test` not yet run
-- Expect some failures from architecture changes
+### 3d. Run full test suite — DONE
+- All tests pass after fixing appBranding test (2AM Code branding) and clientPersistence test (autoGenerateThreadTitle)
 
 ### 3e. Smoke test features
 - [ ] Fork thread feature works end-to-end
@@ -102,20 +103,20 @@ The `subscribeThread` RPC stream fails with "Failed to load thread". Steps to de
 ## Commits So Far
 1. `881e9bde` — merge upstream/main (255 commits)
 2. `83cc7889` — fix: resolve post-merge type errors across web, server, contracts
+3. `fe3a960d` — fix: resolve thread loading, provider turn start, and add title generation setting
 
 ## Risk Factors
-- Thread loading failure may require deeper investigation into how the new subscription-based architecture replays events from the old format
-- Some `@ts-expect-error` comments were added to unblock typecheck — these are tech debt that need proper fixes
-- `useHandleForkThread.ts` needs refactoring for new environment-based routing and store shape
-- `PlanReviewPanel.tsx` needs refactoring for new RPC API (was using old `nativeApi`)
+- ~~Some `@ts-expect-error` comments were added to unblock typecheck~~ — RESOLVED, no ts-expect-error remaining
+- ~~`useHandleForkThread.ts` needs refactoring~~ — RESOLVED, properly uses environment-based routing
+- ~~`PlanReviewPanel.tsx` needs refactoring~~ — RESOLVED, already uses `readEnvironmentApi()`
 
 ## Success Criteria
 - [x] All upstream commits merged
 - [x] TypeScript compiles cleanly
-- [ ] Dev server starts and threads load correctly
-- [ ] All existing tests pass
+- [x] Dev server starts and threads load correctly
+- [x] New prompts can be submitted and fulfilled
+- [x] All existing tests pass
 - [ ] Fork thread feature works end-to-end
 - [ ] @Threads mention works
 - [ ] Element inspector connects
 - [ ] Diff/plan review panels render
-- [ ] New prompts can be submitted and fulfilled
