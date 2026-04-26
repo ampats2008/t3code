@@ -22,6 +22,7 @@ import {
 } from "effect";
 
 import { ServerConfig } from "./config.ts";
+import { startInspectorWs } from "./inspectorWs.ts";
 import { Keybindings } from "./keybindings.ts";
 import { Open } from "./open.ts";
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
@@ -322,6 +323,15 @@ export const makeServerRuntimeStartup = Effect.gen(function* () {
         ),
         Effect.forkScoped,
       ),
+    );
+
+    yield* Effect.logDebug("startup phase: starting inspector WebSocket");
+    yield* runStartupPhase(
+      "inspector.start",
+      Effect.gen(function* () {
+        const cleanup = startInspectorWs();
+        yield* Effect.addFinalizer(() => Effect.sync(cleanup));
+      }).pipe(Effect.forkScoped),
     );
 
     yield* Effect.logDebug("startup phase: starting orchestration reactors");

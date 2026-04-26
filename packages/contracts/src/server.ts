@@ -202,11 +202,25 @@ export const ServerConfigStreamSettingsUpdatedEvent = Schema.Struct({
 export type ServerConfigStreamSettingsUpdatedEvent =
   typeof ServerConfigStreamSettingsUpdatedEvent.Type;
 
+export const ServerConfigSkillsUpdatedPayload = Schema.Struct({
+  skills: Schema.Array(ServerSkill),
+});
+export type ServerConfigSkillsUpdatedPayload = typeof ServerConfigSkillsUpdatedPayload.Type;
+
+export const ServerConfigStreamSkillsUpdatedEvent = Schema.Struct({
+  version: Schema.Literal(1),
+  type: Schema.Literal("skillsUpdated"),
+  payload: ServerConfigSkillsUpdatedPayload,
+});
+export type ServerConfigStreamSkillsUpdatedEvent =
+  typeof ServerConfigStreamSkillsUpdatedEvent.Type;
+
 export const ServerConfigStreamEvent = Schema.Union([
   ServerConfigStreamSnapshotEvent,
   ServerConfigStreamKeybindingsUpdatedEvent,
   ServerConfigStreamProviderStatusesEvent,
   ServerConfigStreamSettingsUpdatedEvent,
+  ServerConfigStreamSkillsUpdatedEvent,
 ]);
 export type ServerConfigStreamEvent = typeof ServerConfigStreamEvent.Type;
 

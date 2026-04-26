@@ -111,6 +111,19 @@ export function applyServerConfigEvent(event: ServerConfigStreamEvent): void {
       applySettingsUpdated(event.payload.settings);
       return;
     }
+    case "skillsUpdated": {
+      const latestServerConfig = getServerConfig();
+      if (!latestServerConfig) {
+        return;
+      }
+      const nextConfig = {
+        ...latestServerConfig,
+        skills: event.payload.skills,
+      } satisfies ServerConfig;
+      resolveServerConfig(nextConfig);
+      emitServerConfigUpdated(toServerConfigUpdatedPayload(nextConfig), event.type);
+      return;
+    }
   }
 }
 

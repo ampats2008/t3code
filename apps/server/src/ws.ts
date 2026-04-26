@@ -34,6 +34,7 @@ import { GitManager } from "./git/Services/GitManager.ts";
 import { GitStatusBroadcaster } from "./git/Services/GitStatusBroadcaster.ts";
 import { Keybindings } from "./keybindings.ts";
 import { Open, resolveAvailableEditors } from "./open.ts";
+import { getCachedSkills, onSkillsCacheChange } from "./provider/skillsCache.ts";
 import { normalizeDispatchCommand } from "./orchestration/Normalizer.ts";
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
@@ -536,6 +537,7 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
             otlpMetricsEnabled: config.otlpMetricsUrl !== undefined,
           },
           settings,
+          skills: getCachedSkills(),
         };
       });
 
@@ -996,6 +998,24 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
                   payload: { settings },
                 })),
               );
+              const skillsUpdates = Stream.callback<{
+                version: 1;
+                type: "skillsUpdated";
+                payload: { skills: ReturnType<typeof getCachedSkills> };
+              }>((queue) =>
+                Effect.acquireRelease(
+                  Effect.sync(() => {
+                    onSkillsCacheChange(() => {
+                      Queue.offer(queue, {
+                        version: 1,
+                        type: "skillsUpdated",
+                        payload: { skills: getCachedSkills() },
+                      }).pipe(Effect.runFork);
+                    });
+                  }),
+                  () => Effect.sync(() => onSkillsCacheChange(() => {})),
+                ),
+              );
 
               yield* Effect.all(
                 [providerRegistry.refresh("codex"), providerRegistry.refresh("claudeAgent")],
@@ -1006,7 +1026,7 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
               ).pipe(Effect.ignoreCause({ log: true }), Effect.forkScoped);
 
               const liveUpdates = Stream.merge(
-                keybindingsUpdates,
+                Stream.merge(keybindingsUpdates, skillsUpdates),
                 Stream.merge(providerStatuses, settingsUpdates),
               );
 
