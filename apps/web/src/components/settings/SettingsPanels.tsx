@@ -601,6 +601,9 @@ export function useSettingsRestore(onRestored?: () => void) {
       ...(settings.autoOpenPlanSidebar !== DEFAULT_UNIFIED_SETTINGS.autoOpenPlanSidebar
         ? ["Task sidebar"]
         : []),
+      ...(settings.autoGenerateThreadTitle !== DEFAULT_UNIFIED_SETTINGS.autoGenerateThreadTitle
+        ? ["Auto-generate thread title"]
+        : []),
       ...(settings.enableAssistantStreaming !== DEFAULT_UNIFIED_SETTINGS.enableAssistantStreaming
         ? ["Assistant output"]
         : []),
@@ -622,6 +625,7 @@ export function useSettingsRestore(onRestored?: () => void) {
     [
       areProviderSettingsDirty,
       isGitWritingModelDirty,
+      settings.autoGenerateThreadTitle,
       settings.autoOpenPlanSidebar,
       settings.confirmThreadArchive,
       settings.confirmThreadDelete,
@@ -1152,6 +1156,32 @@ export function GeneralSettingsPanel() {
                 updateSettings({ autoOpenPlanSidebar: Boolean(checked) })
               }
               aria-label="Open the task sidebar automatically"
+            />
+          }
+        />
+
+        <SettingsRow
+          title="Auto-generate thread title"
+          description="Automatically generate a title for new threads after the first message."
+          resetAction={
+            settings.autoGenerateThreadTitle !== DEFAULT_UNIFIED_SETTINGS.autoGenerateThreadTitle ? (
+              <SettingResetButton
+                label="auto-generate thread title"
+                onClick={() =>
+                  updateSettings({
+                    autoGenerateThreadTitle: DEFAULT_UNIFIED_SETTINGS.autoGenerateThreadTitle,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.autoGenerateThreadTitle}
+              onCheckedChange={(checked) =>
+                updateSettings({ autoGenerateThreadTitle: Boolean(checked) })
+              }
+              aria-label="Auto-generate thread title"
             />
           }
         />

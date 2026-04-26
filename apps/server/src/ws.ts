@@ -699,6 +699,14 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
             Effect.gen(function* () {
               const [threadDetail, snapshotSequence] = yield* Effect.all([
                 projectionSnapshotQuery.getThreadDetailById(input.threadId).pipe(
+                  Effect.tapError((cause) =>
+                    Effect.sync(() => {
+                      console.error(
+                        `[subscribeThread] Failed to load thread ${input.threadId}:`,
+                        JSON.stringify(cause, null, 2),
+                      );
+                    }),
+                  ),
                   Effect.mapError(
                     (cause) =>
                       new OrchestrationGetSnapshotError({

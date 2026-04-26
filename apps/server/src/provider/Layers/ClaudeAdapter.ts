@@ -7,10 +7,8 @@
  * @module ClaudeAdapterLive
  */
 import {
-  createSdkMcpServer,
   type CanUseTool,
   query,
-  tool,
   type Options as ClaudeQueryOptions,
   type PermissionMode,
   type PermissionResult,
@@ -68,8 +66,6 @@ import {
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
-import { ConversationSearchRepository } from "../../persistence/Services/ConversationSearch.ts";
-import { ProjectionThreadRepository } from "../../persistence/Services/ProjectionThreads.ts";
 import {
   getClaudeModelCapabilities,
   normalizeClaudeCliEffort,
@@ -1018,9 +1014,6 @@ const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         prompt: input.prompt,
         options: input.options,
       }) as ClaudeQueryRuntime);
-
-  const conversationSearchRepository = yield* ConversationSearchRepository;
-  const projectionThreadRepository = yield* ProjectionThreadRepository;
 
   const sessions = new Map<ThreadId, ClaudeSessionContext>();
   const runtimeEventQueue = yield* Queue.unbounded<ProviderRuntimeEvent>();
@@ -2908,86 +2901,6 @@ const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         ...(typeof thinking === "boolean" ? { alwaysThinkingEnabled: thinking } : {}),
         ...(fastMode ? { fastMode: true } : {}),
       };
-
-      // Resolve the project id for the current thread so the search tool can
-      // scope its queries to the right project.  We do this best-effort: if the
-      // thread projection row is not found (e.g. during tests or early startup)
-      // the tool will simply return an empty results response.
-      const projectIdForThread = yield* projectionThreadRepository
-        .getById({ threadId })
-        .pipe(
-          Effect.map((opt) => (opt._tag === "Some" ? opt.value.projectId : undefined)),
-          Effect.orElseSucceed(() => undefined),
-        );
-
-      // Build an in-process MCP server that exposes the search-conversations
-      // custom tool.  The handler is async because it must call back into the
-      // Effect runtime via runPromise.
-      //
-      // The `tool` helper from the SDK requires Zod schemas (which is not a
-      // direct dependency of this package).  We construct the definition
-      // manually using a type cast and rely on the SDK's runtime to pass the
-      // validated inputs through – the MCP layer performs validation before
-      // calling the handler.
-      const searchConversationsTool = tool(
-        "search-conversations",
-        "Search past conversation threads by keyword. Use when the user asks you to find or reference previous conversations.",
-        // Provide a JSON-schema-compatible shape cast to the expected Zod type.
-        {
-          query: { _def: { typeName: "ZodString" }, description: "Search keywords", parse: (v: unknown) => v },
-          limit: { _def: { typeName: "ZodOptional", innerType: { _def: { typeName: "ZodNumber" } } }, description: "Max results (default 5)", parse: (v: unknown) => v, optional: () => ({ _def: { typeName: "ZodOptional" } }) },
-        } as unknown as Parameters<typeof tool>[2],
-        async (args: { query?: unknown; limit?: unknown }) => {
-          const queryStr = typeof args.query === "string" ? args.query : "";
-          if (!projectIdForThread || queryStr.length === 0) {
-            return { content: [{ type: "text" as const, text: "Search unavailable: project context not found or empty query." }] };
-          }
-          const limit = typeof args.limit === "number" && args.limit > 0 ? args.limit : 5;
-          try {
-            const rows = await runPromise(
-              conversationSearchRepository.searchAll({
-                query: queryStr,
-                projectId: projectIdForThread,
-                limit,
-              }).pipe(Effect.orElseSucceed(() => [] as const)),
-            );
-            if (rows.length === 0) {
-              return { content: [{ type: "text" as const, text: "No conversations found matching your query." }] };
-            }
-            // Group by thread
-            const byThread = new Map<string, Array<(typeof rows)[number]>>();
-            for (const row of rows) {
-              const key = row.threadId;
-              let group = byThread.get(key);
-              if (!group) {
-                group = [];
-                byThread.set(key, group);
-              }
-              group.push(row);
-            }
-            const lines: string[] = [`Found ${rows.length} result(s) across ${byThread.size} thread(s):\n`];
-            for (const [, threadRows] of byThread) {
-              const first = threadRows[0];
-              if (!first) continue;
-              const createdDate = first.threadCreatedAt.slice(0, 10);
-              lines.push(`## Thread: "${first.threadTitle}" (created ${createdDate})`);
-              for (const row of threadRows) {
-                lines.push(`- Match: ${row.snippet}`);
-              }
-              lines.push("");
-            }
-            return { content: [{ type: "text" as const, text: lines.join("\n") }] };
-          } catch {
-            return { content: [{ type: "text" as const, text: "Search failed due to an internal error." }] };
-          }
-        },
-      );
-
-      const searchMcpServer = createSdkMcpServer({
-        name: "t3-search",
-        version: "1.0.0",
-        tools: [searchConversationsTool],
-      });
 
       yield* Effect.logInfo("[ClaudeAdapter] spawning claude", {
         claudeBinaryPath,

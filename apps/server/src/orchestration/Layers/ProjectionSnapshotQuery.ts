@@ -554,7 +554,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           pending_approval_count AS "pendingApprovalCount",
           pending_user_input_count AS "pendingUserInputCount",
           has_actionable_proposed_plan AS "hasActionableProposedPlan",
-          deleted_at AS "deletedAt"
+          deleted_at AS "deletedAt",
+          fork_source_thread_id AS "forkSourceThreadId",
+          fork_source_message_id AS "forkSourceMessageId"
         FROM projection_threads
         WHERE thread_id = ${threadId}
           AND deleted_at IS NULL

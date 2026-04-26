@@ -621,6 +621,7 @@ export default function ChatView(props: ChatViewProps) {
   );
   const timestampFormat = settings.timestampFormat;
   const autoOpenPlanSidebar = settings.autoOpenPlanSidebar;
+  const autoGenerateThreadTitle = settings.autoGenerateThreadTitle;
   const navigate = useNavigate();
   const rawSearch = useSearch({
     strict: false,
@@ -2663,8 +2664,8 @@ export default function ChatView(props: ChatViewProps) {
       });
       turnStartSucceeded = true;
 
-      // Queue auto-rename after the first message.
-      if (isFirstMessage) {
+      // Queue auto-rename after the first message (if enabled in settings).
+      if (isFirstMessage && autoGenerateThreadTitle) {
         pendingAutoRenameRef.current = true;
       }
     })().catch(async (err: unknown) => {
