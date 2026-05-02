@@ -49,8 +49,10 @@ import {
   type ClipboardEventHandler,
   type ReactElement,
   type Ref,
+  type SVGProps,
 } from "react";
 
+import { CursorIcon, VisualStudioCode } from "./Icons";
 import {
   clampCollapsedComposerCursor,
   collapseExpandedComposerCursor,
@@ -324,6 +326,110 @@ class ComposerElementRefNode extends DecoratorNode<ReactElement> {
 
 function $createComposerElementRefNode(text: string): ComposerElementRefNode {
   return $applyNodeReplacement(new ComposerElementRefNode(text));
+}
+
+// ---------------------------------------------------------------------------
+// ComposerCodeRefNode — VS Code extension code selection chip
+// ---------------------------------------------------------------------------
+
+interface CodeRefData {
+  file: string;
+  startLine: number;
+  endLine: number;
+  text: string;
+  language: string;
+}
+
+type SerializedComposerCodeRefNode = Spread<
+  { data: CodeRefData; type: "composer-code-ref"; version: 1 },
+  SerializedLexicalNode
+>;
+
+function useEditorIcon(): React.FC<SVGProps<SVGSVGElement>> {
+  const stored = localStorage.getItem("t3code:last-editor");
+  // Parse the JSON string stored by useLocalStorage, fall back to raw value
+  let editorId: string | null = null;
+  if (stored) {
+    try { editorId = JSON.parse(stored); } catch { editorId = stored; }
+  }
+  if (editorId === "cursor") return CursorIcon;
+  return VisualStudioCode;
+}
+
+function ComposerCodeRefDecorator({ data }: { data: CodeRefData }) {
+  const basename = data.file.split(/[\\/]/).pop() ?? data.file;
+  const lineRange =
+    data.startLine === data.endLine
+      ? `:${data.startLine}`
+      : `:${data.startLine}-${data.endLine}`;
+  const EditorIcon = useEditorIcon();
+  return (
+    <span className={COMPOSER_INLINE_CHIP_CLASS_NAME} contentEditable={false} spellCheck={false}>
+      <EditorIcon aria-hidden="true" className={COMPOSER_INLINE_CHIP_ICON_CLASS_NAME} />
+      <span className={COMPOSER_INLINE_CHIP_LABEL_CLASS_NAME}>{basename}{lineRange}</span>
+    </span>
+  );
+}
+
+class ComposerCodeRefNode extends DecoratorNode<ReactElement> {
+  __data: CodeRefData;
+
+  static override getType(): string {
+    return "composer-code-ref";
+  }
+
+  static override clone(node: ComposerCodeRefNode): ComposerCodeRefNode {
+    return new ComposerCodeRefNode(node.__data, node.__key);
+  }
+
+  static override importJSON(
+    serializedNode: SerializedComposerCodeRefNode,
+  ): ComposerCodeRefNode {
+    return $createComposerCodeRefNode(serializedNode.data);
+  }
+
+  constructor(data: CodeRefData, key?: NodeKey) {
+    super(key);
+    this.__data = data;
+  }
+
+  override exportJSON(): SerializedComposerCodeRefNode {
+    return {
+      ...super.exportJSON(),
+      data: this.__data,
+      type: "composer-code-ref",
+      version: 1,
+    };
+  }
+
+  override createDOM(): HTMLElement {
+    const span = document.createElement("span");
+    span.className = "inline-flex align-middle leading-none";
+    return span;
+  }
+
+  override updateDOM(): false {
+    return false;
+  }
+
+  override getTextContent(): string {
+    const d = this.__data;
+    const lineRange =
+      d.startLine === d.endLine ? `${d.startLine}` : `${d.startLine}-${d.endLine}`;
+    return `[${d.file}:${lineRange}]\n\`\`\`${d.language}\n${d.text}\n\`\`\``;
+  }
+
+  override isInline(): true {
+    return true;
+  }
+
+  override decorate(): ReactElement {
+    return <ComposerCodeRefDecorator data={this.__data} />;
+  }
+}
+
+function $createComposerCodeRefNode(data: CodeRefData): ComposerCodeRefNode {
+  return $applyNodeReplacement(new ComposerCodeRefNode(data));
 }
 
 const SKILL_CHIP_ICON_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>`;
@@ -991,8 +1097,10 @@ export interface ComposerPromptEditorHandle {
     expandedCursor: number;
     terminalContextIds: string[];
   };
-  /** Dev-only: insert an element inspector chip at the current cursor position. */
+  /** Insert an element inspector chip at the current cursor position. */
   insertElementRef: (text: string) => void;
+  /** Insert a code selection chip from VS Code / Cursor at the current cursor position. */
+  insertCodeRef: (data: { file: string; startLine: number; endLine: number; text: string; language: string }) => void;
 }
 
 interface ComposerPromptEditorProps {
@@ -1686,6 +1794,31 @@ function ComposerPromptEditorInner({
     [editor],
   );
 
+  const insertCodeRef = useCallback(
+    (data: { file: string; startLine: number; endLine: number; text: string; language: string }) => {
+      const rootElement = editor.getRootElement();
+      if (!rootElement) return;
+      rootElement.focus();
+      editor.update(() => {
+        const cursor = snapshotRef.current.cursor;
+        $setSelectionAtComposerOffset(cursor);
+        const selection = $getSelection();
+        if (!$isRangeSelection(selection)) return;
+        const currentText = snapshotRef.current.value;
+        if (cursor > 0 && currentText[cursor - 1] !== " ") {
+          selection.insertText(" ");
+        }
+        const chipNode = $createComposerCodeRefNode(data);
+        selection.insertNodes([chipNode]);
+        const afterSelection = $getSelection();
+        if ($isRangeSelection(afterSelection)) {
+          afterSelection.insertText(" ");
+        }
+      });
+    },
+    [editor],
+  );
+
   useImperativeHandle(
     editorRef,
     () => ({
@@ -1703,8 +1836,9 @@ function ComposerPromptEditorInner({
       },
       readSnapshot,
       insertElementRef,
+      insertCodeRef,
     }),
-    [focusAt, readSnapshot, insertElementRef],
+    [focusAt, readSnapshot, insertElementRef, insertCodeRef],
   );
 
   const handleEditorChange = useCallback((editorState: EditorState) => {
@@ -1819,7 +1953,7 @@ export const ComposerPromptEditor = forwardRef<
     () => ({
       namespace: "t3tools-composer-editor",
       editable: true,
-      nodes: [ComposerMentionNode, ComposerSkillNode, ComposerTerminalContextNode, ComposerElementRefNode],
+      nodes: [ComposerMentionNode, ComposerSkillNode, ComposerTerminalContextNode, ComposerElementRefNode, ComposerCodeRefNode],
       editorState: () => {
         $setComposerEditorPrompt(
           initialValueRef.current,

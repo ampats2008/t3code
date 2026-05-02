@@ -12,9 +12,11 @@ import { WebSocketServer, WebSocket } from "ws";
 import http from "node:http";
 
 interface InspectorMessage {
-  type: "element-ref";
-  chip: string;
+  type: string;
+  [key: string]: unknown;
 }
+
+const KNOWN_TYPES = new Set(["element-ref", "code-ref", "open-file"]);
 
 interface AckMessage {
   type: "ack";
@@ -43,7 +45,7 @@ export function startInspectorWs(): () => void {
         const messageText = typeof raw === "string" ? raw : Buffer.from(raw as any).toString("utf8");
         const message = JSON.parse(messageText) as InspectorMessage;
 
-        if (message.type === "element-ref") {
+        if (KNOWN_TYPES.has(message.type)) {
           const otherClients = [...clients].filter(c => c !== ws && c.readyState === WebSocket.OPEN);
 
           // Send ack to sender

@@ -23,6 +23,7 @@ import {
 
 import { ServerConfig } from "./config.ts";
 import { startInspectorWs } from "./inspectorWs.ts";
+import { installVscodeExtension } from "./installVscodeExtension.ts";
 import { Keybindings } from "./keybindings.ts";
 import { Open } from "./open.ts";
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
@@ -332,6 +333,14 @@ export const makeServerRuntimeStartup = Effect.gen(function* () {
         const cleanup = startInspectorWs();
         yield* Effect.addFinalizer(() => Effect.sync(cleanup));
       }).pipe(Effect.forkScoped),
+    );
+
+    yield* Effect.logDebug("startup phase: auto-installing VS Code extension");
+    yield* runStartupPhase(
+      "vscode-extension.install",
+      Effect.promise(() => installVscodeExtension()).pipe(
+        Effect.ignore,
+      ),
     );
 
     yield* Effect.logDebug("startup phase: starting orchestration reactors");

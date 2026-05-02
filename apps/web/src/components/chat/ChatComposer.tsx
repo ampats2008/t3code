@@ -274,6 +274,9 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
 const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(props: {
   compact: boolean;
   activeContextWindow: ReturnType<typeof deriveLatestContextWindowSnapshot>;
+  guardrails: import("./ContextWindowMeter").TurnGuardrails;
+  onGuardrailsChange: (guardrails: import("./ContextWindowMeter").TurnGuardrails) => void;
+  showGuardrails: boolean;
   isPreparingWorktree: boolean;
   pendingAction: {
     questionIndex: number;
@@ -295,7 +298,14 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
 }) {
   return (
     <>
-      {props.activeContextWindow ? <ContextWindowMeter usage={props.activeContextWindow} /> : null}
+      {props.activeContextWindow ? (
+        <ContextWindowMeter
+          usage={props.activeContextWindow}
+          guardrails={props.guardrails}
+          onGuardrailsChange={props.onGuardrailsChange}
+          showGuardrails={props.showGuardrails}
+        />
+      ) : null}
       {props.isPreparingWorktree ? (
         <span className="text-muted-foreground/70 text-xs">Preparing worktree...</span>
       ) : null}
@@ -353,6 +363,7 @@ export interface ChatComposerHandle {
     selectedProvider: ProviderKind;
     selectedModel: string;
     selectedProviderModels: ReadonlyArray<ServerProvider["models"][number]>;
+    guardrails: import("./ContextWindowMeter").TurnGuardrails;
   };
   /** Get the current diff review state for use in send. */
   getDiffReviewContext: () => {
@@ -662,6 +673,32 @@ export const ChatComposer = memo(
     );
 
     // ------------------------------------------------------------------
+    // Per-conversation guardrails (session-only, keyed by thread)
+    // ------------------------------------------------------------------
+    const guardrailsByThreadRef = useRef(
+      new Map<string, import("./ContextWindowMeter").TurnGuardrails>(),
+    );
+    const threadId = activeThread?.id ?? null;
+    const [guardrails, setGuardrailsState] = useState<
+      import("./ContextWindowMeter").TurnGuardrails
+    >(() => (threadId ? guardrailsByThreadRef.current.get(threadId) ?? {} : {}));
+    const prevThreadIdRef = useRef(threadId);
+    if (prevThreadIdRef.current !== threadId) {
+      prevThreadIdRef.current = threadId;
+      setGuardrailsState(threadId ? guardrailsByThreadRef.current.get(threadId) ?? {} : {});
+    }
+    const setGuardrails = useCallback(
+      (next: import("./ContextWindowMeter").TurnGuardrails) => {
+        setGuardrailsState(next);
+        if (threadId) {
+          guardrailsByThreadRef.current.set(threadId, next);
+        }
+      },
+      [threadId],
+    );
+    const showGuardrails = selectedProvider === "claudeAgent";
+
+    // ------------------------------------------------------------------
     // Composer-local state
     // ------------------------------------------------------------------
     const [composerCursor, setComposerCursor] = useState(() =>
@@ -691,8 +728,8 @@ export const ChatComposer = memo(
     const activeComposerMenuItemRef = useRef<ComposerCommandItem | null>(null);
     const dragDepthRef = useRef(0);
 
-    // Element inspector insertion bridge (dev-only) — inserts a chip node
-    // into the composer when an element is selected in the Chrome extension.
+    // Element inspector insertion bridge — inserts a chip node into the
+    // composer when an element is selected in the Chrome extension.
     useEffect(() => {
       const handler = (event: Event) => {
         const { text } = (event as CustomEvent<{ text: string }>).detail;
@@ -700,6 +737,23 @@ export const ChatComposer = memo(
       };
       window.addEventListener("element-inspector:insert", handler);
       return () => window.removeEventListener("element-inspector:insert", handler);
+    }, []);
+
+    // VS Code extension bridge — inserts a code selection chip when the user
+    // sends a selection from VS Code / Cursor via the inspector WS.
+    useEffect(() => {
+      const handler = (event: Event) => {
+        const detail = (event as CustomEvent).detail as {
+          file: string;
+          startLine: number;
+          endLine: number;
+          text: string;
+          language: string;
+        };
+        composerEditorRef.current?.insertCodeRef(detail);
+      };
+      window.addEventListener("vscode:code-ref", handler);
+      return () => window.removeEventListener("vscode:code-ref", handler);
     }, []);
 
     // ------------------------------------------------------------------
@@ -1718,6 +1772,7 @@ export const ChatComposer = memo(
           selectedProvider,
           selectedModel,
           selectedProviderModels,
+          guardrails,
         }),
         getDiffReviewContext: () => ({
           showDiffReviewPrompt: diffReviewComposer.showDiffReviewPrompt,
@@ -1743,6 +1798,7 @@ export const ChatComposer = memo(
         selectedProvider,
         selectedProviderModels,
         diffReviewComposer,
+        guardrails,
       ],
     );
 
@@ -2027,6 +2083,9 @@ export const ChatComposer = memo(
                   <ComposerFooterPrimaryActions
                     compact={isComposerPrimaryActionsCompact}
                     activeContextWindow={activeContextWindow}
+                    guardrails={guardrails}
+                    onGuardrailsChange={setGuardrails}
+                    showGuardrails={showGuardrails}
                     pendingAction={pendingPrimaryAction}
                     isRunning={phase === "running"}
                     showDiffReviewPrompt={

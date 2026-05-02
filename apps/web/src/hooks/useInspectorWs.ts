@@ -1,7 +1,7 @@
 /**
  * useInspectorWs - Connect to inspector WebSocket server and relay element refs.
  *
- * Only activates in dev mode. Connects to ws://127.0.0.1:27182 and forwards
+ * Connects to ws://127.0.0.1:27182 and forwards
  * incoming element-ref messages as CustomEvents to the document.
  *
  * Uses a module-level singleton pattern: only ONE WebSocket connection is ever
@@ -12,14 +12,14 @@
  * - Singleton connection (no duplicates from strict mode)
  * - Auto-reconnect with exponential backoff (1s, 2s, 4s, max 8s)
  * - Graceful cleanup when all consumers unmount
- * - Dev-mode only
+ * - Works in both dev and production builds
  */
 
 import { useEffect } from "react";
 
 interface InspectorMessage {
-  type: "element-ref";
-  chip: string;
+  type: string;
+  [key: string]: unknown;
 }
 
 const INSPECTOR_WS_URL = "ws://127.0.0.1:27182";
@@ -54,6 +54,10 @@ function connectSingleton() {
             new CustomEvent("element-inspector:insert", {
               detail: { text: message.chip },
             }),
+          );
+        } else if (message.type === "code-ref") {
+          window.dispatchEvent(
+            new CustomEvent("vscode:code-ref", { detail: message }),
           );
         }
       } catch {
@@ -108,8 +112,6 @@ function disconnectSingleton() {
 // ── Hook ──────────────────────────────────────────────────────────────────
 export function useInspectorWs() {
   useEffect(() => {
-    if (!import.meta.env.DEV) return;
-
     refCount++;
     shuttingDown = false;
 
@@ -126,6 +128,18 @@ export function useInspectorWs() {
       }
     };
   }, []);
+}
+
+/**
+ * Send a message to all other inspector WS clients (e.g. VS Code extension).
+ * Returns true if the message was sent, false if not connected.
+ */
+export function sendInspectorMessage(msg: object): boolean {
+  if (singletonWs && singletonWs.readyState === WebSocket.OPEN) {
+    singletonWs.send(JSON.stringify(msg));
+    return true;
+  }
+  return false;
 }
 
 // ── HMR cleanup ──────────────────────────────────────────────────────────
