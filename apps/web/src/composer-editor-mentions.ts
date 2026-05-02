@@ -20,15 +20,7 @@ export type ComposerPromptSegment =
       type: "terminal-context";
       context: TerminalContextDraft | null;
     }
-  | {
-      type: "thread-mention";
-      threadId: string;
-      threadTitle: string;
-    };
-
 const MENTION_TOKEN_REGEX = /(^|\s)@([^\s@]+)(?=\s)/g;
-// Matches @Thread:<threadId>:<threadTitle> tokens — note the title can contain colons
-const THREAD_MENTION_TOKEN_REGEX = /^Thread:([^:]+):(.+)$/;
 const SKILL_TOKEN_REGEX = /(^|\s)\$([a-zA-Z][a-zA-Z0-9:_-]*)(?=\s)/g;
 
 function rangeIncludesIndex(start: number, end: number, index: number): boolean {
@@ -185,14 +177,7 @@ function splitPromptTextIntoComposerSegments(text: string): ComposerPromptSegmen
     }
 
     if (match.type === "mention") {
-      const threadMatch = THREAD_MENTION_TOKEN_REGEX.exec(match.value);
-      if (threadMatch) {
-        const threadId = threadMatch[1] ?? "";
-        const threadTitle = threadMatch[2] ?? "";
-        segments.push({ type: "thread-mention", threadId, threadTitle });
-      } else {
-        segments.push({ type: "mention", path: match.value });
-      }
+      segments.push({ type: "mention", path: match.value });
     } else {
       segments.push({ type: "skill", name: match.value });
     }

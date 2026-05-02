@@ -137,17 +137,9 @@ const UploadChatImageAttachment = Schema.Struct({
 });
 export type UploadChatImageAttachment = typeof UploadChatImageAttachment.Type;
 
-// Thread mention attachment for cross-thread context
-export const ThreadMentionAttachment = Schema.Struct({
-  type: Schema.Literal("thread-reference"),
-  threadId: ThreadId,
-  threadTitle: TrimmedNonEmptyString,
-});
-export type ThreadMentionAttachment = typeof ThreadMentionAttachment.Type;
-
-export const ChatAttachment = Schema.Union([ChatImageAttachment, ThreadMentionAttachment]);
+export const ChatAttachment = ChatImageAttachment;
 export type ChatAttachment = typeof ChatAttachment.Type;
-const UploadChatAttachment = Schema.Union([UploadChatImageAttachment, ThreadMentionAttachment]);
+const UploadChatAttachment = UploadChatImageAttachment;
 export type UploadChatAttachment = typeof UploadChatAttachment.Type;
 
 export const ProjectScriptIcon = Schema.Literals([

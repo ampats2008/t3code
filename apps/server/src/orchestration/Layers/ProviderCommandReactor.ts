@@ -648,38 +648,8 @@ const make = Effect.gen(function* () {
         ),
       );
 
-    // Expand thread-reference attachments into context text
     let resolvedMessageText = message.text;
-    let resolvedAttachments = message.attachments;
-    if (message.attachments && message.attachments.length > 0) {
-      const threadRefs = message.attachments.filter((a) => a.type === "thread-reference");
-      if (threadRefs.length > 0) {
-        const readModel = yield* orchestrationEngine.getReadModel();
-        const summaries: string[] = [];
-        for (const ref of threadRefs) {
-          const refThread = readModel.threads.find((t) => t.id === ref.threadId);
-          if (!refThread) {
-            summaries.push(`[Thread '${ref.threadTitle}' not found]`);
-            continue;
-          }
-          const userMsgs = refThread.messages.filter((m) => m.role === "user").slice(0, 5);
-          const assistantMsgs = refThread.messages.filter((m) => m.role === "assistant").slice(0, 5);
-          const selected = [...userMsgs, ...assistantMsgs].toSorted((a, b) =>
-            a.createdAt.localeCompare(b.createdAt),
-          );
-          const lines = selected.map((m) => {
-            const text = m.text.length > 500 ? m.text.slice(0, 500) + "..." : m.text;
-            return `[${m.role}]: ${text}`;
-          });
-          summaries.push(
-            `Context from thread '${ref.threadTitle}':\n${lines.join("\n\n")}`,
-          );
-        }
-        const contextBlock = summaries.join("\n\n---\n\n");
-        resolvedMessageText = `${contextBlock}\n\n---\n\n${message.text}`;
-        resolvedAttachments = message.attachments.filter((a) => a.type !== "thread-reference");
-      }
-    }
+    const resolvedAttachments = message.attachments;
 
     // For forked threads, prepend the copied conversation history as context
     // so the agent is aware of what was discussed before the fork point.

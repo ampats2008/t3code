@@ -24,7 +24,7 @@ import { Effect, Fiber, Layer, Option, Random, Stream } from "effect";
 import { attachmentRelativePath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
-import { ConversationSearchRepository } from "../../persistence/Services/ConversationSearch.ts";
+
 import { ProjectionThreadRepository } from "../../persistence/Services/ProjectionThreads.ts";
 import { ProviderAdapterValidationError } from "../Errors.ts";
 import { ClaudeAdapter } from "../Services/ClaudeAdapter.ts";
@@ -165,13 +165,6 @@ function makeHarness(config?: {
       : {}),
   };
 
-  const noopSearchRepository = Layer.succeed(ConversationSearchRepository, {
-    searchAll: () => Effect.succeed([]),
-    indexMessage: () => Effect.void,
-    updateThreadTitle: () => Effect.void,
-    removeThread: () => Effect.void,
-  });
-
   const noopProjectionThreadRepository = Layer.succeed(ProjectionThreadRepository, {
     upsert: () => Effect.void,
     getById: () => Effect.succeed(Option.none()),
@@ -189,7 +182,6 @@ function makeHarness(config?: {
       ),
       Layer.provideMerge(ServerSettingsService.layerTest()),
       Layer.provideMerge(NodeServices.layer),
-      Layer.provideMerge(noopSearchRepository),
       Layer.provideMerge(noopProjectionThreadRepository),
     ),
     query,
@@ -1298,12 +1290,6 @@ describe("ClaudeAdapterLive", () => {
       Layer.provideMerge(ServerConfig.layerTest("/tmp/claude-adapter-test", "/tmp")),
       Layer.provideMerge(ServerSettingsService.layerTest()),
       Layer.provideMerge(NodeServices.layer),
-      Layer.provideMerge(Layer.succeed(ConversationSearchRepository, {
-        searchAll: () => Effect.succeed([]),
-        indexMessage: () => Effect.void,
-        updateThreadTitle: () => Effect.void,
-        removeThread: () => Effect.void,
-      })),
       Layer.provideMerge(Layer.succeed(ProjectionThreadRepository, {
         upsert: () => Effect.void,
         getById: () => Effect.succeed(Option.none()),
@@ -1395,12 +1381,6 @@ describe("ClaudeAdapterLive", () => {
       Layer.provideMerge(ServerConfig.layerTest("/tmp/claude-adapter-test", "/tmp")),
       Layer.provideMerge(ServerSettingsService.layerTest()),
       Layer.provideMerge(NodeServices.layer),
-      Layer.provideMerge(Layer.succeed(ConversationSearchRepository, {
-        searchAll: () => Effect.succeed([]),
-        indexMessage: () => Effect.void,
-        updateThreadTitle: () => Effect.void,
-        removeThread: () => Effect.void,
-      })),
       Layer.provideMerge(Layer.succeed(ProjectionThreadRepository, {
         upsert: () => Effect.void,
         getById: () => Effect.succeed(Option.none()),

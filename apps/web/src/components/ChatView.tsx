@@ -46,7 +46,6 @@ import {
   collapseExpandedComposerCursor,
   parseStandaloneComposerSlashCommand,
 } from "../composer-logic";
-import { splitPromptIntoComposerSegments } from "../composer-editor-mentions";
 import {
   deriveCompletionDividerBeforeEntryId,
   derivePendingApprovals,
@@ -103,8 +102,6 @@ import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../rightPanelLayout";
 import { BranchToolbar } from "./BranchToolbar";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
 import PlanSidebar from "./PlanSidebar";
-import { PlanReviewPanel } from "./plan-review";
-import { usePlanReviewStore } from "../planReviewStore";
 import ThreadTerminalDrawer from "./ThreadTerminalDrawer";
 import { ChevronDownIcon } from "lucide-react";
 import { cn, randomUUID } from "~/lib/utils";
@@ -2042,13 +2039,6 @@ export default function ChatView(props: ChatViewProps) {
   ]);
 
   useEffect(() => {
-    if (sidebarProposedPlan?.id) {
-      usePlanReviewStore.getState().clearAnnotations(sidebarProposedPlan.id);
-      usePlanReviewStore.getState().clearEditedMarkdown(sidebarProposedPlan.id);
-    }
-  }, [sidebarProposedPlan?.id]);
-
-  useEffect(() => {
     setIsRevertingCheckpoint(false);
   }, [activeThread?.id]);
 
@@ -2518,14 +2508,6 @@ export default function ChatView(props: ChatViewProps) {
       effort: ctxSelectedPromptEffort,
       text: messageTextForSend || IMAGE_ONLY_BOOTSTRAP_PROMPT,
     });
-    // Extract thread-mention segments from the prompt to include as thread-reference attachments
-    const threadMentionAttachments = splitPromptIntoComposerSegments(promptForSend)
-      .filter((seg) => seg.type === "thread-mention")
-      .map((seg) => ({
-        type: "thread-reference" as const,
-        threadId: seg.threadId as ThreadId,
-        threadTitle: seg.threadTitle,
-      }));
     const turnAttachmentsPromise = Promise.all(
       composerImagesSnapshot.map(async (image) => ({
         type: "image" as const,
@@ -2534,7 +2516,7 @@ export default function ChatView(props: ChatViewProps) {
         sizeBytes: image.sizeBytes,
         dataUrl: await readFileAsDataUrl(image.file),
       })),
-    ).then((imageAttachments) => [...imageAttachments, ...threadMentionAttachments]);
+    );
     const optimisticAttachments = composerImagesSnapshot.map((image) => ({
       type: "image" as const,
       id: image.id,
@@ -3543,20 +3525,6 @@ export default function ChatView(props: ChatViewProps) {
 
         {/* Plan sidebar */}
         {planSidebarOpen && !shouldUsePlanSidebarSheet ? (
-          sidebarProposedPlan && !sidebarProposedPlan.implementedAt ? (
-            <PlanReviewPanel
-              activePlan={activePlan}
-              activeProposedPlan={sidebarProposedPlan}
-              environmentId={environmentId}
-              markdownCwd={gitCwd ?? undefined}
-              workspaceRoot={activeWorkspaceRoot}
-              timestampFormat={timestampFormat}
-              onSubmitReview={(text, interactionMode) => {
-                void onSubmitPlanFollowUp({ text, interactionMode });
-              }}
-              onClose={closePlanSidebar}
-            />
-          ) : (
             <PlanSidebar
               activePlan={activePlan}
               activeProposedPlan={sidebarProposedPlan}
@@ -3568,7 +3536,6 @@ export default function ChatView(props: ChatViewProps) {
               mode="sidebar"
               onClose={closePlanSidebar}
             />
-          )
         ) : null}
       </div>
       {/* end horizontal flex container */}
@@ -3592,20 +3559,6 @@ export default function ChatView(props: ChatViewProps) {
       ))}
       {shouldUsePlanSidebarSheet ? (
         <RightPanelSheet open={planSidebarOpen} onClose={closePlanSidebar}>
-          {sidebarProposedPlan && !sidebarProposedPlan.implementedAt ? (
-            <PlanReviewPanel
-              activePlan={activePlan}
-              activeProposedPlan={sidebarProposedPlan}
-              environmentId={environmentId}
-              markdownCwd={gitCwd ?? undefined}
-              workspaceRoot={activeWorkspaceRoot}
-              timestampFormat={timestampFormat}
-              onSubmitReview={(text, interactionMode) => {
-                void onSubmitPlanFollowUp({ text, interactionMode });
-              }}
-              onClose={closePlanSidebar}
-            />
-          ) : (
             <PlanSidebar
               activePlan={activePlan}
               activeProposedPlan={sidebarProposedPlan}
@@ -3617,7 +3570,6 @@ export default function ChatView(props: ChatViewProps) {
               mode="sheet"
               onClose={closePlanSidebar}
             />
-          )}
         </RightPanelSheet>
       ) : null}
 

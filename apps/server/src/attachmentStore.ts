@@ -62,8 +62,6 @@ export function attachmentRelativePath(attachment: ChatAttachment): string | nul
       });
       return `${attachment.id}${extension}`;
     }
-    case "thread-reference":
-      return null;
   }
 }
 

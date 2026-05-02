@@ -28,7 +28,7 @@ import {
   ProjectionTurnRepository,
 } from "../../persistence/Services/ProjectionTurns.ts";
 import { ProjectionThreadRepository } from "../../persistence/Services/ProjectionThreads.ts";
-import { ConversationSearchRepositoryLive } from "../../persistence/Layers/ConversationSearch.ts";
+
 import { ProjectionPendingApprovalRepositoryLive } from "../../persistence/Layers/ProjectionPendingApprovals.ts";
 import { ProjectionProjectRepositoryLive } from "../../persistence/Layers/ProjectionProjects.ts";
 import { ProjectionStateRepositoryLive } from "../../persistence/Layers/ProjectionState.ts";
@@ -38,7 +38,7 @@ import { ProjectionThreadProposedPlanRepositoryLive } from "../../persistence/La
 import { ProjectionThreadSessionRepositoryLive } from "../../persistence/Layers/ProjectionThreadSessions.ts";
 import { ProjectionTurnRepositoryLive } from "../../persistence/Layers/ProjectionTurns.ts";
 import { ProjectionThreadRepositoryLive } from "../../persistence/Layers/ProjectionThreads.ts";
-import { ConversationSearchRepository } from "../../persistence/Services/ConversationSearch.ts";
+
 import { ServerConfig } from "../../config.ts";
 import {
   OrchestrationProjectionPipeline,
@@ -61,7 +61,6 @@ export const ORCHESTRATION_PROJECTOR_NAMES = {
   threadTurns: "projection.thread-turns",
   checkpoints: "projection.checkpoints",
   pendingApprovals: "projection.pending-approvals",
-  conversationSearch: "projection.conversation-search",
 } as const;
 
 type ProjectorName =
@@ -457,8 +456,6 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
     const projectionThreadSessionRepository = yield* ProjectionThreadSessionRepository;
     const projectionTurnRepository = yield* ProjectionTurnRepository;
     const projectionPendingApprovalRepository = yield* ProjectionPendingApprovalRepository;
-    const conversationSearchRepository = yield* ConversationSearchRepository;
-
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const serverConfig = yield* ServerConfig;
@@ -1418,101 +1415,6 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
       }
     });
 
-    const applyConversationSearchProjection: ProjectorDefinition["apply"] = (
-      event,
-      _attachmentSideEffects,
-    ) =>
-      Effect.gen(function* () {
-        switch (event.type) {
-          case "thread.message-sent": {
-            yield* conversationSearchRepository.indexMessage({
-              threadId: event.payload.threadId,
-              messageId: event.payload.messageId,
-              role: event.payload.role,
-              text: event.payload.text,
-            });
-            return;
-          }
-
-          case "thread.created": {
-            yield* conversationSearchRepository.updateThreadTitle({
-              threadId: event.payload.threadId,
-              title: event.payload.title,
-            });
-            return;
-          }
-
-          case "thread.forked": {
-            // Index the forked thread's title
-            yield* conversationSearchRepository.updateThreadTitle({
-              threadId: event.payload.threadId,
-              title: event.payload.title,
-            });
-            // Index all copied messages in the forked thread
-            const copiedMessageIdSet = new Set(event.payload.copiedMessageIds as unknown as string[]);
-            if (copiedMessageIdSet.size > 0) {
-              const sourceMessages = yield* projectionThreadMessageRepository.listByThreadId({
-                threadId: event.payload.sourceThreadId,
-              });
-              yield* Effect.forEach(
-                sourceMessages.filter((msg) => copiedMessageIdSet.has(msg.messageId)),
-                (msg) =>
-                  conversationSearchRepository.indexMessage({
-                    threadId: event.payload.threadId,
-                    messageId: msg.messageId,
-                    role: msg.role,
-                    text: msg.text,
-                  }),
-                { concurrency: 1 },
-              );
-            }
-            return;
-          }
-
-          case "thread.meta-updated": {
-            if (event.payload.title !== undefined) {
-              yield* conversationSearchRepository.updateThreadTitle({
-                threadId: event.payload.threadId,
-                title: event.payload.title,
-              });
-            }
-            return;
-          }
-
-          case "thread.deleted": {
-            yield* conversationSearchRepository.removeThread({
-              threadId: event.payload.threadId,
-            });
-            return;
-          }
-
-          case "thread.reverted": {
-            // Delete all FTS message entries for this thread, then re-index retained messages
-            yield* sql`DELETE FROM projection_messages_fts WHERE thread_id = ${event.payload.threadId}`.pipe(
-              Effect.mapError(toPersistenceSqlError("ConversationSearchProjection.revert:delete")),
-            );
-            const retainedMessages = yield* projectionThreadMessageRepository.listByThreadId({
-              threadId: event.payload.threadId,
-            });
-            yield* Effect.forEach(
-              retainedMessages,
-              (msg) =>
-                conversationSearchRepository.indexMessage({
-                  threadId: msg.threadId,
-                  messageId: msg.messageId,
-                  role: msg.role,
-                  text: msg.text,
-                }),
-              { concurrency: 1 },
-            );
-            return;
-          }
-
-          default:
-            return;
-        }
-      });
-
     const projectors: ReadonlyArray<ProjectorDefinition> = [
       {
         name: ORCHESTRATION_PROJECTOR_NAMES.projects,
@@ -1549,10 +1451,6 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
       {
         name: ORCHESTRATION_PROJECTOR_NAMES.threads,
         apply: applyThreadsProjection,
-      },
-      {
-        name: ORCHESTRATION_PROJECTOR_NAMES.conversationSearch,
-        apply: applyConversationSearchProjection,
       },
     ];
 
@@ -1657,5 +1555,4 @@ export const OrchestrationProjectionPipelineLive = Layer.effect(
   Layer.provideMerge(ProjectionTurnRepositoryLive),
   Layer.provideMerge(ProjectionPendingApprovalRepositoryLive),
   Layer.provideMerge(ProjectionStateRepositoryLive),
-  Layer.provideMerge(ConversationSearchRepositoryLive),
 );
