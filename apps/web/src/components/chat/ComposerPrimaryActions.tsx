@@ -16,6 +16,7 @@ interface ComposerPrimaryActionsProps {
   compact: boolean;
   pendingAction: PendingActionState | null;
   isRunning: boolean;
+  showDiffReviewPrompt: boolean;
   showPlanFollowUpPrompt: boolean;
   promptHasText: boolean;
   isSendBusy: boolean;
@@ -49,6 +50,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   compact,
   pendingAction,
   isRunning,
+  showDiffReviewPrompt,
   showPlanFollowUpPrompt,
   promptHasText,
   isSendBusy,
@@ -118,6 +120,19 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
           <rect x="2" y="2" width="8" height="8" rx="1.5" />
         </svg>
       </button>
+    );
+  }
+
+  if (showDiffReviewPrompt) {
+    return (
+      <Button
+        type="submit"
+        size="sm"
+        className="h-9 rounded-full px-4 sm:h-8"
+        disabled={isSendBusy || isConnecting}
+      >
+        {isConnecting || isSendBusy ? "Sending..." : "Submit Review"}
+      </Button>
     );
   }
 
