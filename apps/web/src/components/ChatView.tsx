@@ -3387,6 +3387,7 @@ export default function ChatView(props: ChatViewProps) {
               timestampFormat={timestampFormat}
               workspaceRoot={activeWorkspaceRoot}
               onIsAtEndChange={onIsAtEndChange}
+              skills={activeProviderStatus?.skills}
             />
 
             {/* scroll to bottom pill — shown when user has scrolled away from the bottom */}

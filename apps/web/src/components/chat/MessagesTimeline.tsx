@@ -1,4 +1,4 @@
-import { type EnvironmentId, type MessageId, type ThreadForkInfo, type ThreadId, type TurnId } from "@t3tools/contracts";
+import { type EnvironmentId, type MessageId, type ServerProviderSkill, type ThreadForkInfo, type ThreadId, type TurnId } from "@t3tools/contracts";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -100,6 +100,7 @@ interface TimelineRowSharedState {
   onForkAtMessage?: ((messageId: MessageId) => void) | undefined;
   threadForks: ThreadForkInfo[];
   onNavigateToThread?: ((threadId: ThreadId) => void) | undefined;
+  skills: ReadonlyArray<ServerProviderSkill>;
 }
 
 const TimelineRowCtx = createContext<TimelineRowSharedState>(null!);
@@ -133,6 +134,7 @@ interface MessagesTimelineProps {
   timestampFormat: TimestampFormat;
   workspaceRoot: string | undefined;
   onIsAtEndChange: (isAtEnd: boolean) => void;
+  skills?: ReadonlyArray<ServerProviderSkill>;
 }
 
 // ---------------------------------------------------------------------------
@@ -164,6 +166,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   timestampFormat,
   workspaceRoot,
   onIsAtEndChange,
+  skills = [],
 }: MessagesTimelineProps) {
   const rawRows = useMemo(
     () =>
@@ -232,6 +235,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onForkAtMessage,
       threadForks,
       onNavigateToThread,
+      skills,
     }),
     [
       activeTurnInProgress,
@@ -603,7 +607,7 @@ const WorkGroupSection = memo(function WorkGroupSection({
 }: {
   groupedEntries: Extract<MessagesTimelineRow, { kind: "work" }>["groupedEntries"];
 }) {
-  const { workspaceRoot } = use(TimelineRowCtx);
+  const { workspaceRoot, skills } = use(TimelineRowCtx);
   const [isExpanded, setIsExpanded] = useState(false);
   const hasOverflow = groupedEntries.length > MAX_VISIBLE_WORK_LOG_ENTRIES;
   const visibleEntries =
@@ -647,7 +651,7 @@ const WorkGroupSection = memo(function WorkGroupSection({
               workspaceRoot={workspaceRoot}
             />
           ) : (
-            <RichToolCallRow key={`work-row:${workEntry.id}`} workEntry={workEntry} displayMode={displayMode} />
+            <RichToolCallRow key={`work-row:${workEntry.id}`} workEntry={workEntry} displayMode={displayMode} skills={skills} />
           );
         })}
       </div>

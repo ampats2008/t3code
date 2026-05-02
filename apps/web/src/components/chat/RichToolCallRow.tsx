@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { type ServerProviderSkill } from "@t3tools/contracts";
 import {
   CheckIcon,
   ChevronRightIcon,
@@ -19,6 +20,7 @@ import { readLocalApi } from "../../localApi";
 interface RichToolCallRowProps {
   workEntry: WorkLogEntry;
   displayMode: ToolDisplayMode;
+  skills?: ReadonlyArray<ServerProviderSkill>;
 }
 
 interface SkillInput {
@@ -28,7 +30,7 @@ interface SkillInput {
 }
 
 export const RichToolCallRow = memo(function RichToolCallRow(props: RichToolCallRowProps) {
-  const { workEntry, displayMode } = props;
+  const { workEntry, displayMode, skills } = props;
   const [open, setOpen] = useState(false);
   // 2AM-Code fork: track whether the bash summary command is truncated
   const [bashCmdTruncated, setBashCmdTruncated] = useState(false);
@@ -58,7 +60,7 @@ export const RichToolCallRow = memo(function RichToolCallRow(props: RichToolCall
             {displayMode === "rich-agent" && <AgentDetail workEntry={workEntry} />}
             {displayMode === "rich-bash" && <BashDetail workEntry={workEntry} showCommand={bashCmdTruncated} />}
             {displayMode === "rich-edit" && <EditDetail workEntry={workEntry} />}
-            {displayMode === "rich-skill" && <SkillDetail workEntry={workEntry} />}
+            {displayMode === "rich-skill" && <SkillDetail workEntry={workEntry} skills={skills} />}
           </div>
         </CollapsiblePanel>
       </Collapsible>
@@ -313,28 +315,20 @@ function SkillSummary(props: { workEntry: WorkLogEntry }) {
   );
 }
 
-function SkillDetail(props: { workEntry: WorkLogEntry }) {
-  const { workEntry } = props;
+function SkillDetail(props: { workEntry: WorkLogEntry; skills?: ReadonlyArray<ServerProviderSkill> }) {
+  const { workEntry, skills } = props;
   const input = workEntry.data?.input as SkillInput | undefined;
-  const result = workEntry.data?.result;
   const skillName = input?.skill ?? "";
   const args = input?.args ?? "";
+  const skillDef = skills?.find((s) => s.name === skillName);
+  const description = skillDef?.shortDescription ?? skillDef?.description;
 
   return (
     <div className="space-y-2 pb-1">
-      {skillName && (
-        <div className="flex gap-2 text-[11px]">
-          <span className="shrink-0 text-muted-foreground/60">name:</span>
-          <span className="text-foreground/70">{skillName}</span>
-        </div>
+      {description && (
+        <p className="text-[11px] leading-relaxed text-foreground/60 italic">{description}</p>
       )}
       {args && <TruncatedBlock label="Arguments" text={args} />}
-      {result !== undefined && (
-        <TruncatedBlock
-          label="Result"
-          text={typeof result === "string" ? result : JSON.stringify(result, null, 2)}
-        />
-      )}
     </div>
   );
 }
