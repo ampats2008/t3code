@@ -255,6 +255,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onForkAtMessage,
       threadForks,
       onNavigateToThread,
+      skills,
     ],
   );
 
