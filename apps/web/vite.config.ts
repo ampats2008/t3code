@@ -89,13 +89,15 @@ export default defineConfig({
           },
         }
       : {}),
-    hmr: {
-      // Explicit config so Vite's HMR WebSocket connects reliably
-      // inside Electron's BrowserWindow. Vite 8 uses console.debug for
-      // connection logs — enable "Verbose" in DevTools to see them.
-      protocol: "ws",
-      host,
-    },
+    // HMR is disabled by default so that developing T3Code from within
+    // T3Code doesn't break the running client mid-edit. Use /t3reload in
+    // the UI to manually reload, or set HMR=1 to re-enable hot reload.
+    hmr: process.env.HMR
+      ? {
+          protocol: "ws",
+          host,
+        }
+      : false,
   },
   build: {
     outDir: "dist",
