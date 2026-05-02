@@ -59,6 +59,10 @@ function connectSingleton() {
           window.dispatchEvent(
             new CustomEvent("vscode:code-ref", { detail: message }),
           );
+        } else if (message.type === "review-comments") {
+          window.dispatchEvent(
+            new CustomEvent("vscode:review-comments", { detail: message }),
+          );
         }
       } catch {
         // Ignore malformed messages

@@ -1,8 +1,10 @@
 import * as vscode from "vscode";
 import { T3CodeClient } from "./wsClient";
 import { createStatusBar, update as updateStatusBar } from "./statusBar";
+import { createCommentController, type T3CodeCommentController } from "./commentController";
 
 let client: T3CodeClient;
+let reviewController: T3CodeCommentController;
 
 export function activate(context: vscode.ExtensionContext) {
   // WS client
@@ -15,6 +17,49 @@ export function activate(context: vscode.ExtensionContext) {
 
   client.on("stateChange", updateStatusBar);
   client.connect();
+
+  // Review comment controller
+  reviewController = createCommentController(context);
+  context.subscriptions.push({ dispose: () => reviewController.dispose() });
+
+  // Create comment thread (gutter "+" icon)
+  context.subscriptions.push(
+    vscode.commands.registerCommand("t3code.createReviewComment", (reply: vscode.CommentReply) => {
+      reviewController.createThread(reply);
+    }),
+  );
+
+  // Reply to existing comment thread
+  context.subscriptions.push(
+    vscode.commands.registerCommand("t3code.replyReviewComment", (reply: vscode.CommentReply) => {
+      reviewController.replyToThread(reply);
+    }),
+  );
+
+  // Submit all review comments to T3Code
+  context.subscriptions.push(
+    vscode.commands.registerCommand("t3code.submitReview", async () => {
+      const comments = await reviewController.collectComments();
+      if (comments.length === 0) {
+        vscode.window.showWarningMessage("No review comments to submit");
+        return;
+      }
+      const sent = client.send({
+        type: "review-comments",
+        comments,
+      });
+      if (!sent) {
+        vscode.window.showWarningMessage(
+          "Not connected to T3Code. Make sure T3Code is running.",
+        );
+        return;
+      }
+      reviewController.clearAll();
+      vscode.window.showInformationMessage(
+        `Sent ${comments.length} review comment(s) to T3Code`,
+      );
+    }),
+  );
 
   // Send selection command
   context.subscriptions.push(
@@ -74,4 +119,5 @@ export function activate(context: vscode.ExtensionContext) {
 
 export function deactivate() {
   client?.dispose();
+  reviewController?.dispose();
 }

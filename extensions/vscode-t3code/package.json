@@ -16,6 +16,19 @@
       {
         "command": "t3code.sendSelection",
         "title": "Send to T3Code"
+      },
+      {
+        "command": "t3code.submitReview",
+        "title": "Submit Review to T3Code",
+        "icon": "$(send)"
+      },
+      {
+        "command": "t3code.createReviewComment",
+        "title": "Add Comment"
+      },
+      {
+        "command": "t3code.replyReviewComment",
+        "title": "Reply"
       }
     ],
     "menus": {
@@ -24,6 +37,25 @@
           "command": "t3code.sendSelection",
           "when": "editorHasSelection",
           "group": "t3code"
+        }
+      ],
+      "comments/commentThread/title": [
+        {
+          "command": "t3code.submitReview",
+          "group": "inline",
+          "when": "commentController == t3code-review"
+        }
+      ],
+      "comments/commentThread/context": [
+        {
+          "command": "t3code.createReviewComment",
+          "group": "inline",
+          "when": "commentController == t3code-review && commentThreadIsEmpty"
+        },
+        {
+          "command": "t3code.replyReviewComment",
+          "group": "inline",
+          "when": "commentController == t3code-review && !commentThreadIsEmpty"
         }
       ]
     }

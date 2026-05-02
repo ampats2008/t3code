@@ -756,6 +756,25 @@ export const ChatComposer = memo(
       return () => window.removeEventListener("vscode:code-ref", handler);
     }, []);
 
+    // VS Code review comments bridge — inserts a review chip when the user
+    // submits review comments from VS Code / Cursor via the inspector WS.
+    useEffect(() => {
+      const handler = (event: Event) => {
+        const detail = (event as CustomEvent).detail as {
+          comments: Array<{
+            file: string;
+            startLine: number;
+            endLine: number;
+            text: string;
+            body: string;
+          }>;
+        };
+        composerEditorRef.current?.insertReviewComments(detail);
+      };
+      window.addEventListener("vscode:review-comments", handler);
+      return () => window.removeEventListener("vscode:review-comments", handler);
+    }, []);
+
     // ------------------------------------------------------------------
     // Derived: composer send state
     // ------------------------------------------------------------------
