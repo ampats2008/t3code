@@ -4,6 +4,7 @@ import {
   DEFAULT_CLAUDE_MAX_BUDGET_USD,
   DEFAULT_CLAUDE_MAX_TURNS,
 } from "@t3tools/contracts/settings";
+import { useSettings } from "~/hooks/useSettings";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import { Input } from "../ui/input";
 
@@ -42,6 +43,9 @@ export function ContextWindowMeter(props: {
   showGuardrails?: boolean;
 }) {
   const { usage, guardrails, onGuardrailsChange, showGuardrails } = props;
+  const claudeSettings = useSettings((s) => s.providers.claudeAgent);
+  const defaultMaxTurns = claudeSettings.maxTurns ?? DEFAULT_CLAUDE_MAX_TURNS;
+  const defaultMaxBudgetUsd = claudeSettings.maxBudgetUsd ?? DEFAULT_CLAUDE_MAX_BUDGET_USD;
   const usedPercentage = formatPercentage(usage.usedPercentage);
   const normalizedPercentage = Math.max(0, Math.min(100, usage.usedPercentage ?? 0));
   const radius = 9.75;
@@ -211,8 +215,8 @@ export function ContextWindowMeter(props: {
                   min={1}
                   max={500}
                   step={1}
-                  placeholder={String(DEFAULT_CLAUDE_MAX_TURNS)}
-                  value={String(guardrails?.maxTurns ?? DEFAULT_CLAUDE_MAX_TURNS)}
+                  placeholder={String(defaultMaxTurns)}
+                  value={String(guardrails?.maxTurns ?? defaultMaxTurns)}
                   onClick={(e) => e.stopPropagation()}
                   onChange={(e) => {
                     const v = Math.floor(Number(e.target.value));
@@ -238,8 +242,8 @@ export function ContextWindowMeter(props: {
                     className="h-6 w-20 pl-4 pr-1.5 text-xs"
                     min={0.1}
                     step={0.5}
-                    placeholder={String(DEFAULT_CLAUDE_MAX_BUDGET_USD)}
-                    value={String(guardrails?.maxBudgetUsd ?? DEFAULT_CLAUDE_MAX_BUDGET_USD)}
+                    placeholder={String(defaultMaxBudgetUsd)}
+                    value={String(guardrails?.maxBudgetUsd ?? defaultMaxBudgetUsd)}
                     onClick={(e) => e.stopPropagation()}
                     onChange={(e) => {
                       const v = Number(e.target.value);
