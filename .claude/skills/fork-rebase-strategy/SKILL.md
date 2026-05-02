@@ -5,7 +5,6 @@ description: >
   features and stay in sync with upstream (pingdotgg/t3code) main branch using a
   clean rebase workflow. Use this whenever building a new feature, syncing with
   upstream, or resolving conflicts on the fork.
-allowed-tools: Bash, Read, Edit, Write, Glob, Grep
 ---
 
 # 2AM-Code Fork: Rebase Strategy for New Features
