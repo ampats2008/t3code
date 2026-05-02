@@ -69,8 +69,9 @@ import {
   textContainsInlineTerminalContextLabels,
 } from "./userMessageTerminalContexts";
 import { formatWorkspaceRelativePath } from "../../filePathDisplay";
-import { classifyToolDisplayMode } from "./toolCallClassification";
 import { formatToolPreview as forkFormatToolPreview } from "./forkToolPreviewFormatter";
+import { forkClassifyToolDisplayMode } from "./forkToolCallClassification";
+import { ForkRichToolRow } from "./forkRichToolRows";
 import { RichToolCallRow } from "./RichToolCallRow";
 import { ForkBadge } from "./ForkBadge";
 
@@ -634,7 +635,11 @@ const WorkGroupSection = memo(function WorkGroupSection({
       )}
       <div className="space-y-0.5">
         {visibleEntries.map((workEntry) => {
-          const displayMode = classifyToolDisplayMode(workEntry);
+          const displayMode = forkClassifyToolDisplayMode(workEntry);
+          const isForkRich = displayMode === "rich-grep" || displayMode === "rich-glob" || displayMode === "rich-write" || displayMode === "rich-todo";
+          if (isForkRich) {
+            return <ForkRichToolRow key={`work-row:${workEntry.id}`} workEntry={workEntry} displayMode={displayMode} workspaceRoot={workspaceRoot} />;
+          }
           return displayMode === "simple" ? (
             <SimpleWorkEntryRow
               key={`work-row:${workEntry.id}`}

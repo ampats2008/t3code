@@ -221,12 +221,47 @@ function EditSummary(props: { workEntry: WorkLogEntry }) {
   const input = workEntry.data?.input;
   const filePath = (input?.file_path as string) ?? workEntry.changedFiles?.[0] ?? workEntry.label;
   const basename = filePath.split(/[\\/]/).pop() ?? filePath;
+  // 2AM-Code fork: show inline diff snippet in summary
+  const oldStr = (input?.old_string as string) ?? "";
+  const newStr = (input?.new_string as string) ?? "";
+  const diffSnippet = buildDiffSnippet(oldStr, newStr);
 
   return (
-    <p className="truncate text-[11px] leading-5 text-foreground/80" title={filePath}>
-      {basename}
-    </p>
+    <div className="min-w-0">
+      <p className="truncate text-[11px] leading-5 text-foreground/80" title={filePath}>
+        {basename}
+      </p>
+      {diffSnippet && (
+        <p className="truncate font-mono text-[10px] leading-4 text-muted-foreground/55">
+          {diffSnippet}
+        </p>
+      )}
+    </div>
   );
+}
+
+/** 2AM-Code fork: Build a compact single-line diff snippet for the edit summary. */
+function buildDiffSnippet(oldStr: string, newStr: string): string | null {
+  if (!oldStr && !newStr) return null;
+  const oldLine = firstMeaningfulLine(oldStr);
+  const newLine = firstMeaningfulLine(newStr);
+  if (!oldLine && !newLine) return null;
+  const parts: string[] = [];
+  if (oldLine) parts.push(`- ${truncateSnippet(oldLine, 40)}`);
+  if (newLine) parts.push(`+ ${truncateSnippet(newLine, 40)}`);
+  return parts.join("  ");
+}
+
+function firstMeaningfulLine(text: string): string | null {
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    if (trimmed.length > 0) return trimmed;
+  }
+  return null;
+}
+
+function truncateSnippet(value: string, max: number): string {
+  return value.length <= max ? value : value.slice(0, max - 1) + "\u2026";
 }
 
 function EditDetail(props: { workEntry: WorkLogEntry }) {
