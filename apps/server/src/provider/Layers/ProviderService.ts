@@ -370,10 +370,12 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         }
         const persistedBinding = Option.getOrUndefined(yield* directory.getBinding(threadId));
         const effectiveResumeCursor =
-          input.resumeCursor ??
-          (persistedBinding?.provider === input.provider
-            ? persistedBinding.resumeCursor
-            : undefined);
+          input.resumeCursor === null
+            ? undefined // caller explicitly wants a fresh session — skip persisted binding
+            : input.resumeCursor ??
+              (persistedBinding?.provider === input.provider
+                ? persistedBinding.resumeCursor
+                : undefined);
         const effectiveCwd =
           input.cwd ??
           (persistedBinding?.provider === input.provider
@@ -381,11 +383,13 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
             : undefined);
         yield* Effect.annotateCurrentSpan({
           "provider.resume_cursor.source":
-            input.resumeCursor !== undefined
-              ? "request"
-              : effectiveResumeCursor !== undefined && persistedBinding?.provider === input.provider
-                ? "persisted"
-                : "none",
+            input.resumeCursor === null
+              ? "explicit-fresh"
+              : input.resumeCursor !== undefined
+                ? "request"
+                : effectiveResumeCursor !== undefined && persistedBinding?.provider === input.provider
+                  ? "persisted"
+                  : "none",
           "provider.resume_cursor.present": effectiveResumeCursor !== undefined,
           "provider.cwd.source":
             input.cwd !== undefined

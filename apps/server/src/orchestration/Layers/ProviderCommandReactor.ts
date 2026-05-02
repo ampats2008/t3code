@@ -237,6 +237,10 @@ const make = Effect.gen(function* () {
     const thread = yield* resolveThread(input.threadId);
     const session = thread?.session;
     if (!session) {
+      yield* Effect.logWarning(
+        "setThreadSessionErrorOnTurnStartFailure: thread has no session, cannot persist error",
+        { threadId: input.threadId, detail: input.detail },
+      );
       return;
     }
     yield* setThreadSession({
@@ -392,7 +396,10 @@ const make = Effect.gen(function* () {
       return restartedSession.threadId;
     }
 
-    const startedSession = yield* startProviderSession(undefined);
+    // Pass resumeCursor: null to explicitly signal "fresh session" and prevent
+    // ProviderService from picking up a stale persisted binding's resumeCursor
+    // (which would cause "No conversation found with session ID" errors on forks).
+    const startedSession = yield* startProviderSession({ resumeCursor: null });
     yield* bindSessionToThread(startedSession);
     return startedSession.threadId;
   });
