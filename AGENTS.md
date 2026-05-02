@@ -51,3 +51,18 @@ Docs:
 - Codex-Monitor (Tauri, feature-complete, strong reference implementation): https://github.com/Dimillian/CodexMonitor
 
 Use these as implementation references when designing protocol handling, UX flows, and operational safeguards.
+
+## Fork Rebase Strategy (2AM-Code)
+
+This repo is a fork of [pingdotgg/t3code](https://github.com/pingdotgg/t3code) hosted at [ampats2008/t3code](https://github.com/ampats2008/t3code). The fork's primary branch is `feature/main/2am-code`.
+
+**Remotes:** `origin` = ampats2008/t3code (push/pull), `upstream` = pingdotgg/t3code (fetch only).
+
+**Commit format:** `2AM: <type>(<slug>): <message>` — types: feat/fix/chore/refactor/docs/test/style. Use the same slug for all commits in a feature.
+
+**Branch strategy:**
+- `feature/main/2am-code` — long-lived fork branch (our "main")
+- `feat/2am-<name>` — feature branches off the fork branch
+- `feat/<name>` off `upstream/main` — for PRs targeting upstream (no 2AM commits)
+
+**Fork-safe coding:** Keep logic in new files, use custom hooks to encapsulate features, inject only thin single-line insertion points into upstream files. This minimizes conflict surface during rebases.
