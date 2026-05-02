@@ -2397,6 +2397,7 @@ export default function ChatView(props: ChatViewProps) {
       selectedProviderModels: ctxSelectedProviderModels,
       selectedPromptEffort: ctxSelectedPromptEffort,
       selectedModelSelection: ctxSelectedModelSelection,
+      guardrails: ctxGuardrails,
     } = sendCtx;
     const promptForSend = promptRef.current;
     const {
@@ -2659,6 +2660,10 @@ export default function ChatView(props: ChatViewProps) {
         autoGenerateTitle: isFirstMessage ? autoGenerateThreadTitle : undefined,
         ...(bootstrap ? { bootstrap } : {}),
         createdAt: messageCreatedAt,
+        ...(ctxGuardrails?.maxTurns !== undefined ? { maxTurns: ctxGuardrails.maxTurns } : {}),
+        ...(ctxGuardrails?.maxBudgetUsd !== undefined
+          ? { maxBudgetUsd: ctxGuardrails.maxBudgetUsd }
+          : {}),
       });
       turnStartSucceeded = true;
     })().catch(async (err: unknown) => {

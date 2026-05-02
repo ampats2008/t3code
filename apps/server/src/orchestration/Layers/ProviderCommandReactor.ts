@@ -266,6 +266,8 @@ const make = Effect.gen(function* () {
     createdAt: string,
     options?: {
       readonly modelSelection?: ModelSelection;
+      readonly maxTurns?: number;
+      readonly maxBudgetUsd?: number;
     },
   ) {
     const readModel = yield* orchestrationEngine.getReadModel();
@@ -315,6 +317,8 @@ const make = Effect.gen(function* () {
         modelSelection: desiredModelSelection,
         ...(input?.resumeCursor !== undefined ? { resumeCursor: input.resumeCursor } : {}),
         runtimeMode: desiredRuntimeMode,
+        ...(options?.maxTurns !== undefined ? { maxTurns: options.maxTurns } : {}),
+        ...(options?.maxBudgetUsd !== undefined ? { maxBudgetUsd: options.maxBudgetUsd } : {}),
       });
 
     const bindSessionToThread = (session: ProviderSession) =>
@@ -411,6 +415,8 @@ const make = Effect.gen(function* () {
     readonly modelSelection?: ModelSelection;
     readonly interactionMode?: "default" | "plan";
     readonly createdAt: string;
+    readonly maxTurns?: number;
+    readonly maxBudgetUsd?: number;
   }) {
     const thread = yield* resolveThread(input.threadId);
     if (!thread) {
@@ -418,11 +424,11 @@ const make = Effect.gen(function* () {
         new Error(`Thread '${input.threadId}' was not found in read model.`),
       );
     }
-    yield* ensureSessionForThread(
-      input.threadId,
-      input.createdAt,
-      input.modelSelection !== undefined ? { modelSelection: input.modelSelection } : {},
-    );
+    yield* ensureSessionForThread(input.threadId, input.createdAt, {
+      ...(input.modelSelection !== undefined ? { modelSelection: input.modelSelection } : {}),
+      ...(input.maxTurns !== undefined ? { maxTurns: input.maxTurns } : {}),
+      ...(input.maxBudgetUsd !== undefined ? { maxBudgetUsd: input.maxBudgetUsd } : {}),
+    });
     if (input.modelSelection !== undefined) {
       threadModelSelections.set(input.threadId, input.modelSelection);
     }
@@ -455,6 +461,8 @@ const make = Effect.gen(function* () {
       ...(normalizedAttachments.length > 0 ? { attachments: normalizedAttachments } : {}),
       ...(modelForTurn !== undefined ? { modelSelection: modelForTurn } : {}),
       ...(input.interactionMode !== undefined ? { interactionMode: input.interactionMode } : {}),
+      ...(input.maxTurns !== undefined ? { maxTurns: input.maxTurns } : {}),
+      ...(input.maxBudgetUsd !== undefined ? { maxBudgetUsd: input.maxBudgetUsd } : {}),
     };
   });
 
@@ -688,6 +696,10 @@ const make = Effect.gen(function* () {
         : {}),
       interactionMode: event.payload.interactionMode,
       createdAt: event.payload.createdAt,
+      ...(event.payload.maxTurns !== undefined ? { maxTurns: event.payload.maxTurns } : {}),
+      ...(event.payload.maxBudgetUsd !== undefined
+        ? { maxBudgetUsd: event.payload.maxBudgetUsd }
+        : {}),
     }).pipe(
       Effect.map(Option.some),
       Effect.catchCause((cause) => handleTurnStartFailure(cause).pipe(Effect.as(Option.none()))),

@@ -2932,8 +2932,8 @@ const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         env: process.env,
         ...(input.cwd ? { additionalDirectories: [input.cwd] } : {}),
         ...(Object.keys(extraArgs).length > 0 ? { extraArgs } : {}),
-        maxTurns: claudeSettings.maxTurns,
-        maxBudgetUsd: claudeSettings.maxBudgetUsd,
+        maxTurns: input.maxTurns ?? claudeSettings.maxTurns,
+        maxBudgetUsd: input.maxBudgetUsd ?? claudeSettings.maxBudgetUsd,
       };
 
       yield* Effect.annotateCurrentSpan({

@@ -27,6 +27,22 @@ import {
   type ProviderRuntimeIngestionShape,
 } from "../Services/ProviderRuntimeIngestion.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
+import * as _fs from "node:fs";
+import * as _path from "node:path";
+
+// ── DEBUG: session-state diagnostic log ─────────────────────────────────
+const SESSION_STATE_LOG = _path.join(
+  process.env.USERPROFILE ?? process.env.HOME ?? ".",
+  "t3code-session-state-debug.log",
+);
+function debugSessionState(tag: string, data: Record<string, unknown>) {
+  try {
+    const line = `[${new Date().toISOString()}] [${tag}] ${JSON.stringify(data)}\n`;
+    _fs.appendFileSync(SESSION_STATE_LOG, line);
+  } catch {
+    // best-effort
+  }
+}
 
 const providerTurnKey = (threadId: ThreadId, turnId: TurnId) => `${threadId}:${turnId}`;
 const providerCommandId = (event: ProviderRuntimeEvent, tag: string): CommandId =>
@@ -1182,6 +1198,17 @@ const make = Effect.gen(function* () {
                 ? null
                 : (thread.session?.lastError ?? null);
 
+        debugSessionState(shouldApplyThreadLifecycle ? "LIFECYCLE_ACCEPTED" : "LIFECYCLE_REJECTED", {
+          eventType: event.type,
+          eventId: event.eventId,
+          threadId: thread.id,
+          eventTurnId: eventTurnId ?? null,
+          activeTurnId,
+          conflictsWithActiveTurn,
+          missingTurnForActiveTurn,
+          currentSessionStatus: thread.session?.status ?? null,
+        });
+
         if (shouldApplyThreadLifecycle) {
           if (event.type === "turn.started" && acceptedTurnStartedSourcePlan !== null) {
             yield* markSourceProposedPlanImplemented(
@@ -1202,6 +1229,14 @@ const make = Effect.gen(function* () {
               ),
             );
           }
+
+          debugSessionState("SESSION_STATUS_APPLIED", {
+            eventType: event.type,
+            threadId: thread.id,
+            previousStatus: thread.session?.status ?? null,
+            newStatus: status,
+            activeTurnId: nextActiveTurnId,
+          });
 
           yield* orchestrationEngine.dispatch({
             type: "thread.session.set",
@@ -1446,6 +1481,14 @@ const make = Effect.gen(function* () {
         const shouldApplyRuntimeError = !STRICT_PROVIDER_LIFECYCLE_GUARD
           ? true
           : activeTurnId === null || eventTurnId === undefined || sameId(activeTurnId, eventTurnId);
+
+        debugSessionState(shouldApplyRuntimeError ? "RUNTIME_ERROR_ACCEPTED" : "RUNTIME_ERROR_REJECTED", {
+          threadId: thread.id,
+          eventTurnId: eventTurnId ?? null,
+          activeTurnId,
+          runtimeErrorMessage,
+          currentSessionStatus: thread.session?.status ?? null,
+        });
 
         if (shouldApplyRuntimeError) {
           yield* orchestrationEngine.dispatch({

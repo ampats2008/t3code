@@ -55,6 +55,8 @@ export const ProviderSessionStartInput = Schema.Struct({
   approvalPolicy: Schema.optional(ProviderApprovalPolicy),
   sandboxMode: Schema.optional(ProviderSandboxMode),
   runtimeMode: RuntimeMode,
+  maxTurns: Schema.optional(Schema.Number),
+  maxBudgetUsd: Schema.optional(Schema.Number),
 });
 export type ProviderSessionStartInput = typeof ProviderSessionStartInput.Type;
 
@@ -68,6 +70,8 @@ export const ProviderSendTurnInput = Schema.Struct({
   ),
   modelSelection: Schema.optional(ModelSelection),
   interactionMode: Schema.optional(ProviderInteractionMode),
+  maxTurns: Schema.optional(Schema.Number),
+  maxBudgetUsd: Schema.optional(Schema.Number),
 });
 export type ProviderSendTurnInput = typeof ProviderSendTurnInput.Type;
 

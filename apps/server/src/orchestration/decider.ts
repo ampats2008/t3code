@@ -448,6 +448,8 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           interactionMode: targetThread.interactionMode,
           ...(sourceProposedPlan !== undefined ? { sourceProposedPlan } : {}),
           createdAt: command.createdAt,
+          ...(command.maxTurns !== undefined ? { maxTurns: command.maxTurns } : {}),
+          ...(command.maxBudgetUsd !== undefined ? { maxBudgetUsd: command.maxBudgetUsd } : {}),
         },
       };
       return [userMessageEvent, turnStartRequestedEvent];

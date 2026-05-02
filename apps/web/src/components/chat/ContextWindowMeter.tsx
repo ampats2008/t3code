@@ -1,6 +1,16 @@
 import { cn } from "~/lib/utils";
 import { type ContextWindowSnapshot, formatContextWindowTokens } from "~/lib/contextWindow";
+import {
+  DEFAULT_CLAUDE_MAX_BUDGET_USD,
+  DEFAULT_CLAUDE_MAX_TURNS,
+} from "@t3tools/contracts/settings";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
+import { Input } from "../ui/input";
+
+export interface TurnGuardrails {
+  maxTurns?: number;
+  maxBudgetUsd?: number;
+}
 
 function formatPercentage(value: number | null): string | null {
   if (value === null || !Number.isFinite(value)) {
@@ -25,8 +35,13 @@ function formatCost(value: number | null): string | null {
   return `$${value.toFixed(2)}`;
 }
 
-export function ContextWindowMeter(props: { usage: ContextWindowSnapshot }) {
-  const { usage } = props;
+export function ContextWindowMeter(props: {
+  usage: ContextWindowSnapshot;
+  guardrails?: TurnGuardrails;
+  onGuardrailsChange?: (guardrails: TurnGuardrails) => void;
+  showGuardrails?: boolean;
+}) {
+  const { usage, guardrails, onGuardrailsChange, showGuardrails } = props;
   const usedPercentage = formatPercentage(usage.usedPercentage);
   const normalizedPercentage = Math.max(0, Math.min(100, usage.usedPercentage ?? 0));
   const radius = 9.75;
@@ -36,9 +51,9 @@ export function ContextWindowMeter(props: { usage: ContextWindowSnapshot }) {
   return (
     <Popover>
       <PopoverTrigger
-        openOnHover
+        openOnHover={!showGuardrails}
         delay={150}
-        closeDelay={0}
+        closeDelay={showGuardrails ? 200 : 0}
         render={
           <button
             type="button"
@@ -173,6 +188,70 @@ export function ContextWindowMeter(props: { usage: ContextWindowSnapshot }) {
                   Low cache rate — responses may be slower &amp; costlier.
                 </div>
               ) : null}
+            </div>
+          ) : null}
+
+          {/* ── Guardrails ── */}
+          {showGuardrails && onGuardrailsChange ? (
+            <div className="space-y-2 border-t border-border pt-3">
+              <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                Guardrails
+              </div>
+              <div className="flex items-center gap-2">
+                <label
+                  htmlFor="ctx-guardrail-turns"
+                  className="w-16 shrink-0 text-xs text-muted-foreground"
+                >
+                  Max turns
+                </label>
+                <Input
+                  id="ctx-guardrail-turns"
+                  type="number"
+                  className="h-6 w-20 px-1.5 text-xs"
+                  min={1}
+                  max={500}
+                  step={1}
+                  placeholder={String(DEFAULT_CLAUDE_MAX_TURNS)}
+                  value={String(guardrails?.maxTurns ?? DEFAULT_CLAUDE_MAX_TURNS)}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => {
+                    const v = Math.floor(Number(e.target.value));
+                    if (!Number.isFinite(v) || v < 1) return;
+                    onGuardrailsChange({ ...guardrails, maxTurns: v });
+                  }}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <label
+                  htmlFor="ctx-guardrail-budget"
+                  className="w-16 shrink-0 text-xs text-muted-foreground"
+                >
+                  Budget
+                </label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute inset-y-0 left-1.5 flex items-center text-[10px] text-muted-foreground">
+                    $
+                  </span>
+                  <Input
+                    id="ctx-guardrail-budget"
+                    type="number"
+                    className="h-6 w-20 pl-4 pr-1.5 text-xs"
+                    min={0.1}
+                    step={0.5}
+                    placeholder={String(DEFAULT_CLAUDE_MAX_BUDGET_USD)}
+                    value={String(guardrails?.maxBudgetUsd ?? DEFAULT_CLAUDE_MAX_BUDGET_USD)}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      if (!Number.isFinite(v) || v <= 0) return;
+                      onGuardrailsChange({ ...guardrails, maxBudgetUsd: v });
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="text-[10px] text-muted-foreground">
+                Per-turn limits for this conversation.
+              </div>
             </div>
           ) : null}
         </div>

@@ -565,6 +565,8 @@ export const ThreadTurnStartCommand = Schema.Struct({
   bootstrap: Schema.optional(ThreadTurnStartBootstrap),
   sourceProposedPlan: Schema.optional(SourceProposedPlanReference),
   createdAt: IsoDateTime,
+  maxTurns: Schema.optional(Schema.Number),
+  maxBudgetUsd: Schema.optional(Schema.Number),
 });
 
 const ClientThreadTurnStartCommand = Schema.Struct({
@@ -585,6 +587,8 @@ const ClientThreadTurnStartCommand = Schema.Struct({
   bootstrap: Schema.optional(ThreadTurnStartBootstrap),
   sourceProposedPlan: Schema.optional(SourceProposedPlanReference),
   createdAt: IsoDateTime,
+  maxTurns: Schema.optional(Schema.Number),
+  maxBudgetUsd: Schema.optional(Schema.Number),
 });
 
 const ThreadTurnInterruptCommand = Schema.Struct({
@@ -906,6 +910,8 @@ export const ThreadTurnStartRequestedPayload = Schema.Struct({
   ),
   sourceProposedPlan: Schema.optional(SourceProposedPlanReference),
   createdAt: IsoDateTime,
+  maxTurns: Schema.optional(Schema.Number),
+  maxBudgetUsd: Schema.optional(Schema.Number),
 });
 
 export const ThreadTurnInterruptRequestedPayload = Schema.Struct({
