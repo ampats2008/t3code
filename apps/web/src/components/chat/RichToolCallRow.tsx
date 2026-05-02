@@ -1,4 +1,4 @@
-import { memo, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
   CheckIcon,
   ChevronRightIcon,
@@ -27,17 +27,33 @@ interface SkillInput {
 export const RichToolCallRow = memo(function RichToolCallRow(props: RichToolCallRowProps) {
   const { workEntry, displayMode } = props;
   const [open, setOpen] = useState(false);
+  // 2AM-Code fork: track whether the bash summary command is truncated
+  const [bashCmdTruncated, setBashCmdTruncated] = useState(false);
+  const bashSummaryRef = useRef<HTMLParagraphElement>(null);
+
+  const checkBashTruncation = useCallback(() => {
+    const el = bashSummaryRef.current;
+    if (el) setBashCmdTruncated(el.scrollWidth > el.clientWidth);
+  }, []);
+
+  useEffect(() => {
+    if (displayMode !== "rich-bash") return;
+    checkBashTruncation();
+    const observer = new ResizeObserver(checkBashTruncation);
+    if (bashSummaryRef.current) observer.observe(bashSummaryRef.current);
+    return () => observer.disconnect();
+  }, [displayMode, checkBashTruncation]);
 
   return (
     <div className="rounded-lg px-1 py-1">
       <Collapsible open={open} onOpenChange={setOpen}>
         <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-muted/40 text-left">
-          <SummaryLine workEntry={workEntry} displayMode={displayMode} open={open} />
+          <SummaryLine workEntry={workEntry} displayMode={displayMode} open={open} bashSummaryRef={bashSummaryRef} />
         </CollapsibleTrigger>
         <CollapsiblePanel>
           <div className="mt-1 pl-7">
             {displayMode === "rich-agent" && <AgentDetail workEntry={workEntry} />}
-            {displayMode === "rich-bash" && <BashDetail workEntry={workEntry} />}
+            {displayMode === "rich-bash" && <BashDetail workEntry={workEntry} showCommand={bashCmdTruncated} />}
             {displayMode === "rich-edit" && <EditDetail workEntry={workEntry} />}
             {displayMode === "rich-skill" && <SkillDetail workEntry={workEntry} />}
           </div>
@@ -53,8 +69,9 @@ function SummaryLine(props: {
   workEntry: WorkLogEntry;
   displayMode: ToolDisplayMode;
   open: boolean;
+  bashSummaryRef?: React.RefObject<HTMLParagraphElement | null>;
 }) {
-  const { workEntry, displayMode, open } = props;
+  const { workEntry, displayMode, open, bashSummaryRef } = props;
   let Icon = SquarePenIcon;
   if (displayMode === "rich-agent") Icon = HammerIcon;
   else if (displayMode === "rich-bash") Icon = TerminalIcon;
@@ -67,7 +84,7 @@ function SummaryLine(props: {
       </span>
       <div className="min-w-0 flex-1 overflow-hidden">
         {displayMode === "rich-agent" && <AgentSummary workEntry={workEntry} />}
-        {displayMode === "rich-bash" && <BashSummary workEntry={workEntry} />}
+        {displayMode === "rich-bash" && <BashSummary workEntry={workEntry} summaryRef={bashSummaryRef} />}
         {displayMode === "rich-edit" && <EditSummary workEntry={workEntry} />}
         {displayMode === "rich-skill" && <SkillSummary workEntry={workEntry} />}
       </div>
@@ -185,24 +202,31 @@ function extractToolResultText(result: unknown): string | undefined {
 
 /* ---------- Bash ---------- */
 
-function BashSummary(props: { workEntry: WorkLogEntry }) {
-  const { workEntry } = props;
+function BashSummary(props: { workEntry: WorkLogEntry; summaryRef?: React.RefObject<HTMLParagraphElement | null> | undefined }) {
+  const { workEntry, summaryRef } = props;
   const command = workEntry.command ?? workEntry.detail ?? workEntry.label;
 
   return (
-    <p className="truncate font-mono text-[11px] leading-5 text-foreground/80">
+    <p ref={summaryRef} className="truncate font-mono text-[11px] leading-5 text-foreground/80">
       <span className="text-muted-foreground/60">$ </span>
       {command}
     </p>
   );
 }
 
-function BashDetail(props: { workEntry: WorkLogEntry }) {
-  const { workEntry } = props;
+function BashDetail(props: { workEntry: WorkLogEntry; showCommand?: boolean }) {
+  const { workEntry, showCommand } = props;
+  // 2AM-Code fork: prefer data.input.command for untruncated source, fall back through rawCommand → command → detail
+  const command = (workEntry.data?.input?.command as string | undefined) ?? workEntry.rawCommand ?? workEntry.command ?? workEntry.detail;
   const output = extractToolResultText(workEntry.data?.result);
 
   return (
     <div className="pb-1">
+      {showCommand && command && (
+        <pre className="mb-1 whitespace-pre-wrap rounded-md border border-border/50 bg-muted/40 p-2 font-mono text-[10px] leading-relaxed text-foreground/80">
+          <span className="text-muted-foreground/50">$ </span>{command}
+        </pre>
+      )}
       {output ? (
         <pre className="max-h-[300px] overflow-y-auto whitespace-pre-wrap rounded-md border border-border/50 bg-muted/30 p-2 font-mono text-[10px] leading-relaxed text-foreground/75">
           {output}
