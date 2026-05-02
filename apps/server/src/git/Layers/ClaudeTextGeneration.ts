@@ -117,9 +117,8 @@ const makeClaudeTextGeneration = Effect.gen(function* () {
     ).pipe(Effect.catch(() => Effect.undefined));
 
     const runClaudeCommand = Effect.fn("runClaudeJson.runClaudeCommand")(function* () {
-      const command = ChildProcess.make(
-        claudeSettings?.binaryPath || "claude",
-        [
+      const cliBinary = claudeSettings?.binaryPath || "claude";
+      const cliArgs = [
           "-p",
           "--output-format",
           "json",
@@ -130,10 +129,14 @@ const makeClaudeTextGeneration = Effect.gen(function* () {
           ...(cliEffort ? ["--effort", cliEffort] : []),
           ...(Object.keys(settings).length > 0 ? ["--settings", JSON.stringify(settings)] : []),
           "--dangerously-skip-permissions",
-        ],
+      ];
+      // shell:true wraps in cmd.exe on Windows which breaks stdin EOF piping.
+      // claude.exe is a real binary so shell:true is unnecessary.
+      const command = ChildProcess.make(
+        cliBinary,
+        cliArgs,
         {
           cwd,
-          shell: process.platform === "win32",
           stdin: {
             stream: Stream.encodeText(Stream.make(prompt)),
           },
@@ -147,7 +150,6 @@ const makeClaudeTextGeneration = Effect.gen(function* () {
             normalizeCliError("claude", operation, cause, "Failed to spawn Claude CLI process"),
           ),
         );
-
       const [stdout, stderr, exitCode] = yield* Effect.all(
         [
           readStreamAsString(operation, child.stdout),

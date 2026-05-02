@@ -83,6 +83,10 @@ export function startInspectorWs(): () => void {
     },
   );
 
+  wss.on("error", (error: Error) => {
+    console.warn(`[inspector-ws] WebSocket server error: ${error.message}`);
+  });
+
   httpServer.on("error", (error: NodeJS.ErrnoException) => {
     if (error.code === "EADDRINUSE") {
       console.warn(

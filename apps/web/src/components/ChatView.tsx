@@ -695,8 +695,6 @@ export default function ChatView(props: ChatViewProps) {
   // When set, the thread-change reset effect will open the sidebar instead of closing it.
   // Used by "Implement in a new thread" to carry the sidebar-open intent across navigation.
   const planSidebarOpenOnNextThreadRef = useRef(false);
-  // When true, the next thread message update will trigger an auto-rename.
-  const pendingAutoRenameRef = useRef(false);
   const [terminalFocusRequestId, setTerminalFocusRequestId] = useState(0);
   const [pullRequestDialogState, setPullRequestDialogState] =
     useState<PullRequestDialogState | null>(null);
@@ -2421,6 +2419,23 @@ export default function ChatView(props: ChatViewProps) {
       imageCount: composerImages.length,
       terminalContexts: composerTerminalContexts,
     });
+    // Diff review submission: intercept send when review annotations are active
+    const diffReviewCtx = composerRef.current?.getDiffReviewContext();
+    if (diffReviewCtx?.showDiffReviewPrompt && activeThread) {
+      const reviewMessage = diffReviewCtx.buildReviewMessage(trimmed);
+      promptRef.current = "";
+      clearComposerDraftContent(composerDraftTarget);
+      composerRef.current?.resetCursorState();
+      await onSubmitPlanFollowUp({
+        text: reviewMessage,
+        interactionMode: "default",
+      });
+      // onSubmitPlanFollowUp opens the plan sidebar for "default" mode —
+      // close it since this is a review submission, not a plan implementation.
+      setPlanSidebarOpen(false);
+      diffReviewCtx.clearAfterSubmit();
+      return;
+    }
     if (showPlanFollowUpPrompt && activeProposedPlan) {
       const followUp = resolvePlanFollowUpSubmission({
         draftText: trimmed,
@@ -2659,15 +2674,11 @@ export default function ChatView(props: ChatViewProps) {
         titleSeed: title,
         runtimeMode,
         interactionMode,
+        autoGenerateTitle: isFirstMessage ? autoGenerateThreadTitle : undefined,
         ...(bootstrap ? { bootstrap } : {}),
         createdAt: messageCreatedAt,
       });
       turnStartSucceeded = true;
-
-      // Queue auto-rename after the first message (if enabled in settings).
-      if (isFirstMessage && autoGenerateThreadTitle) {
-        pendingAutoRenameRef.current = true;
-      }
     })().catch(async (err: unknown) => {
       if (
         !turnStartSucceeded &&
@@ -3263,14 +3274,6 @@ export default function ChatView(props: ChatViewProps) {
     }
   }, [activeThread, environmentId]);
 
-  // Trigger auto-rename once the first message appears in the thread state.
-  useEffect(() => {
-    if (pendingAutoRenameRef.current && activeThread && activeThread.messages.length > 0) {
-      pendingAutoRenameRef.current = false;
-      void handleRenameThread();
-    }
-  }, [activeThread?.messages.length, handleRenameThread]);
-
   const onExpandTimelineImage = useCallback((preview: ExpandedImagePreview) => {
     setExpandedImage(preview);
   }, []);
@@ -3437,6 +3440,7 @@ export default function ChatView(props: ChatViewProps) {
               isConnecting={isConnecting}
               isSendBusy={isSendBusy}
               isPreparingWorktree={isPreparingWorktree}
+              latestTurnSettled={latestTurnSettled}
               activePendingApproval={activePendingApproval}
               pendingApprovals={pendingApprovals}
               pendingUserInputs={pendingUserInputs}
@@ -3483,6 +3487,7 @@ export default function ChatView(props: ChatViewProps) {
               toggleInteractionMode={toggleInteractionMode}
               handleRuntimeModeChange={handleRuntimeModeChange}
               handleInteractionModeChange={handleInteractionModeChange}
+              onRenameThread={handleRenameThread}
               togglePlanSidebar={togglePlanSidebar}
               focusComposer={focusComposer}
               scheduleComposerFocus={scheduleComposerFocus}

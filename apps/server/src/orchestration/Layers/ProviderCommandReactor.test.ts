@@ -399,7 +399,7 @@ describe("ProviderCommandReactor", () => {
 
     await waitFor(() => harness.generateThreadTitle.mock.calls.length === 1);
     expect(harness.generateThreadTitle.mock.calls[0]?.[0]).toMatchObject({
-      message: "Please investigate reconnect failures after restarting the session.",
+      messages: [{ role: "user", text: "Please investigate reconnect failures after restarting the session." }],
     });
 
     await waitFor(async () => {
@@ -1687,5 +1687,104 @@ describe("ProviderCommandReactor", () => {
     expect(thread?.session?.status).toBe("stopped");
     expect(thread?.session?.threadId).toBe("thread-1");
     expect(thread?.session?.activeTurnId).toBeNull();
+  });
+
+  it("prepends fork conversation history to the first message in a forked thread", async () => {
+    const harness = await createHarness();
+    const now = new Date().toISOString();
+
+    // 1. Add a user message and simulate a turn on the source thread
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-source"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("source-msg-1"),
+          role: "user",
+          text: "What is the capital of France?",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+
+    // Add an assistant message to the source thread via delta (sets text)
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.message.assistant.delta",
+        commandId: CommandId.make("cmd-assistant-delta"),
+        threadId: ThreadId.make("thread-1"),
+        messageId: asMessageId("source-msg-2"),
+        turnId: asTurnId("turn-source-1"),
+        delta: "The capital of France is Paris.",
+        createdAt: now,
+      }),
+    );
+
+    // 2. Fork the thread at the assistant message
+    const forkedThreadId = ThreadId.make("forked-thread-1");
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.fork",
+        commandId: CommandId.make("cmd-fork"),
+        sourceThreadId: ThreadId.make("thread-1"),
+        forkAtMessageId: asMessageId("source-msg-2"),
+        threadId: forkedThreadId,
+        projectId: asProjectId("project-1"),
+        title: "Fork: Thread",
+        modelSelection: { provider: "codex", model: "gpt-5-codex" },
+        runtimeMode: "approval-required",
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        branch: null,
+        worktreePath: null,
+        createdAt: now,
+      }),
+    );
+
+    // Verify the forked thread has the copied messages
+    const readModelAfterFork = await Effect.runPromise(harness.engine.getReadModel());
+    const forkedThread = readModelAfterFork.threads.find(
+      (entry) => entry.id === forkedThreadId,
+    );
+    expect(forkedThread).toBeDefined();
+    expect(forkedThread?.forkSource).toBeDefined();
+    expect(forkedThread?.messages.length).toBe(2); // both source msgs copied
+
+    // 3. Send a turn on the forked thread
+    harness.sendTurn.mockClear();
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-fork"),
+        threadId: forkedThreadId,
+        message: {
+          messageId: asMessageId("fork-msg-1"),
+          role: "user",
+          text: "Tell me more about Paris.",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+
+    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+
+    // 4. Verify the message sent to the provider includes fork history context
+    const sendTurnArg = harness.sendTurn.mock.calls[0]?.[0] as {
+      input?: string;
+    };
+    expect(sendTurnArg?.input).toBeDefined();
+    expect(sendTurnArg.input).toContain(
+      "This conversation was forked from a previous thread",
+    );
+    expect(sendTurnArg.input).toContain("What is the capital of France?");
+    expect(sendTurnArg.input).toContain("The capital of France is Paris.");
+    expect(sendTurnArg.input).toContain("Tell me more about Paris.");
   });
 });

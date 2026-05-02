@@ -525,6 +525,7 @@ const make = Effect.gen(function* () {
           ...(attachments.length > 0 ? { attachments } : {}),
           modelSelection,
         });
+
         if (!generated) return;
 
         const thread = yield* resolveThread(input.threadId);
@@ -539,14 +540,15 @@ const make = Effect.gen(function* () {
           threadId: input.threadId,
           title: generated.title,
         });
+
       }).pipe(
-        Effect.catchCause((cause) =>
-          Effect.logWarning("provider command reactor failed to generate or rename thread title", {
+        Effect.catchCause((cause) => {
+          return Effect.logWarning("provider command reactor failed to generate or rename thread title", {
             threadId: input.threadId,
             cwd: input.cwd,
             cause: Cause.pretty(cause),
-          }),
-        ),
+          });
+        }),
       );
     },
   );
@@ -598,7 +600,10 @@ const make = Effect.gen(function* () {
         ...generationInput,
       }).pipe(Effect.forkScoped);
 
-      if (canReplaceThreadTitle(thread.title, event.payload.titleSeed)) {
+      if (
+        event.payload.autoGenerateTitle !== false &&
+        canReplaceThreadTitle(thread.title, event.payload.titleSeed)
+      ) {
         yield* maybeGenerateThreadTitleForFirstTurn({
           threadId: event.payload.threadId,
           cwd: generationCwd,
@@ -673,6 +678,25 @@ const make = Effect.gen(function* () {
         const contextBlock = summaries.join("\n\n---\n\n");
         resolvedMessageText = `${contextBlock}\n\n---\n\n${message.text}`;
         resolvedAttachments = message.attachments.filter((a) => a.type !== "thread-reference");
+      }
+    }
+
+    // For forked threads, prepend the copied conversation history as context
+    // so the agent is aware of what was discussed before the fork point.
+    // We check thread.session === null to detect the very first turn (no SDK
+    // session has been started yet for this forked thread).
+    if (thread.forkSource && thread.session === null) {
+      const priorMessages = thread.messages
+        .filter((m) => m.id !== message.id)
+        .toSorted((a, b) => a.createdAt.localeCompare(b.createdAt));
+      if (priorMessages.length > 0) {
+        const historyLines = priorMessages.map((m) => {
+          const text = m.text.length > 2000 ? m.text.slice(0, 2000) + "..." : m.text;
+          return `[${m.role}]: ${text}`;
+        });
+        const forkContext =
+          `This conversation was forked from a previous thread. Here is the conversation history up to the fork point:\n\n${historyLines.join("\n\n")}`;
+        resolvedMessageText = `${forkContext}\n\n---\n\n${resolvedMessageText}`;
       }
     }
 

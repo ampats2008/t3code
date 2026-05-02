@@ -104,6 +104,8 @@ import type { UnifiedSettings } from "@t3tools/contracts/settings";
 import type { SessionPhase, Thread } from "../../types";
 import type { PendingUserInputDraftAnswer } from "../../pendingUserInput";
 import type { PendingApproval, PendingUserInput } from "../../session-logic";
+import { useDiffReviewComposer } from "../../hooks/useDiffReviewComposer";
+import { ComposerDiffReviewBanner } from "../diff-review/ComposerDiffReviewBanner";
 import { deriveLatestContextWindowSnapshot } from "../../lib/contextWindow";
 import { formatProviderSkillDisplayName } from "../../providerSkillPresentation";
 import { searchProviderSkills } from "../../providerSkillSearch";
@@ -281,6 +283,7 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
     isComplete: boolean;
   } | null;
   isRunning: boolean;
+  showDiffReviewPrompt: boolean;
   showPlanFollowUpPrompt: boolean;
   promptHasText: boolean;
   isSendBusy: boolean;
@@ -300,6 +303,7 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
         compact={props.compact}
         pendingAction={props.pendingAction}
         isRunning={props.isRunning}
+        showDiffReviewPrompt={props.showDiffReviewPrompt}
         showPlanFollowUpPrompt={props.showPlanFollowUpPrompt}
         promptHasText={props.promptHasText}
         isSendBusy={props.isSendBusy}
@@ -350,6 +354,12 @@ export interface ChatComposerHandle {
     selectedModel: string;
     selectedProviderModels: ReadonlyArray<ServerProvider["models"][number]>;
   };
+  /** Get the current diff review state for use in send. */
+  getDiffReviewContext: () => {
+    showDiffReviewPrompt: boolean;
+    buildReviewMessage: (draftText: string) => string;
+    clearAfterSubmit: () => void;
+  };
 }
 
 // --------------------------------------------------------------------------
@@ -375,6 +385,7 @@ export interface ChatComposerProps {
   isConnecting: boolean;
   isSendBusy: boolean;
   isPreparingWorktree: boolean;
+  latestTurnSettled: boolean;
 
   // Pending approvals / inputs
   activePendingApproval: PendingApproval | null;
@@ -453,6 +464,7 @@ export interface ChatComposerProps {
   toggleInteractionMode: () => void;
   handleRuntimeModeChange: (mode: RuntimeMode) => void;
   handleInteractionModeChange: (mode: ProviderInteractionMode) => void;
+  onRenameThread: () => void;
   togglePlanSidebar: () => void;
 
   focusComposer: () => void;
@@ -482,6 +494,7 @@ export const ChatComposer = memo(
       isConnecting,
       isSendBusy,
       isPreparingWorktree,
+      latestTurnSettled,
       activePendingApproval,
       pendingApprovals,
       pendingUserInputs,
@@ -526,6 +539,7 @@ export const ChatComposer = memo(
       toggleInteractionMode,
       handleRuntimeModeChange,
       handleInteractionModeChange,
+      onRenameThread,
       togglePlanSidebar,
       focusComposer,
       scheduleComposerFocus,
@@ -677,6 +691,17 @@ export const ChatComposer = memo(
     const activeComposerMenuItemRef = useRef<ComposerCommandItem | null>(null);
     const dragDepthRef = useRef(0);
 
+    // Element inspector insertion bridge (dev-only) — inserts a chip node
+    // into the composer when an element is selected in the Chrome extension.
+    useEffect(() => {
+      const handler = (event: Event) => {
+        const { text } = (event as CustomEvent<{ text: string }>).detail;
+        composerEditorRef.current?.insertElementRef(text);
+      };
+      window.addEventListener("element-inspector:insert", handler);
+      return () => window.removeEventListener("element-inspector:insert", handler);
+    }, []);
+
     // ------------------------------------------------------------------
     // Derived: composer send state
     // ------------------------------------------------------------------
@@ -748,6 +773,13 @@ export const ChatComposer = memo(
             label: "/default",
             description: "Switch this thread back to normal build mode",
           },
+          {
+            id: "slash:rename",
+            type: "slash-command",
+            command: "rename",
+            label: "/rename",
+            description: "Generate a new title for this thread",
+          },
         ] satisfies ReadonlyArray<Extract<ComposerCommandItem, { type: "slash-command" }>>;
         const providerSlashCommandItems = (selectedProviderStatus?.slashCommands ?? []).map(
           (command) => ({
@@ -815,12 +847,22 @@ export const ChatComposer = memo(
 
     const isComposerApprovalState = activePendingApproval !== null;
     const activePendingUserInput = pendingUserInputs[0] ?? null;
+
+    // Diff review integration
+    const diffReviewComposer = useDiffReviewComposer({
+      activeThreadId,
+      latestTurnSettled,
+      pendingUserInputsCount: pendingUserInputs.length,
+      isComposerApprovalState,
+    });
+
     const hasComposerHeader =
       isComposerApprovalState ||
       pendingUserInputs.length > 0 ||
+      diffReviewComposer.showDiffReviewPrompt ||
       (showPlanFollowUpPrompt && activeProposedPlan !== null);
 
-    const composerFooterHasWideActions = showPlanFollowUpPrompt || activePendingProgress !== null;
+    const composerFooterHasWideActions = showPlanFollowUpPrompt || diffReviewComposer.showDiffReviewPrompt || activePendingProgress !== null;
     const showPlanSidebarToggle = Boolean(activePlan || sidebarProposedPlan || planSidebarOpen);
     const composerFooterActionLayoutKey = useMemo(() => {
       if (activePendingProgress) {
@@ -1366,6 +1408,16 @@ export const ChatComposer = memo(
             }
             return;
           }
+          if (item.command === "rename") {
+            const applied = applyPromptReplacement(trigger.rangeStart, trigger.rangeEnd, "", {
+              expectedText: snapshot.value.slice(trigger.rangeStart, trigger.rangeEnd),
+            });
+            if (applied) {
+              setComposerHighlightedItemId(null);
+            }
+            void onRenameThread();
+            return;
+          }
           void handleInteractionModeChange(item.command === "plan" ? "plan" : "default");
           const applied = applyPromptReplacement(trigger.rangeStart, trigger.rangeEnd, "", {
             expectedText: snapshot.value.slice(trigger.rangeStart, trigger.rangeEnd),
@@ -1412,7 +1464,7 @@ export const ChatComposer = memo(
           return;
         }
       },
-      [applyPromptReplacement, handleInteractionModeChange, resolveActiveComposerTrigger],
+      [applyPromptReplacement, handleInteractionModeChange, onRenameThread, resolveActiveComposerTrigger],
     );
 
     const onComposerMenuItemHighlighted = useCallback(
@@ -1667,6 +1719,11 @@ export const ChatComposer = memo(
           selectedModel,
           selectedProviderModels,
         }),
+        getDiffReviewContext: () => ({
+          showDiffReviewPrompt: diffReviewComposer.showDiffReviewPrompt,
+          buildReviewMessage: diffReviewComposer.buildReviewMessage,
+          clearAfterSubmit: diffReviewComposer.clearAfterSubmit,
+        }),
       }),
       [
         activeThread,
@@ -1685,6 +1742,7 @@ export const ChatComposer = memo(
         selectedPromptEffort,
         selectedProvider,
         selectedProviderModels,
+        diffReviewComposer,
       ],
     );
 
@@ -1730,6 +1788,12 @@ export const ChatComposer = memo(
                   questionIndex={activePendingQuestionIndex}
                   onToggleOption={onSelectActivePendingUserInputOption}
                   onAdvance={onAdvanceActivePendingUserInput}
+                />
+              </div>
+            ) : diffReviewComposer.showDiffReviewPrompt ? (
+              <div className="rounded-t-[19px] border-b border-border/65 bg-muted/20">
+                <ComposerDiffReviewBanner
+                  annotationCount={diffReviewComposer.nonOrphanedAnnotationCount}
                 />
               </div>
             ) : showPlanFollowUpPrompt && activeProposedPlan ? (
@@ -1858,11 +1922,13 @@ export const ChatComposer = memo(
                     ? (activePendingApproval?.detail ?? "Resolve this approval request to continue")
                     : activePendingProgress
                       ? "Type your own answer, or leave this blank to use the selected option"
-                      : showPlanFollowUpPrompt && activeProposedPlan
-                        ? "Add feedback to refine the plan, or leave this blank to implement it"
-                        : phase === "disconnected"
-                          ? "Ask for follow-up changes or attach images"
-                          : "Ask anything, @tag files/folders, or use / to show available commands"
+                      : diffReviewComposer.showDiffReviewPrompt
+                        ? diffReviewComposer.reviewComposerPlaceholder
+                        : showPlanFollowUpPrompt && activeProposedPlan
+                          ? "Add feedback to refine the plan, or leave this blank to implement it"
+                          : phase === "disconnected"
+                            ? "Ask for follow-up changes or attach images"
+                            : "Ask anything, @tag files/folders, or use / to show available commands"
                 }
                 disabled={isConnecting || isComposerApprovalState}
               />
@@ -1963,6 +2029,9 @@ export const ChatComposer = memo(
                     activeContextWindow={activeContextWindow}
                     pendingAction={pendingPrimaryAction}
                     isRunning={phase === "running"}
+                    showDiffReviewPrompt={
+                      pendingUserInputs.length === 0 && diffReviewComposer.showDiffReviewPrompt
+                    }
                     showPlanFollowUpPrompt={
                       pendingUserInputs.length === 0 && showPlanFollowUpPrompt
                     }

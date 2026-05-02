@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { realpathSync } from "node:fs";
+import * as nodePath from "node:path";
 
 import {
   Cache,
