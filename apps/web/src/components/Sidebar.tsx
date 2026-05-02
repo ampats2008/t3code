@@ -2371,14 +2371,14 @@ const SidebarChromeHeader = memo(function SidebarChromeHeader({
   isElectron: boolean;
 }) {
   const wordmark = (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center justify-center gap-2">
       <SidebarTrigger className="shrink-0 md:hidden" />
       <Tooltip>
         <TooltipTrigger
           render={
             <Link
               aria-label="Go to threads"
-              className="ml-1 flex min-w-0 flex-1 cursor-pointer items-center gap-1 rounded-md outline-hidden ring-ring transition-colors hover:text-foreground focus-visible:ring-2"
+              className="flex cursor-pointer items-center gap-1 rounded-md outline-hidden ring-ring transition-colors hover:text-foreground focus-visible:ring-2"
               to="/"
             >
               <AMWordmark />
