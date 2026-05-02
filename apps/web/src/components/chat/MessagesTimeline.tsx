@@ -70,6 +70,7 @@ import {
 } from "./userMessageTerminalContexts";
 import { formatWorkspaceRelativePath } from "../../filePathDisplay";
 import { classifyToolDisplayMode } from "./toolCallClassification";
+import { formatToolPreview as forkFormatToolPreview } from "./forkToolPreviewFormatter";
 import { RichToolCallRow } from "./RichToolCallRow";
 import { ForkBadge } from "./ForkBadge";
 
@@ -943,10 +944,19 @@ function workToneClass(tone: "thinking" | "tool" | "info" | "error"): string {
 }
 
 function workEntryPreview(
-  workEntry: Pick<TimelineWorkEntry, "detail" | "command" | "changedFiles">,
+  workEntry: Pick<TimelineWorkEntry, "detail" | "command" | "changedFiles"> & {
+    data?: { toolName?: string; input?: Record<string, unknown> };
+  },
   workspaceRoot: string | undefined,
 ) {
   if (workEntry.command) return workEntry.command;
+  // 2AM-Code fork: use formatted preview when available
+  const formatted = forkFormatToolPreview(
+    workEntry.data?.toolName,
+    workEntry.data?.input,
+    workspaceRoot,
+  );
+  if (formatted) return formatted;
   if (workEntry.detail) return workEntry.detail;
   if ((workEntry.changedFiles?.length ?? 0) === 0) return null;
   const [firstPath] = workEntry.changedFiles ?? [];
