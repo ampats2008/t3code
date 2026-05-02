@@ -872,7 +872,7 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
                                     e.preventDefault();
                                     openDiffFileInEditor(filePath);
                                   }}
-                                  className="inline-flex items-center justify-center rounded-sm p-0.5 transition-colors hover:bg-foreground/10"
+                                  className="inline-flex cursor-pointer items-center justify-center rounded-sm p-0.5 transition-colors hover:bg-foreground/10"
                                   aria-label="Open in editor"
                                   title="Open in editor"
                                 >

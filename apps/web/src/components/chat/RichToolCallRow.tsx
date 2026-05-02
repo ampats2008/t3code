@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import {
   CheckIcon,
   ChevronRightIcon,
@@ -12,6 +12,9 @@ import { Collapsible, CollapsibleTrigger, CollapsiblePanel } from "~/components/
 import { cn } from "~/lib/utils";
 import { type WorkLogEntry } from "../../session-logic";
 import { type ToolDisplayMode } from "./toolCallClassification";
+import { InlineEditDiff } from "./forkUnifiedDiff";
+import { openInPreferredEditor } from "../../editorPreferences";
+import { readLocalApi } from "../../localApi";
 
 interface RichToolCallRowProps {
   workEntry: WorkLogEntry;
@@ -245,48 +248,14 @@ function EditSummary(props: { workEntry: WorkLogEntry }) {
   const input = workEntry.data?.input;
   const filePath = (input?.file_path as string) ?? workEntry.changedFiles?.[0] ?? workEntry.label;
   const basename = filePath.split(/[\\/]/).pop() ?? filePath;
-  // 2AM-Code fork: show inline diff snippet in summary
-  const oldStr = (input?.old_string as string) ?? "";
-  const newStr = (input?.new_string as string) ?? "";
-  const diffSnippet = buildDiffSnippet(oldStr, newStr);
 
   return (
-    <div className="min-w-0">
-      <p className="truncate text-[11px] leading-5 text-foreground/80" title={filePath}>
-        {basename}
-      </p>
-      {diffSnippet && (
-        <p className="truncate font-mono text-[10px] leading-4 text-muted-foreground/55">
-          {diffSnippet}
-        </p>
-      )}
-    </div>
+    <p className="truncate text-[11px] leading-5 text-foreground/80" title={filePath}>
+      {basename}
+    </p>
   );
 }
 
-/** 2AM-Code fork: Build a compact single-line diff snippet for the edit summary. */
-function buildDiffSnippet(oldStr: string, newStr: string): string | null {
-  if (!oldStr && !newStr) return null;
-  const oldLine = firstMeaningfulLine(oldStr);
-  const newLine = firstMeaningfulLine(newStr);
-  if (!oldLine && !newLine) return null;
-  const parts: string[] = [];
-  if (oldLine) parts.push(`- ${truncateSnippet(oldLine, 40)}`);
-  if (newLine) parts.push(`+ ${truncateSnippet(newLine, 40)}`);
-  return parts.join("  ");
-}
-
-function firstMeaningfulLine(text: string): string | null {
-  for (const line of text.split("\n")) {
-    const trimmed = line.trim();
-    if (trimmed.length > 0) return trimmed;
-  }
-  return null;
-}
-
-function truncateSnippet(value: string, max: number): string {
-  return value.length <= max ? value : value.slice(0, max - 1) + "\u2026";
-}
 
 function EditDetail(props: { workEntry: WorkLogEntry }) {
   const { workEntry } = props;
@@ -295,20 +264,30 @@ function EditDetail(props: { workEntry: WorkLogEntry }) {
   const oldString = (input?.old_string as string) ?? "";
   const newString = (input?.new_string as string) ?? "";
 
+  const handleOpenInEditor = useCallback(
+    (e: ReactMouseEvent) => {
+      e.stopPropagation();
+      const api = readLocalApi();
+      if (!api || !filePath) return;
+      void openInPreferredEditor(api, filePath);
+    },
+    [filePath],
+  );
+
   return (
     <div className="space-y-2 pb-1">
       {filePath && (
-        <p className="font-mono text-[10px] text-muted-foreground/60">{filePath}</p>
+        <button
+          type="button"
+          onClick={handleOpenInEditor}
+          className="cursor-pointer font-mono text-[10px] text-muted-foreground/60 underline decoration-muted-foreground/30 underline-offset-2 transition-colors hover:text-foreground/80 hover:decoration-foreground/50"
+          title="Open in editor"
+        >
+          {filePath}
+        </button>
       )}
       {(oldString || newString) && (
-        <div className="space-y-1">
-          {oldString && (
-            <DiffBlock prefix="-" text={oldString} className="bg-red-500/8 text-red-400/80" />
-          )}
-          {newString && (
-            <DiffBlock prefix="+" text={newString} className="bg-green-500/8 text-green-400/80" />
-          )}
-        </div>
+        <InlineEditDiff oldString={oldString} newString={newString} filePath={filePath} />
       )}
     </div>
   );
