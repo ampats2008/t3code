@@ -23,12 +23,9 @@ import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type { KnownProvider } from "@mariozechner/pi-ai";
 import { Effect, Exit, Layer, Queue, Ref, Scope, Stream } from "effect";
 
-import { ServerConfig } from "../../config.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 import {
-  ProviderAdapterProcessError,
-  ProviderAdapterRequestError,
   ProviderAdapterSessionClosedError,
   ProviderAdapterSessionNotFoundError,
 } from "../Errors.ts";
@@ -244,11 +241,29 @@ export function makePiAdapterLive(options?: PiAdapterLiveOptions) {
           const pendingApprovals = new Map<string, PendingApproval>();
           const stoppedRef = yield* Ref.make(false);
 
+          const API_KEY_ENV_MAP: Record<string, string> = {
+            anthropic: "ANTHROPIC_API_KEY",
+            openai: "OPENAI_API_KEY",
+            google: "GOOGLE_API_KEY",
+            mistral: "MISTRAL_API_KEY",
+            groq: "GROQ_API_KEY",
+            xai: "XAI_API_KEY",
+            together: "TOGETHER_API_KEY",
+            deepseek: "DEEPSEEK_API_KEY",
+            fireworks: "FIREWORKS_API_KEY",
+            cohere: "COHERE_API_KEY",
+            perplexity: "PERPLEXITY_API_KEY",
+          };
+
           const agent = new Agent({
             initialState: {
               ...(model ? { model } : {}),
               ...(resumeState?.messages ? { messages: resumeState.messages } : {}),
               systemPrompt: "You are a coding assistant working in a development environment.",
+            },
+            getApiKey: (provider: string) => {
+              const envVar = API_KEY_ENV_MAP[provider] ?? `${provider.toUpperCase()}_API_KEY`;
+              return process.env[envVar];
             },
             beforeToolCall: async (context: any, signal?: AbortSignal) => {
               // Auto-approve read-only tools

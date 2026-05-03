@@ -224,8 +224,8 @@ type InstallProviderSettings = {
   provider: ProviderKind;
   title: string;
   badgeLabel?: string;
-  binaryPlaceholder: string;
-  binaryDescription: ReactNode;
+  binaryPlaceholder?: string;
+  binaryDescription?: ReactNode;
   serverUrlPlaceholder?: string;
   serverUrlDescription?: ReactNode;
   serverPasswordPlaceholder?: string;
@@ -268,6 +268,11 @@ const PROVIDER_SETTINGS: readonly InstallProviderSettings[] = [
     serverPasswordPlaceholder: "Server password (optional)",
     serverPasswordDescription:
       "If your OpenCode server requires authentication, enter the password here. NOTE: Stored in plain text on disk",
+  },
+  {
+    provider: "pi",
+    title: "Pi",
+    badgeLabel: "Experimental",
   },
 ] as const;
 
@@ -1577,6 +1582,7 @@ export function GeneralSettingsPanel() {
               >
                 <CollapsibleContent>
                   <div className="space-y-0">
+                    {providerCard.binaryPlaceholder ? (
                     <div className="border-t border-border/60 px-4 py-3 sm:px-5">
                       <label
                         htmlFor={`provider-install-${providerCard.provider}-binary-path`}
@@ -1608,6 +1614,7 @@ export function GeneralSettingsPanel() {
                         </span>
                       </label>
                     </div>
+                    ) : null}
 
                     {providerCard.serverUrlPlaceholder ? (
                       <div className="border-t border-border/60 px-4 py-3 sm:px-5">
