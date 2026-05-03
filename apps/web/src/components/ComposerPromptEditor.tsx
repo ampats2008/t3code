@@ -631,6 +631,106 @@ function $createComposerTerminalErrorNode(data: TerminalErrorData): ComposerTerm
   return $applyNodeReplacement(new ComposerTerminalErrorNode(data));
 }
 
+// ---------------------------------------------------------------------------
+// ComposerDiagnosticNode — VS Code diagnostic "Fix This" chip
+// ---------------------------------------------------------------------------
+
+interface DiagnosticRefData {
+  file: string;
+  startLine: number;
+  endLine: number;
+  diagnostics: Array<{ message: string; severity: string; source: string }>;
+}
+
+type SerializedComposerDiagnosticNode = Spread<
+  { data: DiagnosticRefData; type: "composer-diagnostic"; version: 1 },
+  SerializedLexicalNode
+>;
+
+const DIAGNOSTIC_ICON_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>`;
+
+function ComposerDiagnosticDecorator({ data }: { data: DiagnosticRefData }) {
+  const filename = data.file.split(/[/\\]/).pop() ?? data.file;
+  const firstDiag = data.diagnostics[0];
+  const label = firstDiag
+    ? `${firstDiag.source || firstDiag.severity} in ${filename}:${data.startLine}`
+    : `Diagnostic in ${filename}:${data.startLine}`;
+  return (
+    <span className={COMPOSER_INLINE_CHIP_CLASS_NAME} contentEditable={false} spellCheck={false}>
+      <span
+        aria-hidden="true"
+        className={COMPOSER_INLINE_CHIP_ICON_CLASS_NAME}
+        dangerouslySetInnerHTML={{ __html: DIAGNOSTIC_ICON_SVG }}
+      />
+      <span className={COMPOSER_INLINE_CHIP_LABEL_CLASS_NAME}>
+        {label}
+      </span>
+    </span>
+  );
+}
+
+class ComposerDiagnosticNode extends DecoratorNode<ReactElement> {
+  __data: DiagnosticRefData;
+
+  static override getType(): string {
+    return "composer-diagnostic";
+  }
+
+  static override clone(node: ComposerDiagnosticNode): ComposerDiagnosticNode {
+    return new ComposerDiagnosticNode(node.__data, node.__key);
+  }
+
+  static override importJSON(
+    serializedNode: SerializedComposerDiagnosticNode,
+  ): ComposerDiagnosticNode {
+    return $createComposerDiagnosticNode(serializedNode.data);
+  }
+
+  constructor(data: DiagnosticRefData, key?: NodeKey) {
+    super(key);
+    this.__data = data;
+  }
+
+  override exportJSON(): SerializedComposerDiagnosticNode {
+    return {
+      ...super.exportJSON(),
+      data: this.__data,
+      type: "composer-diagnostic",
+      version: 1,
+    };
+  }
+
+  override createDOM(): HTMLElement {
+    const span = document.createElement("span");
+    span.className = "inline-flex align-middle leading-none";
+    return span;
+  }
+
+  override updateDOM(): false {
+    return false;
+  }
+
+  override getTextContent(): string {
+    const header = `[Diagnostic — ${this.__data.file}:${this.__data.startLine}]`;
+    const diagLines = this.__data.diagnostics
+      .map((d) => `${d.severity}: ${d.message}${d.source ? ` (${d.source})` : ""}`)
+      .join("\n");
+    return `${header}\n${diagLines}`;
+  }
+
+  override isInline(): true {
+    return true;
+  }
+
+  override decorate(): ReactElement {
+    return <ComposerDiagnosticDecorator data={this.__data} />;
+  }
+}
+
+function $createComposerDiagnosticNode(data: DiagnosticRefData): ComposerDiagnosticNode {
+  return $applyNodeReplacement(new ComposerDiagnosticNode(data));
+}
+
 const SKILL_CHIP_ICON_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>`;
 
 function resolveSkillDescription(
@@ -1304,6 +1404,8 @@ export interface ComposerPromptEditorHandle {
   insertReviewComments: (data: { comments: Array<{ file: string; startLine: number; endLine: number; text: string; body: string }> }) => void;
   /** Insert a terminal error chip from VS Code / Cursor at the current cursor position. */
   insertTerminalError: (data: { command: string; exitCode: number; output: string; cwd: string }) => void;
+  /** Insert a diagnostic ref chip from VS Code / Cursor at the current cursor position. */
+  insertDiagnosticRef: (data: { file: string; startLine: number; endLine: number; diagnostics: Array<{ message: string; severity: string; source: string }> }) => void;
 }
 
 interface ComposerPromptEditorProps {
@@ -2072,6 +2174,31 @@ function ComposerPromptEditorInner({
     [editor],
   );
 
+  const insertDiagnosticRef = useCallback(
+    (data: { file: string; startLine: number; endLine: number; diagnostics: Array<{ message: string; severity: string; source: string }> }) => {
+      const rootElement = editor.getRootElement();
+      if (!rootElement) return;
+      rootElement.focus();
+      editor.update(() => {
+        const cursor = snapshotRef.current.cursor;
+        $setSelectionAtComposerOffset(cursor);
+        const selection = $getSelection();
+        if (!$isRangeSelection(selection)) return;
+        const currentText = snapshotRef.current.value;
+        if (cursor > 0 && currentText[cursor - 1] !== " ") {
+          selection.insertText(" ");
+        }
+        const chipNode = $createComposerDiagnosticNode(data);
+        selection.insertNodes([chipNode]);
+        const afterSelection = $getSelection();
+        if ($isRangeSelection(afterSelection)) {
+          afterSelection.insertText(" ");
+        }
+      });
+    },
+    [editor],
+  );
+
   useImperativeHandle(
     editorRef,
     () => ({
@@ -2092,8 +2219,9 @@ function ComposerPromptEditorInner({
       insertCodeRef,
       insertReviewComments,
       insertTerminalError,
+      insertDiagnosticRef,
     }),
-    [focusAt, readSnapshot, insertElementRef, insertCodeRef, insertReviewComments, insertTerminalError],
+    [focusAt, readSnapshot, insertElementRef, insertCodeRef, insertReviewComments, insertTerminalError, insertDiagnosticRef],
   );
 
   const handleEditorChange = useCallback((editorState: EditorState) => {
@@ -2208,7 +2336,7 @@ export const ComposerPromptEditor = forwardRef<
     () => ({
       namespace: "t3tools-composer-editor",
       editable: true,
-      nodes: [ComposerMentionNode, ComposerSkillNode, ComposerTerminalContextNode, ComposerElementRefNode, ComposerCodeRefNode, ComposerReviewNode, ComposerTerminalErrorNode],
+      nodes: [ComposerMentionNode, ComposerSkillNode, ComposerTerminalContextNode, ComposerElementRefNode, ComposerCodeRefNode, ComposerReviewNode, ComposerTerminalErrorNode, ComposerDiagnosticNode],
       editorState: () => {
         $setComposerEditorPrompt(
           initialValueRef.current,

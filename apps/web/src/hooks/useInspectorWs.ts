@@ -67,6 +67,10 @@ function connectSingleton() {
           window.dispatchEvent(
             new CustomEvent("vscode:terminal-error", { detail: message }),
           );
+        } else if (message.type === "diagnostic-ref") {
+          window.dispatchEvent(
+            new CustomEvent("vscode:diagnostic-ref", { detail: message }),
+          );
         }
       } catch {
         // Ignore malformed messages

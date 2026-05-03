@@ -34,6 +34,10 @@
         "command": "t3code.deleteReviewComment",
         "title": "Delete Comment",
         "icon": "$(trash)"
+      },
+      {
+        "command": "t3code.fixDiagnostic",
+        "title": "Fix with T3Code"
       }
     ],
     "menus": {

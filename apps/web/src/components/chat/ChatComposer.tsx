@@ -791,6 +791,22 @@ export const ChatComposer = memo(
       return () => window.removeEventListener("vscode:terminal-error", handler);
     }, []);
 
+    // VS Code diagnostic ref bridge — inserts a diagnostic chip when the
+    // user clicks "Fix with T3Code" on a diagnostic in VS Code / Cursor.
+    useEffect(() => {
+      const handler = (event: Event) => {
+        const detail = (event as CustomEvent).detail as {
+          file: string;
+          startLine: number;
+          endLine: number;
+          diagnostics: Array<{ message: string; severity: string; source: string }>;
+        };
+        composerEditorRef.current?.insertDiagnosticRef(detail);
+      };
+      window.addEventListener("vscode:diagnostic-ref", handler);
+      return () => window.removeEventListener("vscode:diagnostic-ref", handler);
+    }, []);
+
     // ------------------------------------------------------------------
     // Derived: composer send state
     // ------------------------------------------------------------------

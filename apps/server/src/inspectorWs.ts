@@ -16,7 +16,7 @@ interface InspectorMessage {
   [key: string]: unknown;
 }
 
-const KNOWN_TYPES = new Set(["element-ref", "code-ref", "open-file", "review-comments", "terminal-error"]);
+const KNOWN_TYPES = new Set(["element-ref", "code-ref", "open-file", "review-comments", "terminal-error", "diagnostic-ref"]);
 
 interface AckMessage {
   type: "ack";
