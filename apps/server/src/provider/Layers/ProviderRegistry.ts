@@ -11,10 +11,12 @@ import { ClaudeProviderLive } from "./ClaudeProvider.ts";
 import { CodexProviderLive } from "./CodexProvider.ts";
 import { CursorProviderLive } from "./CursorProvider.ts";
 import { OpenCodeProviderLive } from "./OpenCodeProvider.ts";
+import { PiProviderLive } from "./PiProvider.ts";
 import { ClaudeProvider } from "../Services/ClaudeProvider.ts";
 import { CodexProvider } from "../Services/CodexProvider.ts";
 import { CursorProvider } from "../Services/CursorProvider.ts";
 import { OpenCodeProvider } from "../Services/OpenCodeProvider.ts";
+import { PiProvider } from "../Services/PiProvider.ts";
 import { ProviderRegistry, type ProviderRegistryShape } from "../Services/ProviderRegistry.ts";
 import { OpenCodeRuntimeLive } from "../opencodeRuntime.ts";
 import {
@@ -88,12 +90,14 @@ const ProviderRegistryLiveBase = Layer.effect(
     const path = yield* Path.Path;
 
     const cursorProvider = yield* CursorProvider;
+    const piProvider = yield* PiProvider;
 
     const providerSources = createBuiltInProviderSources({
       codex: codexProvider,
       claudeAgent: claudeProvider,
       opencode: openCodeProvider,
       cursor: cursorProvider,
+      pi: piProvider,
     }) satisfies ReadonlyArray<ProviderSnapshotSource>;
     const activeProviders = PROVIDER_CACHE_IDS;
     const changesPubSub = yield* Effect.acquireRelease(
@@ -259,6 +263,7 @@ export const ProviderRegistryLive = Layer.unwrap(
       Layer.provideMerge(CodexProviderLive),
       Layer.provideMerge(ClaudeProviderLive),
       Layer.provideMerge(OpenCodeProviderLive),
+      Layer.provideMerge(PiProviderLive),
       Layer.provideMerge(OpenCodeRuntimeLive),
     ),
   ),
