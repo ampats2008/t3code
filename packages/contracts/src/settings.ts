@@ -66,6 +66,9 @@ export const ClientSettingsSchema = Schema.Struct({
   timestampFormat: TimestampFormat.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_TIMESTAMP_FORMAT)),
   ),
+  hideAddActionButton: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  hideOpenButton: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  hideCommitPushPrButton: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
 });
 export type ClientSettings = typeof ClientSettingsSchema.Type;
 
@@ -282,5 +285,8 @@ export const ClientSettingsPatch = Schema.Struct({
   sidebarProjectSortOrder: Schema.optionalKey(SidebarProjectSortOrder),
   sidebarThreadSortOrder: Schema.optionalKey(SidebarThreadSortOrder),
   timestampFormat: Schema.optionalKey(TimestampFormat),
+  hideAddActionButton: Schema.optionalKey(Schema.Boolean),
+  hideOpenButton: Schema.optionalKey(Schema.Boolean),
+  hideCommitPushPrButton: Schema.optionalKey(Schema.Boolean),
 });
 export type ClientSettingsPatch = typeof ClientSettingsPatch.Type;

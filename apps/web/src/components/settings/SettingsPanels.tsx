@@ -621,6 +621,15 @@ export function useSettingsRestore(onRestored?: () => void) {
         : []),
       ...(isGitWritingModelDirty ? ["Git writing model"] : []),
       ...(areProviderSettingsDirty ? ["Providers"] : []),
+      ...(settings.hideAddActionButton !== DEFAULT_UNIFIED_SETTINGS.hideAddActionButton
+        ? ["Hide Add action"]
+        : []),
+      ...(settings.hideOpenButton !== DEFAULT_UNIFIED_SETTINGS.hideOpenButton
+        ? ["Hide Open"]
+        : []),
+      ...(settings.hideCommitPushPrButton !== DEFAULT_UNIFIED_SETTINGS.hideCommitPushPrButton
+        ? ["Hide Commit, push & PR"]
+        : []),
     ],
     [
       areProviderSettingsDirty,
@@ -635,6 +644,9 @@ export function useSettingsRestore(onRestored?: () => void) {
       settings.diffDefaultView,
       settings.diffWordWrap,
       settings.enableAssistantStreaming,
+      settings.hideAddActionButton,
+      settings.hideOpenButton,
+      settings.hideCommitPushPrButton,
       settings.timestampFormat,
       theme,
     ],
@@ -1182,6 +1194,48 @@ export function GeneralSettingsPanel() {
                 updateSettings({ autoGenerateThreadTitle: Boolean(checked) })
               }
               aria-label="Auto-generate thread title"
+            />
+          }
+        />
+
+        <SettingsRow
+          title={`Hide "Add action" button`}
+          description="Hide the Add action button from the chat header toolbar."
+          control={
+            <Switch
+              checked={settings.hideAddActionButton}
+              onCheckedChange={(checked) =>
+                updateSettings({ hideAddActionButton: Boolean(checked) })
+              }
+              aria-label="Hide Add action button"
+            />
+          }
+        />
+
+        <SettingsRow
+          title={`Hide "Open" button`}
+          description="Hide the Open in editor button from the chat header toolbar."
+          control={
+            <Switch
+              checked={settings.hideOpenButton}
+              onCheckedChange={(checked) =>
+                updateSettings({ hideOpenButton: Boolean(checked) })
+              }
+              aria-label="Hide Open button"
+            />
+          }
+        />
+
+        <SettingsRow
+          title={`Hide "Commit, push & PR" button`}
+          description="Hide the git actions button from the chat header toolbar."
+          control={
+            <Switch
+              checked={settings.hideCommitPushPrButton}
+              onCheckedChange={(checked) =>
+                updateSettings({ hideCommitPushPrButton: Boolean(checked) })
+              }
+              aria-label="Hide Commit, push & PR button"
             />
           }
         />

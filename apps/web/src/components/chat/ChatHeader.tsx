@@ -6,7 +6,8 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 import { scopeThreadRef } from "@t3tools/client-runtime";
-import { memo } from "react";
+import { memo, useCallback } from "react";
+import { useSettings } from "../../hooks/useSettings";
 import GitActionsControl from "../GitActionsControl";
 import { type DraftId } from "~/composerDraftStore";
 import { DiffIcon, TerminalSquareIcon } from "lucide-react";
@@ -69,6 +70,15 @@ export const ChatHeader = memo(function ChatHeader({
   onToggleDiff,
 }: ChatHeaderProps) {
   const { state } = useSidebar();
+  const selectHidden = useCallback(
+    (s: { hideAddActionButton: boolean; hideOpenButton: boolean; hideCommitPushPrButton: boolean }) => ({
+      hideAddAction: s.hideAddActionButton,
+      hideOpen: s.hideOpenButton,
+      hideCommitPushPr: s.hideCommitPushPrButton,
+    }),
+    [],
+  );
+  const { hideAddAction, hideOpen, hideCommitPushPr } = useSettings(selectHidden);
   return (
     <div className="@container/header-actions flex min-w-0 flex-1 items-center gap-2">
       <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden sm:gap-3">
@@ -91,7 +101,7 @@ export const ChatHeader = memo(function ChatHeader({
         )}
       </div>
       <div className="flex shrink-0 items-center justify-end gap-2 @3xl/header-actions:gap-3">
-        {activeProjectScripts && (
+        {activeProjectScripts && !hideAddAction && (
           <ProjectScriptsControl
             scripts={activeProjectScripts}
             keybindings={keybindings}
@@ -102,14 +112,14 @@ export const ChatHeader = memo(function ChatHeader({
             onDeleteScript={onDeleteProjectScript}
           />
         )}
-        {activeProjectName && (
+        {activeProjectName && !hideOpen && (
           <OpenInPicker
             keybindings={keybindings}
             availableEditors={availableEditors}
             openInCwd={openInCwd}
           />
         )}
-        {activeProjectName && (
+        {activeProjectName && !hideCommitPushPr && (
           <GitActionsControl
             gitCwd={gitCwd}
             activeThreadRef={scopeThreadRef(activeThreadEnvironmentId, activeThreadId)}
