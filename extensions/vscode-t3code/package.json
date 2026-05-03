@@ -39,11 +39,17 @@
           "group": "t3code"
         }
       ],
-      "comments/commentThread/title": [
+      "editor/title": [
         {
           "command": "t3code.submitReview",
-          "group": "inline",
-          "when": "commentController == t3code-review"
+          "group": "navigation",
+          "when": "t3code.hasReviewComments"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "t3code.submitReview",
+          "when": "t3code.hasReviewComments"
         }
       ],
       "comments/commentThread/context": [

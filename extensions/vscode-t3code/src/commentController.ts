@@ -32,6 +32,14 @@ export function createCommentController(
 
   const threads: vscode.CommentThread[] = [];
 
+  function updateContextKey() {
+    vscode.commands.executeCommand(
+      "setContext",
+      "t3code.hasReviewComments",
+      threads.length > 0,
+    );
+  }
+
   const instance: T3CodeCommentController = {
     controller,
     threads,
@@ -48,6 +56,7 @@ export function createCommentController(
       thread.comments = [...thread.comments, comment];
       thread.collapsibleState = vscode.CommentThreadCollapsibleState.Expanded;
       threads.push(thread);
+      updateContextKey();
     },
 
     replyToThread(reply: vscode.CommentReply): void {
@@ -92,6 +101,7 @@ export function createCommentController(
         thread.dispose();
       }
       threads.length = 0;
+      updateContextKey();
     },
 
     dispose(): void {
