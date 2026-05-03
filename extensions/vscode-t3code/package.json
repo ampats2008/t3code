@@ -29,6 +29,11 @@
       {
         "command": "t3code.replyReviewComment",
         "title": "Reply"
+      },
+      {
+        "command": "t3code.deleteReviewComment",
+        "title": "Delete Comment",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -50,6 +55,13 @@
         {
           "command": "t3code.submitReview",
           "when": "t3code.hasReviewComments"
+        }
+      ],
+      "comments/commentThread/title": [
+        {
+          "command": "t3code.deleteReviewComment",
+          "group": "inline",
+          "when": "commentController == t3code-review && !commentThreadIsEmpty"
         }
       ],
       "comments/commentThread/context": [

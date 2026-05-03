@@ -59,6 +59,15 @@ export function createCommentController(
       updateContextKey();
     },
 
+    deleteThread(thread: vscode.CommentThread): void {
+      const idx = threads.indexOf(thread);
+      if (idx !== -1) {
+        threads.splice(idx, 1);
+      }
+      thread.dispose();
+      updateContextKey();
+    },
+
     replyToThread(reply: vscode.CommentReply): void {
       const comment: vscode.Comment = {
         body: reply.text,
@@ -117,6 +126,7 @@ export interface T3CodeCommentController {
   controller: vscode.CommentController;
   threads: vscode.CommentThread[];
   createThread(reply: vscode.CommentReply): void;
+  deleteThread(thread: vscode.CommentThread): void;
   replyToThread(reply: vscode.CommentReply): void;
   collectComments(): Promise<ReviewComment[]>;
   clearAll(): void;

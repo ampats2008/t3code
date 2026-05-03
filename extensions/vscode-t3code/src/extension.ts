@@ -36,6 +36,13 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   );
 
+  // Delete a comment thread
+  context.subscriptions.push(
+    vscode.commands.registerCommand("t3code.deleteReviewComment", (thread: vscode.CommentThread) => {
+      reviewController.deleteThread(thread);
+    }),
+  );
+
   // Submit all review comments to T3Code
   context.subscriptions.push(
     vscode.commands.registerCommand("t3code.submitReview", async () => {
