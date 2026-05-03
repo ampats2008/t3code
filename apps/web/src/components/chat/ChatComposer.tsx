@@ -775,6 +775,22 @@ export const ChatComposer = memo(
       return () => window.removeEventListener("vscode:review-comments", handler);
     }, []);
 
+    // VS Code terminal error bridge — inserts a terminal error chip when the
+    // user confirms sending a failed terminal command from VS Code / Cursor.
+    useEffect(() => {
+      const handler = (event: Event) => {
+        const detail = (event as CustomEvent).detail as {
+          command: string;
+          exitCode: number;
+          output: string;
+          cwd: string;
+        };
+        composerEditorRef.current?.insertTerminalError(detail);
+      };
+      window.addEventListener("vscode:terminal-error", handler);
+      return () => window.removeEventListener("vscode:terminal-error", handler);
+    }, []);
+
     // ------------------------------------------------------------------
     // Derived: composer send state
     // ------------------------------------------------------------------

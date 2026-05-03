@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { T3CodeClient } from "./wsClient";
 import { createStatusBar, update as updateStatusBar } from "./statusBar";
 import { createCommentController, type T3CodeCommentController } from "./commentController";
+import { registerTerminalWatcher } from "./terminalWatcher";
 
 let client: T3CodeClient;
 let reviewController: T3CodeCommentController;
@@ -17,6 +18,9 @@ export function activate(context: vscode.ExtensionContext) {
 
   client.on("stateChange", updateStatusBar);
   client.connect();
+
+  // Terminal error watcher
+  registerTerminalWatcher(context, client);
 
   // Review comment controller
   reviewController = createCommentController(context);

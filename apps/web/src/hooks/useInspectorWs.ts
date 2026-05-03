@@ -63,6 +63,10 @@ function connectSingleton() {
           window.dispatchEvent(
             new CustomEvent("vscode:review-comments", { detail: message }),
           );
+        } else if (message.type === "terminal-error") {
+          window.dispatchEvent(
+            new CustomEvent("vscode:terminal-error", { detail: message }),
+          );
         }
       } catch {
         // Ignore malformed messages

@@ -534,6 +534,103 @@ function $createComposerReviewNode(data: ReviewData): ComposerReviewNode {
   return $applyNodeReplacement(new ComposerReviewNode(data));
 }
 
+// ---------------------------------------------------------------------------
+// ComposerTerminalErrorNode — VS Code terminal error chip
+// ---------------------------------------------------------------------------
+
+interface TerminalErrorData {
+  command: string;
+  exitCode: number;
+  output: string;
+  cwd: string;
+}
+
+type SerializedComposerTerminalErrorNode = Spread<
+  { data: TerminalErrorData; type: "composer-terminal-error"; version: 1 },
+  SerializedLexicalNode
+>;
+
+const TERMINAL_ICON_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg>`;
+
+function ComposerTerminalErrorDecorator({ data }: { data: TerminalErrorData }) {
+  return (
+    <span className={COMPOSER_INLINE_CHIP_CLASS_NAME} contentEditable={false} spellCheck={false}>
+      <span
+        aria-hidden="true"
+        className={COMPOSER_INLINE_CHIP_ICON_CLASS_NAME}
+        dangerouslySetInnerHTML={{ __html: TERMINAL_ICON_SVG }}
+      />
+      <span className={COMPOSER_INLINE_CHIP_LABEL_CLASS_NAME}>
+        Build failed (exit {data.exitCode})
+      </span>
+    </span>
+  );
+}
+
+class ComposerTerminalErrorNode extends DecoratorNode<ReactElement> {
+  __data: TerminalErrorData;
+
+  static override getType(): string {
+    return "composer-terminal-error";
+  }
+
+  static override clone(node: ComposerTerminalErrorNode): ComposerTerminalErrorNode {
+    return new ComposerTerminalErrorNode(node.__data, node.__key);
+  }
+
+  static override importJSON(
+    serializedNode: SerializedComposerTerminalErrorNode,
+  ): ComposerTerminalErrorNode {
+    return $createComposerTerminalErrorNode(serializedNode.data);
+  }
+
+  constructor(data: TerminalErrorData, key?: NodeKey) {
+    super(key);
+    this.__data = data;
+  }
+
+  override exportJSON(): SerializedComposerTerminalErrorNode {
+    return {
+      ...super.exportJSON(),
+      data: this.__data,
+      type: "composer-terminal-error",
+      version: 1,
+    };
+  }
+
+  override createDOM(): HTMLElement {
+    const span = document.createElement("span");
+    span.className = "inline-flex align-middle leading-none";
+    return span;
+  }
+
+  override updateDOM(): false {
+    return false;
+  }
+
+  override getTextContent(): string {
+    const header = `[Terminal Error — exit ${this.__data.exitCode}]`;
+    const cmd = `$ ${this.__data.command}`;
+    const cwd = this.__data.cwd ? `cwd: ${this.__data.cwd}` : "";
+    const output = this.__data.output.trim()
+      ? `\n\`\`\`\n${this.__data.output.trim()}\n\`\`\``
+      : "";
+    return `${header}\n${cwd ? cwd + "\n" : ""}${cmd}${output}`;
+  }
+
+  override isInline(): true {
+    return true;
+  }
+
+  override decorate(): ReactElement {
+    return <ComposerTerminalErrorDecorator data={this.__data} />;
+  }
+}
+
+function $createComposerTerminalErrorNode(data: TerminalErrorData): ComposerTerminalErrorNode {
+  return $applyNodeReplacement(new ComposerTerminalErrorNode(data));
+}
+
 const SKILL_CHIP_ICON_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>`;
 
 function resolveSkillDescription(
@@ -1205,6 +1302,8 @@ export interface ComposerPromptEditorHandle {
   insertCodeRef: (data: { file: string; startLine: number; endLine: number; text: string; language: string }) => void;
   /** Insert a review comments chip from VS Code / Cursor at the current cursor position. */
   insertReviewComments: (data: { comments: Array<{ file: string; startLine: number; endLine: number; text: string; body: string }> }) => void;
+  /** Insert a terminal error chip from VS Code / Cursor at the current cursor position. */
+  insertTerminalError: (data: { command: string; exitCode: number; output: string; cwd: string }) => void;
 }
 
 interface ComposerPromptEditorProps {
@@ -1948,6 +2047,31 @@ function ComposerPromptEditorInner({
     [editor],
   );
 
+  const insertTerminalError = useCallback(
+    (data: { command: string; exitCode: number; output: string; cwd: string }) => {
+      const rootElement = editor.getRootElement();
+      if (!rootElement) return;
+      rootElement.focus();
+      editor.update(() => {
+        const cursor = snapshotRef.current.cursor;
+        $setSelectionAtComposerOffset(cursor);
+        const selection = $getSelection();
+        if (!$isRangeSelection(selection)) return;
+        const currentText = snapshotRef.current.value;
+        if (cursor > 0 && currentText[cursor - 1] !== " ") {
+          selection.insertText(" ");
+        }
+        const chipNode = $createComposerTerminalErrorNode(data);
+        selection.insertNodes([chipNode]);
+        const afterSelection = $getSelection();
+        if ($isRangeSelection(afterSelection)) {
+          afterSelection.insertText(" ");
+        }
+      });
+    },
+    [editor],
+  );
+
   useImperativeHandle(
     editorRef,
     () => ({
@@ -1967,8 +2091,9 @@ function ComposerPromptEditorInner({
       insertElementRef,
       insertCodeRef,
       insertReviewComments,
+      insertTerminalError,
     }),
-    [focusAt, readSnapshot, insertElementRef, insertCodeRef, insertReviewComments],
+    [focusAt, readSnapshot, insertElementRef, insertCodeRef, insertReviewComments, insertTerminalError],
   );
 
   const handleEditorChange = useCallback((editorState: EditorState) => {
@@ -2083,7 +2208,7 @@ export const ComposerPromptEditor = forwardRef<
     () => ({
       namespace: "t3tools-composer-editor",
       editable: true,
-      nodes: [ComposerMentionNode, ComposerSkillNode, ComposerTerminalContextNode, ComposerElementRefNode, ComposerCodeRefNode, ComposerReviewNode],
+      nodes: [ComposerMentionNode, ComposerSkillNode, ComposerTerminalContextNode, ComposerElementRefNode, ComposerCodeRefNode, ComposerReviewNode, ComposerTerminalErrorNode],
       editorState: () => {
         $setComposerEditorPrompt(
           initialValueRef.current,
