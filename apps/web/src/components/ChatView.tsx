@@ -1391,7 +1391,7 @@ export default function ChatView(props: ChatViewProps) {
         if (typeof turnCount !== "number") {
           break;
         }
-        byUserMessageId.set(entry.message.id, Math.max(0, turnCount - 1));
+        byUserMessageId.set(entry.message.id, turnCount);
         break;
       }
     }
