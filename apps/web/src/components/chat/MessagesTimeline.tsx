@@ -3,6 +3,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../ui/menu";
 import {
@@ -26,11 +27,13 @@ import {
   CheckIcon,
   CircleAlertIcon,
   EyeIcon,
+  GitBranchIcon,
   GitForkIcon,
   GlobeIcon,
   HammerIcon,
   type LucideIcon,
   MoreVerticalIcon,
+  PenLineIcon,
   SquarePenIcon,
   TerminalIcon,
   Undo2Icon,
@@ -98,6 +101,7 @@ interface TimelineRowSharedState {
   onImageExpand: (preview: ExpandedImagePreview) => void;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
   onForkAtMessage?: ((messageId: MessageId) => void) | undefined;
+  onEditMessage?: ((messageId: MessageId, messageText: string) => void) | undefined;
   threadForks: ThreadForkInfo[];
   onNavigateToThread?: ((threadId: ThreadId) => void) | undefined;
   skills: ReadonlyArray<ServerProviderSkill>;
@@ -125,6 +129,7 @@ interface MessagesTimelineProps {
   onRevertUserMessage: (messageId: MessageId) => void;
   isRevertingCheckpoint: boolean;
   onForkAtMessage?: (messageId: MessageId) => void;
+  onEditMessage?: (messageId: MessageId, messageText: string) => void;
   threadForks?: ThreadForkInfo[];
   onNavigateToThread?: (threadId: ThreadId) => void;
   onImageExpand: (preview: ExpandedImagePreview) => void;
@@ -157,6 +162,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   onRevertUserMessage,
   isRevertingCheckpoint,
   onForkAtMessage,
+  onEditMessage,
   threadForks = [],
   onNavigateToThread,
   onImageExpand,
@@ -233,6 +239,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onImageExpand,
       onOpenTurnDiff,
       onForkAtMessage,
+      onEditMessage,
       threadForks,
       onNavigateToThread,
       skills,
@@ -253,6 +260,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onImageExpand,
       onOpenTurnDiff,
       onForkAtMessage,
+      onEditMessage,
       threadForks,
       onNavigateToThread,
       skills,
@@ -399,29 +407,52 @@ function TimelineRowContent({ row }: { row: TimelineRow }) {
                         <Undo2Icon className="size-3" />
                       </Button>
                     )}
-                    {ctx.onForkAtMessage && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger render={<Button type="button" size="xs" variant="outline" title="More actions" />}>
-                          <MoreVerticalIcon className="size-3" />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => ctx.onForkAtMessage!(row.message.id)}>
-                            <GitForkIcon className="size-3.5" />
-                            Fork here
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                    {ctx.onEditMessage && displayedUserMessage.visibleText.trim().length > 0 && (
+                      <Button
+                        type="button"
+                        size="xs"
+                        variant="outline"
+                        title="Edit & branch from here"
+                        onClick={() => ctx.onEditMessage!(row.message.id, displayedUserMessage.visibleText)}
+                      >
+                        <PenLineIcon className="size-3" />
+                      </Button>
                     )}
+                    {(() => {
+                      const messageForks = ctx.threadForks.filter(
+                        (f) => f.sourceMessageId === row.message.id,
+                      );
+                      const hasForks = messageForks.length > 0 && ctx.onNavigateToThread;
+                      if (!ctx.onForkAtMessage && !hasForks) return null;
+                      return (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger render={<Button type="button" size="xs" variant={hasForks ? "outline" : "outline"} title={hasForks ? `${messageForks.length} fork${messageForks.length > 1 ? "s" : ""}` : "More actions"} className={hasForks ? "relative" : ""} />}>
+                            <MoreVerticalIcon className="size-3" />
+                            {hasForks && (
+                              <span className="absolute -top-0.5 -right-0.5 flex size-2.5 items-center justify-center rounded-full bg-accent-foreground/70 text-[7px] font-bold leading-none text-background">
+                                {messageForks.length}
+                              </span>
+                            )}
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {hasForks && messageForks.toSorted((a, b) => a.forkNumber - b.forkNumber).map((fork) => (
+                              <DropdownMenuItem key={fork.forkedThreadId} onClick={() => ctx.onNavigateToThread!(fork.forkedThreadId)}>
+                                <GitBranchIcon className="size-3.5" />
+                                {fork.forkedThreadTitle}
+                              </DropdownMenuItem>
+                            ))}
+                            {hasForks && ctx.onForkAtMessage && <DropdownMenuSeparator />}
+                            {ctx.onForkAtMessage && (
+                              <DropdownMenuItem onClick={() => ctx.onForkAtMessage!(row.message.id)}>
+                                <GitForkIcon className="size-3.5" />
+                                Fork here
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      );
+                    })()}
                   </div>
-                  {(() => {
-                    const messageForks = ctx.threadForks.filter(
-                      (f) => f.sourceMessageId === row.message.id,
-                    );
-                    if (messageForks.length === 0 || !ctx.onNavigateToThread) return null;
-                    return (
-                      <ForkBadge forks={messageForks} onNavigate={ctx.onNavigateToThread} />
-                    );
-                  })()}
                   <p className="text-right text-xs text-muted-foreground/50">
                     {formatTimestamp(row.message.createdAt, ctx.timestampFormat)}
                   </p>
@@ -498,26 +529,38 @@ function TimelineRowContent({ row }: { row: TimelineRow }) {
                     const messageForks = ctx.threadForks.filter(
                       (f) => f.sourceMessageId === row.message.id,
                     );
-                    if (messageForks.length === 0 || !ctx.onNavigateToThread) return null;
+                    const hasForks = messageForks.length > 0 && ctx.onNavigateToThread;
+                    if (!ctx.onForkAtMessage && !hasForks) return null;
                     return (
-                      <ForkBadge forks={messageForks} onNavigate={ctx.onNavigateToThread} />
+                      <div className={hasForks ? "" : "opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover/assistant:opacity-100"}>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger render={<Button type="button" size="xs" variant="ghost" title={hasForks ? `${messageForks.length} fork${messageForks.length > 1 ? "s" : ""}` : "More actions"} className={hasForks ? "relative" : ""} />}>
+                            <MoreVerticalIcon className="size-3" />
+                            {hasForks && (
+                              <span className="absolute -top-0.5 -right-0.5 flex size-2.5 items-center justify-center rounded-full bg-accent-foreground/70 text-[7px] font-bold leading-none text-background">
+                                {messageForks.length}
+                              </span>
+                            )}
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start">
+                            {hasForks && messageForks.toSorted((a, b) => a.forkNumber - b.forkNumber).map((fork) => (
+                              <DropdownMenuItem key={fork.forkedThreadId} onClick={() => ctx.onNavigateToThread!(fork.forkedThreadId)}>
+                                <GitBranchIcon className="size-3.5" />
+                                {fork.forkedThreadTitle}
+                              </DropdownMenuItem>
+                            ))}
+                            {hasForks && ctx.onForkAtMessage && <DropdownMenuSeparator />}
+                            {ctx.onForkAtMessage && (
+                              <DropdownMenuItem onClick={() => ctx.onForkAtMessage!(row.message.id)}>
+                                <GitForkIcon className="size-3.5" />
+                                Fork here
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     );
                   })()}
-                  {ctx.onForkAtMessage && (
-                    <div className="opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover/assistant:opacity-100">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger render={<Button type="button" size="xs" variant="ghost" title="More actions" />}>
-                          <MoreVerticalIcon className="size-3" />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start">
-                          <DropdownMenuItem onClick={() => ctx.onForkAtMessage!(row.message.id)}>
-                            <GitForkIcon className="size-3.5" />
-                            Fork here
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  )}
                 </div>
               </div>
             </>

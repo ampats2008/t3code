@@ -11,6 +11,7 @@ import { useSettings } from "../../hooks/useSettings";
 import GitActionsControl from "../GitActionsControl";
 import { type DraftId } from "~/composerDraftStore";
 import { DiffIcon, TerminalSquareIcon } from "lucide-react";
+import { BranchBreadcrumbs, type BreadcrumbSegment } from "./BranchBreadcrumbs";
 import { Badge } from "../ui/badge";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import ProjectScriptsControl, { type NewProjectScriptInput } from "../ProjectScriptsControl";
@@ -42,6 +43,8 @@ interface ChatHeaderProps {
   onDeleteProjectScript: (scriptId: string) => Promise<void>;
   onToggleTerminal: () => void;
   onToggleDiff: () => void;
+  forkAncestry?: BreadcrumbSegment[] | undefined;
+  onNavigateToThread?: ((threadId: string) => void) | undefined;
 }
 
 export const ChatHeader = memo(function ChatHeader({
@@ -68,6 +71,8 @@ export const ChatHeader = memo(function ChatHeader({
   onDeleteProjectScript,
   onToggleTerminal,
   onToggleDiff,
+  forkAncestry,
+  onNavigateToThread,
 }: ChatHeaderProps) {
   const { state } = useSidebar();
   const selectHidden = useCallback(
@@ -83,12 +88,17 @@ export const ChatHeader = memo(function ChatHeader({
     <div className="@container/header-actions flex min-w-0 flex-1 items-center gap-2">
       <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden sm:gap-3">
         <SidebarTrigger className={`size-7 shrink-0 ${state === "expanded" ? "md:hidden" : ""}`} />
-        <h2
-          className="min-w-0 shrink truncate text-sm font-medium text-foreground"
-          title={activeThreadTitle}
-        >
-          {activeThreadTitle}
-        </h2>
+        <div className="flex min-w-0 shrink flex-col">
+          <h2
+            className="min-w-0 truncate text-sm font-medium text-foreground"
+            title={activeThreadTitle}
+          >
+            {activeThreadTitle}
+          </h2>
+          {forkAncestry && forkAncestry.length > 1 && onNavigateToThread && (
+            <BranchBreadcrumbs segments={forkAncestry} onNavigate={onNavigateToThread} />
+          )}
+        </div>
         {activeProjectName && (
           <Badge variant="outline" className="min-w-0 shrink overflow-hidden">
             <span className="min-w-0 truncate">{activeProjectName}</span>

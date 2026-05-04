@@ -19,7 +19,7 @@ import type {
   ScopedThreadRef,
 } from "@t3tools/contracts";
 import { ProviderKind } from "@t3tools/contracts";
-import type { ThreadId, TurnId } from "@t3tools/contracts";
+import type { ThreadId, ThreadForkInfo, TurnId } from "@t3tools/contracts";
 import { Schema } from "effect";
 import { resolveModelSlugForProvider } from "@t3tools/shared/model";
 import { create } from "zustand";
@@ -36,6 +36,7 @@ import {
 } from "./types";
 import { resolveEnvironmentHttpUrl } from "./environments/runtime";
 import { sanitizeThreadErrorMessage } from "./rpc/transportError";
+import { forkDebugLog } from "./debugLog";
 import { getThreadFromEnvironmentState } from "./threadDerivation";
 
 export interface EnvironmentState {
@@ -76,6 +77,16 @@ export interface EnvironmentState {
   proposedPlanByThreadId: Record<ThreadId, Record<string, ProposedPlan>>;
   turnDiffIdsByThreadId: Record<ThreadId, TurnId[]>;
   turnDiffSummaryByThreadId: Record<ThreadId, Record<TurnId, TurnDiffSummary>>;
+  forksByThreadId: Record<ThreadId, ThreadForkInfo[]>;
+  forkSourceByThreadId: Record<ThreadId, { threadId: ThreadId; messageId: MessageId } | undefined>;
+
+  // ---------------------------------------------------------------------------
+  // Pending edit-fork messages — optimistic user messages written during
+  // edit-and-resubmit that must survive stale server snapshots.  Merged at
+  // write time in writeThreadState and cleaned up when the real
+  // thread.message-sent event arrives from the server.
+  // ---------------------------------------------------------------------------
+  pendingEditMessagesByThreadId: Record<ThreadId, ChatMessage[]>;
 
   // ---------------------------------------------------------------------------
   // Sidebar summary — written ONLY by the shell stream
@@ -110,6 +121,9 @@ const initialEnvironmentState: EnvironmentState = {
   proposedPlanByThreadId: {},
   turnDiffIdsByThreadId: {},
   turnDiffSummaryByThreadId: {},
+  forksByThreadId: {},
+  forkSourceByThreadId: {},
+  pendingEditMessagesByThreadId: {},
   sidebarThreadSummaryById: {},
   bootstrapComplete: false,
 };
@@ -262,6 +276,7 @@ function mapThreadShell(
   session: ThreadSession | null;
   turnState: ThreadTurnState;
   summary: SidebarThreadSummary;
+  forkSource: { threadId: ThreadId; messageId: MessageId } | undefined;
 } {
   const shell: ThreadShell = {
     id: thread.id,
@@ -307,6 +322,7 @@ function mapThreadShell(
     session,
     turnState,
     summary,
+    forkSource: thread.forkSource,
   };
 }
 
@@ -617,6 +633,31 @@ function writeThreadState(
 
   if (previousThread?.messages !== nextThread.messages) {
     const nextMessageSlice = buildMessageSlice(nextThread);
+    // Merge pending edit-fork messages that aren't yet in the server snapshot.
+    // This prevents stale syncServerThreadDetail snapshots from wiping
+    // optimistic user messages written during edit-and-resubmit.
+    const pendingMessages = nextState.pendingEditMessagesByThreadId[nextThread.id];
+    if (pendingMessages && pendingMessages.length > 0) {
+      const missingPending = pendingMessages.filter(
+        (pm) => !nextMessageSlice.byId[pm.id],
+      );
+      if (missingPending.length > 0) {
+        for (const pm of missingPending) {
+          nextMessageSlice.ids.push(pm.id);
+          nextMessageSlice.byId[pm.id] = pm;
+        }
+      }
+      // Clean up pending slice if server has caught up
+      if (missingPending.length < pendingMessages.length) {
+        nextState = {
+          ...nextState,
+          pendingEditMessagesByThreadId: {
+            ...nextState.pendingEditMessagesByThreadId,
+            [nextThread.id]: missingPending.length > 0 ? missingPending : undefined,
+          },
+        };
+      }
+    }
     nextState = {
       ...nextState,
       messageIdsByThreadId: {
@@ -675,6 +716,39 @@ function writeThreadState(
     };
   }
 
+  // Persist fork metadata from detail stream — don't overwrite shell-derived
+  // forks with an empty array from a stale detail snapshot.
+  if (previousThread?.forks !== nextThread.forks) {
+    const existingForks = nextState.forksByThreadId[nextThread.id];
+    if (nextThread.forks.length > 0 || !existingForks || existingForks.length === 0) {
+      nextState = {
+        ...nextState,
+        forksByThreadId: {
+          ...nextState.forksByThreadId,
+          [nextThread.id]: nextThread.forks,
+        },
+      };
+    }
+  }
+  if (previousThread?.forkSource !== nextThread.forkSource) {
+    // Don't overwrite a known optimistic forkSource with undefined from the
+    // server — the projection pipeline may not have processed the thread.forked
+    // event yet, so the snapshot arrives without fork_source columns set.
+    const existingForkSource = nextState.forkSourceByThreadId[nextThread.id];
+    if (nextThread.forkSource || !existingForkSource) {
+      forkDebugLog("writeThreadState", "updating forkSource for thread", nextThread.id, "→", nextThread.forkSource, "previous:", previousThread?.forkSource);
+      nextState = {
+        ...nextState,
+        forkSourceByThreadId: {
+          ...nextState.forkSourceByThreadId,
+          [nextThread.id]: nextThread.forkSource,
+        },
+      };
+    } else {
+      forkDebugLog("writeThreadState", "preserving optimistic forkSource for thread", nextThread.id, "server sent undefined but optimistic:", existingForkSource);
+    }
+  }
+
   return nextState;
 }
 
@@ -696,6 +770,7 @@ function writeThreadShellState(
     session: ThreadSession | null;
     turnState: ThreadTurnState;
     summary: SidebarThreadSummary;
+    forkSource: { threadId: ThreadId; messageId: MessageId } | undefined;
   },
 ): EnvironmentState {
   const previousShell = state.threadShellById[nextThread.shell.id];
@@ -756,6 +831,25 @@ function writeThreadShellState(
     };
   }
 
+  // Persist forkSource from shell stream (same logic as writeThreadState:
+  // don't overwrite optimistic forkSource with undefined from server)
+  if (nextThread.forkSource !== undefined) {
+    const existingForkSource = nextState.forkSourceByThreadId[nextThread.shell.id];
+    if (
+      !existingForkSource ||
+      existingForkSource.threadId !== nextThread.forkSource.threadId ||
+      existingForkSource.messageId !== nextThread.forkSource.messageId
+    ) {
+      nextState = {
+        ...nextState,
+        forkSourceByThreadId: {
+          ...nextState.forkSourceByThreadId,
+          [nextThread.shell.id]: nextThread.forkSource,
+        },
+      };
+    }
+  }
+
   return nextState;
 }
 
@@ -803,6 +897,10 @@ function removeThreadState(state: EnvironmentState, threadId: ThreadId): Environ
   const { [threadId]: _removedTurnDiffIds, ...turnDiffIdsByThreadId } = state.turnDiffIdsByThreadId;
   const { [threadId]: _removedTurnDiffs, ...turnDiffSummaryByThreadId } =
     state.turnDiffSummaryByThreadId;
+  const { [threadId]: _removedForks, ...forksByThreadId } = state.forksByThreadId;
+  const { [threadId]: _removedForkSource, ...forkSourceByThreadId } = state.forkSourceByThreadId;
+  const { [threadId]: _removedPending, ...pendingEditMessagesByThreadId } =
+    state.pendingEditMessagesByThreadId;
   const { [threadId]: _removedSidebarSummary, ...sidebarThreadSummaryById } =
     state.sidebarThreadSummaryById;
 
@@ -821,6 +919,9 @@ function removeThreadState(state: EnvironmentState, threadId: ThreadId): Environ
     proposedPlanByThreadId,
     turnDiffIdsByThreadId,
     turnDiffSummaryByThreadId,
+    forksByThreadId,
+    forkSourceByThreadId,
+    pendingEditMessagesByThreadId,
     sidebarThreadSummaryById,
   };
 }
@@ -1103,12 +1204,40 @@ function syncEnvironmentShellSnapshot(
       state.turnDiffSummaryByThreadId,
       nextThreadIds,
     ),
+    pendingEditMessagesByThreadId: retainThreadScopedRecord(
+      state.pendingEditMessagesByThreadId,
+      nextThreadIds,
+    ),
     bootstrapComplete: true,
   };
 
   for (const thread of snapshot.threads) {
     nextState = writeThreadShellState(nextState, mapThreadShell(thread, environmentId));
   }
+
+  // Rebuild forksByThreadId from forkSourceByThreadId (child→parent inversion)
+  // so sidebar nesting works on page load without waiting for detail streams.
+  const forksByThreadId: Record<ThreadId, ThreadForkInfo[]> = { ...nextState.forksByThreadId };
+  for (const [childId, src] of Object.entries(nextState.forkSourceByThreadId) as Array<
+    [ThreadId, { threadId: ThreadId; messageId: MessageId } | undefined]
+  >) {
+    if (!src) continue;
+    const existing = forksByThreadId[src.threadId] ?? [];
+    // Only add if not already tracked (detail stream may have richer data)
+    if (!existing.some((f) => f.forkedThreadId === childId)) {
+      const childShell = nextState.threadShellById[childId];
+      forksByThreadId[src.threadId] = [
+        ...existing,
+        {
+          sourceMessageId: src.messageId,
+          forkedThreadId: childId,
+          forkedThreadTitle: childShell?.title ?? "Fork",
+          forkNumber: existing.length + 1,
+        },
+      ];
+    }
+  }
+  nextState = { ...nextState, forksByThreadId };
 
   return nextState;
 }
@@ -1134,6 +1263,7 @@ export function syncServerThreadDetail(
   thread: OrchestrationThread,
   environmentId: EnvironmentId,
 ): AppState {
+  forkDebugLog("syncServerThreadDetail", "thread:", thread.id, "forkSource:", thread.forkSource, "messageCount:", thread.messages.length, "messages:", thread.messages.map(m => `${m.role}:${(m.text ?? "").slice(0, 30)}`));
   const environmentState = getStoredEnvironmentState(state, environmentId);
   const previousThread = getThreadFromEnvironmentState(environmentState, thread.id);
   return commitEnvironmentState(
@@ -1356,7 +1486,21 @@ function applyEnvironmentOrchestrationEvent(
       });
     }
 
-    case "thread.message-sent":
+    case "thread.message-sent": {
+      const _threadExists = getThreadFromEnvironmentState(state, event.payload.threadId as ThreadId);
+      forkDebugLog("thread.message-sent", "threadId:", event.payload.threadId, "role:", event.payload.role, "text:", (event.payload.text as string)?.slice(0, 80), "threadExists:", !!_threadExists);
+      // Clean up pending edit message if the server confirmed it
+      const pendingForThread = state.pendingEditMessagesByThreadId[event.payload.threadId as ThreadId];
+      if (pendingForThread?.some((pm) => pm.id === event.payload.messageId)) {
+        const filtered = pendingForThread.filter((pm) => pm.id !== event.payload.messageId);
+        state = {
+          ...state,
+          pendingEditMessagesByThreadId: {
+            ...state.pendingEditMessagesByThreadId,
+            [event.payload.threadId]: filtered.length > 0 ? filtered : undefined,
+          },
+        };
+      }
       return updateThreadState(state, event.payload.threadId, (thread) => {
         const message = mapMessage(thread.environmentId, {
           id: event.payload.messageId,
@@ -1445,6 +1589,7 @@ function applyEnvironmentOrchestrationEvent(
           updatedAt: event.occurredAt,
         };
       });
+    }
 
     case "thread.session-set":
       return updateThreadState(state, event.payload.threadId, (thread) => ({
@@ -1626,6 +1771,40 @@ function applyEnvironmentOrchestrationEvent(
         };
       });
 
+    case "thread.forked": {
+      // Update the source thread's forks slice so fork indicators render
+      const forkedPayload = event.payload as {
+        sourceThreadId: string;
+        forkAtMessageId: string;
+        threadId: string;
+        title: string;
+        forkNumber: number;
+      };
+      const srcId = forkedPayload.sourceThreadId as ThreadId;
+      const childId = forkedPayload.threadId as ThreadId;
+      const forkAtMessageId = forkedPayload.forkAtMessageId as MessageId;
+      const existingForks = state.forksByThreadId[srcId] ?? [];
+      return {
+        ...state,
+        forksByThreadId: {
+          ...state.forksByThreadId,
+          [srcId]: [
+            ...existingForks,
+            {
+              sourceMessageId: forkAtMessageId,
+              forkedThreadId: childId,
+              forkedThreadTitle: forkedPayload.title,
+              forkNumber: forkedPayload.forkNumber,
+            },
+          ],
+        },
+        forkSourceByThreadId: {
+          ...state.forkSourceByThreadId,
+          [childId]: { threadId: srcId, messageId: forkAtMessageId },
+        },
+      };
+    }
+
     case "thread.approval-response-requested":
     case "thread.user-input-response-requested":
       return state;
@@ -1688,8 +1867,32 @@ function applyEnvironmentShellEvent(
         projectIds: removeId(state.projectIds, event.projectId),
       };
     }
-    case "thread-upserted":
-      return writeThreadShellState(state, mapThreadShell(event.thread, environmentId));
+    case "thread-upserted": {
+      const mapped = mapThreadShell(event.thread, environmentId);
+      let nextState = writeThreadShellState(state, mapped);
+      // If the upserted thread has a forkSource, ensure parent's forksByThreadId is updated
+      if (mapped.forkSource) {
+        const parentForks = nextState.forksByThreadId[mapped.forkSource.threadId] ?? [];
+        if (!parentForks.some((f) => f.forkedThreadId === mapped.shell.id)) {
+          nextState = {
+            ...nextState,
+            forksByThreadId: {
+              ...nextState.forksByThreadId,
+              [mapped.forkSource.threadId]: [
+                ...parentForks,
+                {
+                  sourceMessageId: mapped.forkSource.messageId,
+                  forkedThreadId: mapped.shell.id,
+                  forkedThreadTitle: mapped.shell.title ?? "Fork",
+                  forkNumber: parentForks.length + 1,
+                },
+              ],
+            },
+          };
+        }
+      }
+      return nextState;
+    }
     case "thread-removed":
       return removeThreadState(state, event.threadId);
   }
@@ -1928,6 +2131,35 @@ export function setThreadBranch(
   return commitEnvironmentState(state, threadRef.environmentId, nextEnvironmentState);
 }
 
+function addPendingEditMessage(
+  state: AppState,
+  environmentId: EnvironmentId,
+  threadId: ThreadId,
+  message: ChatMessage,
+): AppState {
+  const envState = getStoredEnvironmentState(state, environmentId);
+  const existing = envState.pendingEditMessagesByThreadId[threadId] ?? [];
+  // Also write into the main message slices so the message renders immediately
+  const currentIds = envState.messageIdsByThreadId[threadId] ?? [];
+  const currentById = envState.messageByThreadId[threadId] ?? {};
+  const nextEnvState: EnvironmentState = {
+    ...envState,
+    pendingEditMessagesByThreadId: {
+      ...envState.pendingEditMessagesByThreadId,
+      [threadId]: [...existing, message],
+    },
+    messageIdsByThreadId: {
+      ...envState.messageIdsByThreadId,
+      [threadId]: [...currentIds, message.id],
+    },
+    messageByThreadId: {
+      ...envState.messageByThreadId,
+      [threadId]: { ...currentById, [message.id]: message },
+    },
+  };
+  return commitEnvironmentState(state, environmentId, nextEnvState);
+}
+
 interface AppStore extends AppState {
   setActiveEnvironmentId: (environmentId: EnvironmentId) => void;
   syncServerShellSnapshot: (
@@ -1946,6 +2178,11 @@ interface AppStore extends AppState {
     threadRef: ScopedThreadRef,
     branch: string | null,
     worktreePath: string | null,
+  ) => void;
+  addPendingEditMessage: (
+    environmentId: EnvironmentId,
+    threadId: ThreadId,
+    message: ChatMessage,
   ) => void;
 }
 
@@ -1966,4 +2203,6 @@ export const useStore = create<AppStore>((set) => ({
   setError: (threadId, error) => set((state) => setError(state, threadId, error)),
   setThreadBranch: (threadRef, branch, worktreePath) =>
     set((state) => setThreadBranch(state, threadRef, branch, worktreePath)),
+  addPendingEditMessage: (environmentId, threadId, message) =>
+    set((state) => addPendingEditMessage(state, environmentId, threadId, message)),
 }));

@@ -32,6 +32,7 @@ import {
 } from "@t3tools/shared/model";
 import { projectScriptCwd, projectScriptRuntimeEnv } from "@t3tools/shared/projectScripts";
 import { truncate } from "@t3tools/shared/String";
+import { forkDebugLog } from "../debugLog";
 import { Debouncer } from "@tanstack/react-pacer";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
@@ -95,6 +96,7 @@ import {
 import { useTheme } from "../hooks/useTheme";
 import { useTurnDiffSummaries } from "../hooks/useTurnDiffSummaries";
 import { useHandleForkThread } from "../hooks/useHandleForkThread";
+import { useThreadAncestry } from "../hooks/useThreadAncestry";
 import { useCommandPaletteStore } from "../commandPaletteStore";
 import { buildTemporaryWorktreeBranchName } from "@t3tools/shared/git";
 import { useMediaQuery } from "../hooks/useMediaQuery";
@@ -142,6 +144,8 @@ import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import { MessagesTimeline } from "./chat/MessagesTimeline";
 import { ChatHeader } from "./chat/ChatHeader";
+import { EditMessageBanner } from "./chat/EditMessageBanner";
+import type { BreadcrumbSegment } from "./chat/BranchBreadcrumbs";
 import { type ExpandedImagePreview } from "./chat/ExpandedImagePreview";
 import { NoActiveThreadState } from "./NoActiveThreadState";
 import { resolveEffectiveEnvMode, resolveEnvironmentOptionLabel } from "./BranchToolbar.logic";
@@ -183,6 +187,8 @@ import { RightPanelSheet } from "./RightPanelSheet";
 const IMAGE_ONLY_BOOTSTRAP_PROMPT =
   "[User attached one or more images without additional text. Respond using the conversation context and the attached image(s).]";
 const EMPTY_ACTIVITIES: OrchestrationThreadActivity[] = [];
+const EMPTY_FORK_SOURCE_MAP: Record<string, { threadId: string; messageId: string } | undefined> = {};
+const EMPTY_SHELL_MAP: Record<string, import("../types").ThreadShell> = {};
 const EMPTY_PROPOSED_PLANS: Thread["proposedPlans"] = [];
 const EMPTY_PROVIDERS: ServerProvider[] = [];
 const EMPTY_PENDING_USER_INPUT_ANSWERS: Record<string, PendingUserInputDraftAnswer> = {};
@@ -676,6 +682,7 @@ export default function ChatView(props: ChatViewProps) {
   >({});
   const [isConnecting, _setIsConnecting] = useState(false);
   const [isRevertingCheckpoint, setIsRevertingCheckpoint] = useState(false);
+  const [editForkSource, setEditForkSource] = useState<{ messageId: string } | null>(null);
   const [respondingRequestIds, setRespondingRequestIds] = useState<ApprovalRequestId[]>([]);
   const [respondingUserInputRequestIds, setRespondingUserInputRequestIds] = useState<
     ApprovalRequestId[]
@@ -801,6 +808,24 @@ export default function ChatView(props: ChatViewProps) {
     [activeThread],
   );
   const activeThreadKey = activeThreadRef ? scopedThreadKey(activeThreadRef) : null;
+
+  // Fork ancestry for breadcrumbs — walks forkSourceByThreadId chain and resolves real titles
+  const forkSourceMap = useStore(
+    useMemo(
+      () => (state: import("../store").AppState) =>
+        state.environmentStateById[environmentId]?.forkSourceByThreadId ?? EMPTY_FORK_SOURCE_MAP,
+      [environmentId],
+    ),
+  );
+  const shellMap = useStore(
+    useMemo(
+      () => (state: import("../store").AppState) =>
+        state.environmentStateById[environmentId]?.threadShellById ?? EMPTY_SHELL_MAP,
+      [environmentId],
+    ),
+  );
+  const forkAncestry = useThreadAncestry(activeThread?.id ?? null, forkSourceMap, shellMap);
+
   const existingOpenTerminalThreadKeys = useMemo(() => {
     const existingThreadKeys = new Set<string>([...serverThreadKeys, ...draftThreadKeys]);
     return openTerminalThreadKeys.filter((nextThreadKey) => existingThreadKeys.has(nextThreadKey));
@@ -1217,6 +1242,12 @@ export default function ChatView(props: ChatViewProps) {
     });
   }, []);
   const serverMessages = activeThread?.messages;
+  // DEBUG: log messages whenever they change
+  useEffect(() => {
+    if (serverMessages) {
+      forkDebugLog("ChatView", "serverMessages for thread", activeThread?.id, serverMessages.map(m => `${m.role}:${m.id}:${(m.text ?? "").slice(0, 40)}`));
+    }
+  }, [serverMessages, activeThread?.id]);
   useEffect(() => {
     if (typeof Image === "undefined" || !serverMessages || serverMessages.length === 0) {
       return;
@@ -2387,6 +2418,110 @@ export default function ChatView(props: ChatViewProps) {
       onAdvanceActivePendingUserInput();
       return;
     }
+    // Edit-and-resubmit: fork at the message BEFORE the edited one, then send
+    // the edited text as the first user message in the new fork.
+    if (editForkSource) {
+      const editedText = promptRef.current;
+      forkDebugLog("edit-fork", "editedText:", editedText, "editForkSource:", editForkSource);
+      if (!editedText.trim()) return;
+      const sendCtxForEdit = composerRef.current?.getSendContext();
+      // Find the message preceding the one being edited so the fork doesn't
+      // include the original user message we're replacing.
+      const editMsgIndex = activeThread.messages.findIndex(
+        (m) => m.id === editForkSource.messageId,
+      );
+      forkDebugLog("edit-fork", "editMsgIndex:", editMsgIndex, "total messages:", activeThread.messages.length);
+      if (editMsgIndex <= 0) {
+        // Can't edit the very first message via fork — no preceding context
+        forkDebugLog("edit-fork", "editMsgIndex <= 0, bailing out");
+        setEditForkSource(null);
+        return;
+      }
+      const forkAtId = activeThread.messages[editMsgIndex - 1]!.id;
+      forkDebugLog("edit-fork", "forking at message:", forkAtId, "(one before edited message)");
+      const forkedThreadId = await handleForkThread(
+        environmentId,
+        threadId,
+        forkAtId,
+      );
+      forkDebugLog("edit-fork", "forkedThreadId:", forkedThreadId);
+      setEditForkSource(null);
+      promptRef.current = "";
+      clearComposerDraftContent(composerDraftTarget);
+      composerRef.current?.resetCursorState();
+      if (forkedThreadId && api) {
+        const modelSel = sendCtxForEdit
+          ? createModelSelection(
+              sendCtxForEdit.selectedProvider,
+              sendCtxForEdit.selectedModel || activeThread.modelSelection.model,
+              sendCtxForEdit.selectedModelSelection.options,
+            )
+          : activeThread.modelSelection;
+        const editMessageId = newMessageId();
+        const editCreatedAt = new Date().toISOString();
+        // Write the user message as a pending edit message so it survives
+        // stale server snapshots.  The pending slice is merged at write time
+        // and cleaned up when the real thread.message-sent event arrives.
+        // Pre-populate forked thread's message store with copied messages
+        // (up to the fork point) so the UI shows them immediately before
+        // the server's projection pipeline finishes copying.
+        const copiedMessages = activeThread.messages.slice(0, editMsgIndex);
+        const copiedMsgIds = copiedMessages.map((m) => m.id);
+        const copiedMsgById = Object.fromEntries(copiedMessages.map((m) => [m.id, m]));
+        useStore.setState((prev) => {
+          const envState = prev.environmentStateById[environmentId];
+          if (!envState) return prev;
+          return {
+            ...prev,
+            environmentStateById: {
+              ...prev.environmentStateById,
+              [environmentId]: {
+                ...envState,
+                messageIdsByThreadId: {
+                  ...envState.messageIdsByThreadId,
+                  [forkedThreadId]: copiedMsgIds,
+                },
+                messageByThreadId: {
+                  ...envState.messageByThreadId,
+                  [forkedThreadId]: copiedMsgById,
+                },
+              },
+            },
+          };
+        });
+        useStore.getState().addPendingEditMessage(
+          environmentId,
+          forkedThreadId,
+          {
+            id: editMessageId,
+            role: "user",
+            text: editedText,
+            turnId: null,
+            createdAt: editCreatedAt,
+            streaming: false,
+            completedAt: editCreatedAt,
+          },
+        );
+        forkDebugLog("edit-fork", "pending edit message written to store:", editMessageId, editedText);
+        await api.orchestration.dispatchCommand({
+          type: "thread.turn.start",
+          commandId: newCommandId(),
+          threadId: forkedThreadId,
+          message: {
+            messageId: editMessageId,
+            role: "user",
+            text: editedText,
+            attachments: [],
+          },
+          modelSelection: modelSel,
+          titleSeed: truncate(editedText),
+          runtimeMode: activeThread.runtimeMode,
+          interactionMode: activeThread.interactionMode,
+          createdAt: editCreatedAt,
+        });
+      }
+      return;
+    }
     const sendCtx = composerRef.current?.getSendContext();
     if (!sendCtx) return;
     const {
@@ -3346,6 +3481,10 @@ export default function ChatView(props: ChatViewProps) {
           onDeleteProjectScript={deleteProjectScript}
           onToggleTerminal={toggleTerminalVisibility}
           onToggleDiff={onToggleDiff}
+          forkAncestry={forkAncestry.length > 1 ? forkAncestry : undefined}
+          onNavigateToThread={(targetThreadId) =>
+            void navigate({ to: "/$environmentId/$threadId", params: { environmentId, threadId: targetThreadId } })
+          }
         />
       </header>
 
@@ -3383,6 +3522,12 @@ export default function ChatView(props: ChatViewProps) {
               onForkAtMessage={(messageId) => {
                 void handleForkThread(environmentId, threadId, messageId);
               }}
+              onEditMessage={(messageId, messageText) => {
+                setEditForkSource({ messageId });
+                setComposerDraftPrompt(composerDraftTarget, messageText);
+                promptRef.current = messageText;
+                composerRef.current?.focusAtEnd();
+              }}
               threadForks={activeThread?.forks ?? []}
               onNavigateToThread={(targetThreadId) =>
                 void navigate({ to: "/$environmentId/$threadId", params: { environmentId, threadId: targetThreadId } })
@@ -3412,6 +3557,17 @@ export default function ChatView(props: ChatViewProps) {
 
           {/* Input bar */}
           <div className={cn("px-3 pt-1.5 sm:px-5 sm:pt-2", isGitRepo ? "pb-1" : "pb-3 sm:pb-4")}>
+            {editForkSource && (
+              <div className="mx-auto w-full max-w-208">
+                <EditMessageBanner
+                  onCancel={() => {
+                    setEditForkSource(null);
+                    setComposerDraftPrompt(composerDraftTarget, "");
+                    promptRef.current = "";
+                  }}
+                />
+              </div>
+            )}
             <ChatComposer
               ref={composerRef}
               composerDraftTarget={composerDraftTarget}

@@ -162,6 +162,8 @@ import {
   ThreadStatusPill,
 } from "./Sidebar.logic";
 import { sortThreads } from "../lib/threadSort";
+import { buildThreadTree, flattenThreadTree, collectAncestorIds } from "../hooks/useThreadTree";
+import type { ThreadForkInfo } from "@t3tools/contracts";
 import { SidebarUpdatePill } from "./sidebar/SidebarUpdatePill";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { CommandDialogTrigger } from "./ui/command";
@@ -272,6 +274,10 @@ interface SidebarThreadRowProps {
   confirmingArchiveThreadKey: string | null;
   setConfirmingArchiveThreadKey: React.Dispatch<React.SetStateAction<string | null>>;
   confirmArchiveButtonRefs: React.RefObject<Map<string, HTMLButtonElement>>;
+  forkDepth?: number;
+  hasForkChildren?: boolean;
+  isForkExpanded?: boolean;
+  onToggleForkExpand?: (threadId: string) => void;
   handleThreadClick: (
     event: React.MouseEvent,
     threadRef: ScopedThreadRef,
@@ -319,6 +325,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     openPrLink,
     thread,
   } = props;
+  const { forkDepth = 0, hasForkChildren = false, isForkExpanded = false, onToggleForkExpand } = props;
   const threadRef = scopeThreadRef(thread.environmentId, thread.id);
   const threadKey = scopedThreadKey(threadRef);
   const lastVisitedAt = useUiStateStore((state) => state.threadLastVisitedAtById[threadKey]);
@@ -542,11 +549,27 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
           isActive,
           isSelected,
         })} relative isolate`}
+        style={forkDepth > 0 ? { paddingLeft: `${forkDepth * 12 + 8}px` } : undefined}
         onClick={handleRowClick}
         onKeyDown={handleRowKeyDown}
         onContextMenu={handleRowContextMenu}
       >
         <div className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
+          {hasForkChildren && onToggleForkExpand && (
+            <button
+              type="button"
+              className="inline-flex size-3.5 shrink-0 items-center justify-center rounded-sm text-muted-foreground/50 hover:text-muted-foreground"
+              onClick={(e) => { e.stopPropagation(); onToggleForkExpand(thread.id); }}
+              aria-label={isForkExpanded ? "Collapse forks" : "Expand forks"}
+            >
+              <ChevronRightIcon className={`size-3 transition-transform ${isForkExpanded ? "rotate-90" : ""}`} />
+            </button>
+          )}
+          {forkDepth > 0 && !hasForkChildren && (
+            <span className="inline-flex size-3.5 shrink-0 items-center justify-center text-muted-foreground/30">
+              └
+            </span>
+          )}
           {prStatus && (
             <Tooltip>
               <TooltipTrigger
@@ -710,6 +733,10 @@ interface SidebarProjectThreadListProps {
   orderedProjectThreadKeys: readonly string[];
   renderedThreads: readonly SidebarThreadSummary[];
   showEmptyThreadState: boolean;
+  threadDepthById?: Map<string, number>;
+  forksByThreadId?: Record<string, ThreadForkInfo[]>;
+  expandedForkParents?: ReadonlySet<string>;
+  toggleForkExpanded?: (threadId: string) => void;
   shouldShowThreadPanel: boolean;
   isThreadListExpanded: boolean;
   projectCwd: string;
@@ -787,6 +814,7 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
     expandThreadListForProject,
     collapseThreadListForProject,
   } = props;
+  const { threadDepthById, forksByThreadId: forksByThread, expandedForkParents, toggleForkExpanded } = props;
   const showMoreButtonRender = useMemo(() => <button type="button" />, []);
   const showLessButtonRender = useMemo(() => <button type="button" />, []);
 
@@ -808,6 +836,10 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
       {shouldShowThreadPanel &&
         renderedThreads.map((thread) => {
           const threadKey = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
+          const depth = threadDepthById?.get(thread.id) ?? 0;
+          const threadForks = forksByThread?.[thread.id];
+          const hasForkChildren = threadForks != null && threadForks.length > 0;
+          const isForkExpanded = expandedForkParents?.has(thread.id) ?? false;
           return (
             <SidebarThreadRow
               key={threadKey}
@@ -834,6 +866,10 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
               cancelRename={cancelRename}
               attemptArchiveThread={attemptArchiveThread}
               openPrLink={openPrLink}
+              forkDepth={depth}
+              hasForkChildren={hasForkChildren}
+              isForkExpanded={isForkExpanded}
+              {...(toggleForkExpanded ? { onToggleForkExpand: toggleForkExpanded } : {})}
             />
           );
         })}
@@ -1009,6 +1045,32 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
           selectSidebarThreadsForProjectRefs(state, project.memberProjectRefs),
         [project.memberProjectRefs],
       ),
+    ),
+  );
+  // Read forksByThreadId for sidebar tree nesting.
+  // For single-environment projects (the common case) we return the store
+  // slice directly so reference equality is preserved between renders.
+  // For multi-environment groups we merge, but wrap with useShallow to
+  // avoid infinite re-render loops from new object identity.
+  const forksByThreadId = useStore(
+    useShallow(
+      useMemo(() => {
+        if (project.memberProjectRefs.length === 1) {
+          const ref = project.memberProjectRefs[0]!;
+          return (state: import("../store").AppState): Record<string, ThreadForkInfo[]> =>
+            state.environmentStateById[ref.environmentId]?.forksByThreadId ?? {};
+        }
+        return (state: import("../store").AppState): Record<string, ThreadForkInfo[]> => {
+          const result: Record<string, ThreadForkInfo[]> = {};
+          for (const ref of project.memberProjectRefs) {
+            const envState = state.environmentStateById[ref.environmentId];
+            if (envState) {
+              Object.assign(result, envState.forksByThreadId);
+            }
+          }
+          return result;
+        };
+      }, [project.memberProjectRefs]),
     ),
   );
   const sidebarThreadByKey = useMemo(
@@ -1188,6 +1250,43 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     threadLastVisitedAts,
     visibleProjectThreads,
   ]);
+
+  // Fork tree nesting: build tree from rendered threads and flatten with depths
+  const [expandedForkParents, setExpandedForkParents] = useState<Set<string>>(new Set());
+  const { treeOrderedThreads, threadDepthById } = useMemo(() => {
+    const tree = buildThreadTree(renderedThreads, forksByThreadId);
+    // Auto-expand ancestors of the active thread
+    const activeThreadId = activeRouteThreadKey
+      ? parseScopedThreadKey(activeRouteThreadKey)?.threadId
+      : undefined;
+    const autoExpanded = new Set(expandedForkParents);
+    if (activeThreadId) {
+      for (const id of collectAncestorIds(tree, activeThreadId as ThreadId)) {
+        autoExpanded.add(id);
+      }
+    }
+    const flat = flattenThreadTree(tree, autoExpanded as Set<ThreadId>);
+    const depthMap = new Map<string, number>();
+    for (const node of flat) {
+      depthMap.set(node.thread.id, node.depth);
+    }
+    return {
+      treeOrderedThreads: flat.map((n) => n.thread),
+      threadDepthById: depthMap,
+    };
+  }, [renderedThreads, forksByThreadId, expandedForkParents, activeRouteThreadKey]);
+
+  const toggleForkExpanded = useCallback((threadId: string) => {
+    setExpandedForkParents((prev) => {
+      const next = new Set(prev);
+      if (next.has(threadId)) {
+        next.delete(threadId);
+      } else {
+        next.add(threadId);
+      }
+      return next;
+    });
+  }, []);
 
   const handleProjectButtonClick = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -2045,8 +2144,12 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         hasOverflowingThreads={hasOverflowingThreads}
         hiddenThreadStatus={hiddenThreadStatus}
         orderedProjectThreadKeys={orderedProjectThreadKeys}
-        renderedThreads={renderedThreads}
+        renderedThreads={treeOrderedThreads}
         showEmptyThreadState={showEmptyThreadState}
+        threadDepthById={threadDepthById}
+        forksByThreadId={forksByThreadId}
+        expandedForkParents={expandedForkParents}
+        toggleForkExpanded={toggleForkExpanded}
         shouldShowThreadPanel={shouldShowThreadPanel}
         isThreadListExpanded={isThreadListExpanded}
         projectCwd={project.cwd}

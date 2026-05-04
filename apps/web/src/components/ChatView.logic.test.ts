@@ -339,6 +339,9 @@ function setStoreThreads(threads: ReadonlyArray<ReturnType<typeof makeThread>>) 
       ]),
     ),
     sidebarThreadSummaryById: {},
+    forksByThreadId: {},
+    forkSourceByThreadId: {},
+    pendingEditMessagesByThreadId: {},
     bootstrapComplete: true,
   };
   useStore.setState({

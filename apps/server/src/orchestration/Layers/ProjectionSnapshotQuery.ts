@@ -1122,6 +1122,14 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                     updatedAt: row.updatedAt,
                     archivedAt: row.archivedAt,
                     session: sessionByThread.get(row.threadId) ?? null,
+                    ...(row.forkSourceThreadId !== null && row.forkSourceMessageId !== null
+                      ? {
+                          forkSource: {
+                            threadId: row.forkSourceThreadId,
+                            messageId: row.forkSourceMessageId,
+                          },
+                        }
+                      : {}),
                     latestUserMessageAt: row.latestUserMessageAt,
                     hasPendingApprovals: row.pendingApprovalCount > 0,
                     hasPendingUserInput: row.pendingUserInputCount > 0,
