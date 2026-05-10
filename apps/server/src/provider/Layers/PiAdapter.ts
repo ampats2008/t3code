@@ -89,7 +89,11 @@ function buildEventBase(input: {
 
 function toToolLifecycleItemType(toolName: string): ToolLifecycleItemType {
   const normalized = toolName.toLowerCase();
-  if (normalized.includes("bash") || normalized.includes("command") || normalized.includes("shell")) {
+  if (
+    normalized.includes("bash") ||
+    normalized.includes("command") ||
+    normalized.includes("shell")
+  ) {
     return "command_execution";
   }
   if (
@@ -179,11 +183,10 @@ export function makePiAdapterLive(options?: PiAdapterLiveOptions) {
         Effect.gen(function* () {
           const contexts = [...sessions.values()];
           sessions.clear();
-          yield* Effect.forEach(
-            contexts,
-            (context) => Effect.ignoreCause(stopPiContext(context)),
-            { concurrency: "unbounded", discard: true },
-          );
+          yield* Effect.forEach(contexts, (context) => Effect.ignoreCause(stopPiContext(context)), {
+            concurrency: "unbounded",
+            discard: true,
+          });
           if (managedNativeEventLogger !== undefined) {
             yield* managedNativeEventLogger.close();
           }
@@ -218,13 +221,17 @@ export function makePiAdapterLive(options?: PiAdapterLiveOptions) {
           const resumeState = readPiResumeState(input.resumeCursor);
           const sessionScope = yield* Scope.make();
 
-          // Dynamically import Pi SDK
+          // Dynamically import Pi SDK (modules are cached after first load)
           const { Agent } = yield* Effect.promise(() => import("@mariozechner/pi-agent-core"));
-          const { getModels, getProviders } = yield* Effect.promise(() => import("@mariozechner/pi-ai"));
+          const { getEnvApiKey, getModels, getProviders } = yield* Effect.promise(
+            () => import("@mariozechner/pi-ai"),
+          );
 
           // Resolve model from slug (format: "provider/modelId")
           const resolvedModelSlug = modelSlug ?? resumeState?.modelSlug;
-          let model: import("@mariozechner/pi-ai").Model<import("@mariozechner/pi-ai").Api> | undefined;
+          let model:
+            | import("@mariozechner/pi-ai").Model<import("@mariozechner/pi-ai").Api>
+            | undefined;
           if (resolvedModelSlug) {
             const slashIndex = resolvedModelSlug.indexOf("/");
             if (slashIndex > 0) {
@@ -241,30 +248,13 @@ export function makePiAdapterLive(options?: PiAdapterLiveOptions) {
           const pendingApprovals = new Map<string, PendingApproval>();
           const stoppedRef = yield* Ref.make(false);
 
-          const API_KEY_ENV_MAP: Record<string, string> = {
-            anthropic: "ANTHROPIC_API_KEY",
-            openai: "OPENAI_API_KEY",
-            google: "GOOGLE_API_KEY",
-            mistral: "MISTRAL_API_KEY",
-            groq: "GROQ_API_KEY",
-            xai: "XAI_API_KEY",
-            together: "TOGETHER_API_KEY",
-            deepseek: "DEEPSEEK_API_KEY",
-            fireworks: "FIREWORKS_API_KEY",
-            cohere: "COHERE_API_KEY",
-            perplexity: "PERPLEXITY_API_KEY",
-          };
-
           const agent = new Agent({
             initialState: {
               ...(model ? { model } : {}),
               ...(resumeState?.messages ? { messages: resumeState.messages } : {}),
               systemPrompt: "You are a coding assistant working in a development environment.",
             },
-            getApiKey: (provider: string) => {
-              const envVar = API_KEY_ENV_MAP[provider] ?? `${provider.toUpperCase()}_API_KEY`;
-              return process.env[envVar];
-            },
+            getApiKey: (provider: string) => getEnvApiKey(provider),
             beforeToolCall: async (context: any, signal?: AbortSignal) => {
               // Auto-approve read-only tools
               const toolName = context.toolCall?.name ?? "";
@@ -287,9 +277,9 @@ export function makePiAdapterLive(options?: PiAdapterLiveOptions) {
               // Emit permission request and await decision
               const requestId = randomUUID();
               let resolveDecision!: (decision: ProviderApprovalDecision) => void;
-              const decisionPromise = new Promise<ProviderApprovalDecision>(
-                (resolve) => { resolveDecision = resolve; },
-              );
+              const decisionPromise = new Promise<ProviderApprovalDecision>((resolve) => {
+                resolveDecision = resolve;
+              });
               pendingApprovals.set(requestId, {
                 toolName,
                 args: context.args,
@@ -610,11 +600,10 @@ export function makePiAdapterLive(options?: PiAdapterLiveOptions) {
         Effect.gen(function* () {
           const contexts = [...sessions.values()];
           sessions.clear();
-          yield* Effect.forEach(
-            contexts,
-            (context) => Effect.ignoreCause(stopPiContext(context)),
-            { concurrency: "unbounded", discard: true },
-          );
+          yield* Effect.forEach(contexts, (context) => Effect.ignoreCause(stopPiContext(context)), {
+            concurrency: "unbounded",
+            discard: true,
+          });
         });
 
       return {

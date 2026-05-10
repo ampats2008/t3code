@@ -31,25 +31,39 @@ const PI_PRESENTATION: ServerProviderPresentation = {
 
 const BUILT_IN_MODELS: ReadonlyArray<ServerProviderModel> = [];
 
-let cachedModels: ReadonlyArray<ServerProviderModel> | null = null;
+let cachedModelsByProvider: ReadonlyMap<string, ReadonlyArray<ServerProviderModel>> | null = null;
+
+// Pre-warm the Pi AI SDK as soon as this module is imported (server startup)
+// so that the heavy transitive deps (anthropic-ai/sdk, openai, etc.) are
+// resolved in the background rather than blocking the event loop the first
+// time the user enables Pi in settings.
+const _piAiModulePromise: Promise<typeof import("@mariozechner/pi-ai") | null> =
+  import("@mariozechner/pi-ai").catch(() => null);
 
 async function loadPiModels(): Promise<ReadonlyArray<ServerProviderModel>> {
-  if (cachedModels) return cachedModels;
   try {
-    const { getModels, getProviders } = await import("@mariozechner/pi-ai");
-    const allModels: ServerProviderModel[] = [];
-    for (const provider of getProviders()) {
-      for (const model of getModels(provider)) {
-        allModels.push({
-          slug: `${model.provider}/${model.id}`,
-          name: model.name,
-          isCustom: false,
-          capabilities: null,
-        });
+    const piAi = await _piAiModulePromise;
+    if (!piAi) return BUILT_IN_MODELS;
+    const { getEnvApiKey, getModels, getProviders } = piAi;
+    if (!cachedModelsByProvider) {
+      const nextModelsByProvider = new Map<string, ReadonlyArray<ServerProviderModel>>();
+      for (const provider of getProviders()) {
+        nextModelsByProvider.set(
+          provider,
+          getModels(provider).map((model) => ({
+            slug: `${model.provider}/${model.id}`,
+            name: model.name,
+            isCustom: false,
+            capabilities: null,
+          })),
+        );
       }
+      cachedModelsByProvider = nextModelsByProvider;
     }
-    cachedModels = allModels;
-    return cachedModels;
+
+    return [...cachedModelsByProvider.entries()].flatMap(([provider, models]) =>
+      getEnvApiKey(provider) ? models : [],
+    );
   } catch {
     return BUILT_IN_MODELS;
   }
@@ -64,7 +78,7 @@ export const checkPiProviderStatus = Effect.fn("checkPiProviderStatus")(
     const checkedAt = new Date().toISOString();
 
     if (!piSettings.enabled) {
-      return buildServerProvider({
+      const result = buildServerProvider({
         provider: PROVIDER,
         presentation: PI_PRESENTATION,
         enabled: false,
@@ -78,6 +92,7 @@ export const checkPiProviderStatus = Effect.fn("checkPiProviderStatus")(
           message: "Pi is disabled in T3 Code settings.",
         },
       });
+      return result;
     }
 
     const piModels = yield* Effect.promise(loadPiModels);
@@ -92,8 +107,17 @@ export const checkPiProviderStatus = Effect.fn("checkPiProviderStatus")(
       probe: {
         installed: true,
         version: null,
-        status: "ready",
-        auth: { status: "authenticated", type: "sdk", label: "In-process SDK" },
+        status: models.length > 0 ? "ready" : "warning",
+        auth:
+          models.length > 0
+            ? { status: "authenticated", type: "sdk", label: "In-process SDK" }
+            : { status: "unknown" },
+        ...(models.length === 0
+          ? {
+              message:
+                "Pi is enabled, but no supported Pi sub-provider credentials were found in the server environment.",
+            }
+          : {}),
       },
     });
   },
@@ -117,21 +141,36 @@ export const PiProviderLive = Layer.effect(
         Stream.map((settings) => settings.providers.pi),
       ),
       haveSettingsChanged: (previous, next) => !Equal.equals(previous, next),
-      initialSnapshot: () =>
-        buildServerProvider({
-          provider: PROVIDER,
-          presentation: PI_PRESENTATION,
-          enabled: false,
-          checkedAt: new Date().toISOString(),
-          models: BUILT_IN_MODELS,
-          probe: {
-            installed: false,
-            version: null,
-            status: "warning",
-            auth: { status: "unknown" },
-            message: "Pi status not yet checked.",
-          },
-        }),
+      initialSnapshot: (settings) =>
+        settings.enabled
+          ? buildServerProvider({
+              provider: PROVIDER,
+              presentation: PI_PRESENTATION,
+              enabled: true,
+              checkedAt: new Date().toISOString(),
+              models: BUILT_IN_MODELS,
+              probe: {
+                installed: true,
+                version: null,
+                status: "warning",
+                auth: { status: "unknown" },
+                message: "Pi status not yet checked.",
+              },
+            })
+          : buildServerProvider({
+              provider: PROVIDER,
+              presentation: PI_PRESENTATION,
+              enabled: false,
+              checkedAt: new Date().toISOString(),
+              models: BUILT_IN_MODELS,
+              probe: {
+                installed: true,
+                version: null,
+                status: "warning",
+                auth: { status: "unknown" },
+                message: "Pi is disabled in T3 Code settings.",
+              },
+            }),
       checkProvider,
     });
   }),

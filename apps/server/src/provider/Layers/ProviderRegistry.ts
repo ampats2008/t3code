@@ -184,7 +184,9 @@ const ProviderRegistryLiveBase = Layer.effect(
         },
       );
 
-      if (haveProvidersChanged(previousProviders, providers)) {
+      const changed = haveProvidersChanged(previousProviders, providers);
+
+      if (changed) {
         yield* Effect.forEach(nextProviders, persistProvider, {
           concurrency: "unbounded",
           discard: true,
