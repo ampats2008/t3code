@@ -52,9 +52,9 @@ export type ServerProviderAuth = typeof ServerProviderAuth.Type;
 
 export const ServerProviderModel = Schema.Struct({
   slug: TrimmedNonEmptyString,
-  name: TrimmedNonEmptyString,
-  shortName: Schema.optional(TrimmedNonEmptyString),
-  subProvider: Schema.optional(TrimmedNonEmptyString),
+  name: Schema.NonEmptyString,
+  shortName: Schema.optional(Schema.NonEmptyString),
+  subProvider: Schema.optional(Schema.NonEmptyString),
   isCustom: Schema.Boolean,
   capabilities: Schema.NullOr(ModelCapabilities),
 });

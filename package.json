@@ -88,5 +88,10 @@
   },
   "trustedDependencies": [
     "node-pty"
-  ]
+  ],
+  "dependencies": {
+    "@mariozechner/pi-agent-core": "^0.72.1",
+    "@mariozechner/pi-ai": "^0.72.1",
+    "@mariozechner/pi-web-ui": "^0.72.1"
+  }
 }
