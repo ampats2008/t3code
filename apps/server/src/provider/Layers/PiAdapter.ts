@@ -1,7 +1,7 @@
 /**
  * PiAdapterLive - In-process Pi SDK adapter for the provider adapter contract.
  *
- * Wraps `@mariozechner/pi-agent-core` Agent class behind the generic provider
+ * Wraps `@mariozechner/pi-coding-agent` AgentSession behind the generic provider
  * adapter interface and emits canonical runtime events.
  *
  * @module PiAdapterLive
@@ -20,7 +20,11 @@ import {
   TurnId,
 } from "@t3tools/contracts";
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
-import type { KnownProvider } from "@mariozechner/pi-ai";
+import {
+  type AgentSession,
+  SessionManager,
+  createAgentSessionFromServices,
+} from "@mariozechner/pi-coding-agent";
 import { Effect, Exit, Layer, Queue, Ref, Scope, Stream } from "effect";
 
 import { ServerSettingsService } from "../../serverSettings.ts";
@@ -30,10 +34,13 @@ import {
   ProviderAdapterSessionNotFoundError,
 } from "../Errors.ts";
 import { PiAdapter, type PiAdapterShape } from "../Services/PiAdapter.ts";
+import { createPiServices, parsePiModelSlug } from "../piSdk.ts";
+import { createT3PiTools } from "../piTools.ts";
 
 const PROVIDER = "pi" as const;
 
 interface PiResumeState {
+  readonly schemaVersion?: number;
   readonly messages?: AgentMessage[];
   readonly modelSlug?: string;
   readonly turnCount?: number;
@@ -42,6 +49,8 @@ interface PiResumeState {
 interface PiTurnSnapshot {
   readonly id: TurnId;
   readonly items: Array<unknown>;
+  /** SessionManager leaf entry id after this turn completed. Used for rollback via branch(). */
+  readonly leafId: string | null;
 }
 
 interface PendingApproval {
@@ -53,7 +62,7 @@ interface PendingApproval {
 
 interface PiSessionContext {
   session: ProviderSession;
-  agent: any;
+  piSession: AgentSession;
   unsubscribe: (() => void) | undefined;
   readonly pendingApprovals: Map<string, PendingApproval>;
   readonly turns: Array<PiTurnSnapshot>;
@@ -122,6 +131,7 @@ function readPiResumeState(resumeCursor: unknown): PiResumeState | undefined {
   }
   const cursor = resumeCursor as Record<string, unknown>;
   return {
+    ...(typeof cursor.schemaVersion === "number" ? { schemaVersion: cursor.schemaVersion } : {}),
     ...(Array.isArray(cursor.messages) ? { messages: cursor.messages as AgentMessage[] } : {}),
     ...(typeof cursor.modelSlug === "string" ? { modelSlug: cursor.modelSlug } : {}),
     ...(typeof cursor.turnCount === "number" ? { turnCount: cursor.turnCount } : {}),
@@ -145,17 +155,11 @@ const stopPiContext = Effect.fn("stopPiContext")(function* (context: PiSessionCo
   if (yield* Ref.getAndSet(context.stopped, true)) {
     return;
   }
-  if (context.agent) {
-    try {
-      context.agent.abort();
-    } catch {
-      // best-effort
-    }
-  }
   if (context.unsubscribe) {
     context.unsubscribe();
     context.unsubscribe = undefined;
   }
+  context.piSession.dispose();
   yield* Scope.close(context.sessionScope, Exit.void);
 });
 
@@ -168,7 +172,7 @@ export function makePiAdapterLive(options?: PiAdapterLiveOptions) {
   return Layer.effect(
     PiAdapter,
     Effect.gen(function* () {
-      const serverSettings = yield* ServerSettingsService;
+      const _serverSettings = yield* ServerSettingsService;
       const nativeEventLogger =
         options?.nativeEventLogger ??
         (options?.nativeEventLogPath !== undefined
@@ -216,106 +220,85 @@ export function makePiAdapterLive(options?: PiAdapterLiveOptions) {
             sessions.delete(threadId);
           }
 
+          const cwd = input.cwd?.trim() || process.cwd();
           const modelSlug =
             input.modelSelection?.provider === "pi" ? input.modelSelection.model : undefined;
           const resumeState = readPiResumeState(input.resumeCursor);
-          const sessionScope = yield* Scope.make();
 
-          // Dynamically import Pi SDK (modules are cached after first load)
-          const { Agent } = yield* Effect.promise(() => import("@mariozechner/pi-agent-core"));
-          const { getEnvApiKey, getModels, getProviders } = yield* Effect.promise(
-            () => import("@mariozechner/pi-ai"),
-          );
-
-          // Resolve model from slug (format: "provider/modelId")
+          // Resolve model slug from selection or resume cursor
           const resolvedModelSlug = modelSlug ?? resumeState?.modelSlug;
-          let model:
-            | import("@mariozechner/pi-ai").Model<import("@mariozechner/pi-ai").Api>
-            | undefined;
+
+          // Create Pi SDK services for this working directory (handles auth/models/settings)
+          const services = yield* Effect.promise(() => createPiServices(cwd));
+
+          // Resolve model from registry using provider/modelId slug
+          let model: ReturnType<typeof services.modelRegistry.find> | undefined;
           if (resolvedModelSlug) {
-            const slashIndex = resolvedModelSlug.indexOf("/");
-            if (slashIndex > 0) {
-              const providerName = resolvedModelSlug.slice(0, slashIndex);
-              const modelId = resolvedModelSlug.slice(slashIndex + 1);
-              const knownProviders: readonly string[] = getProviders();
-              if (knownProviders.includes(providerName)) {
-                const providerModels = getModels(providerName as KnownProvider);
-                model = providerModels.find((m) => m.id === modelId);
-              }
+            const parsed = parsePiModelSlug(resolvedModelSlug);
+            if (parsed) {
+              model = services.modelRegistry.find(parsed.provider, parsed.modelId);
             }
           }
 
           const pendingApprovals = new Map<string, PendingApproval>();
           const stoppedRef = yield* Ref.make(false);
+          const sessionScope = yield* Scope.make();
 
-          const agent = new Agent({
-            initialState: {
-              ...(model ? { model } : {}),
-              ...(resumeState?.messages ? { messages: resumeState.messages } : {}),
-              systemPrompt: "You are a coding assistant working in a development environment.",
-            },
-            getApiKey: (provider: string) => getEnvApiKey(provider),
-            beforeToolCall: async (context: any, signal?: AbortSignal) => {
-              // Auto-approve read-only tools
-              const toolName = context.toolCall?.name ?? "";
-              const normalizedTool = toolName.toLowerCase();
-              if (
-                normalizedTool.includes("read") ||
-                normalizedTool.includes("grep") ||
-                normalizedTool.includes("glob") ||
-                normalizedTool.includes("search") ||
-                normalizedTool.includes("ls")
-              ) {
-                return undefined;
-              }
+          // Build requestApproval callback for the T3 approval gate.
+          // Uses sessions.get(threadId) for late-bound activeTurnId access.
+          const requestApproval = async (
+            toolName: string,
+            args: unknown,
+          ): Promise<ProviderApprovalDecision> => {
+            const requestId = randomUUID();
+            let resolveDecision!: (decision: ProviderApprovalDecision) => void;
+            const decisionPromise = new Promise<ProviderApprovalDecision>((resolve) => {
+              resolveDecision = resolve;
+            });
+            pendingApprovals.set(requestId, {
+              toolName,
+              args,
+              resolve: resolveDecision,
+              promise: decisionPromise,
+            });
 
-              // Check runtime mode
-              if (input.runtimeMode === "full-access") {
-                return undefined;
-              }
-
-              // Emit permission request and await decision
-              const requestId = randomUUID();
-              let resolveDecision!: (decision: ProviderApprovalDecision) => void;
-              const decisionPromise = new Promise<ProviderApprovalDecision>((resolve) => {
-                resolveDecision = resolve;
-              });
-              pendingApprovals.set(requestId, {
-                toolName,
-                args: context.args,
-                resolve: resolveDecision,
-                promise: decisionPromise,
-              });
-
-              // Emit the approval request event
-              await Effect.runPromise(
-                emit({
-                  ...buildEventBase({
-                    threadId,
-                    turnId: sessions.get(threadId)?.activeTurnId,
-                    requestId,
-                  }),
-                  type: "request.opened",
-                  payload: {
-                    requestType:
-                      normalizedTool.includes("bash") || normalizedTool.includes("command")
-                        ? "command_execution_approval"
-                        : "file_change_approval",
-                    detail: JSON.stringify(context.args ?? {}).slice(0, 400),
-                  },
+            const normalizedTool = toolName.toLowerCase();
+            await Effect.runPromise(
+              emit({
+                ...buildEventBase({
+                  threadId,
+                  turnId: sessions.get(threadId)?.activeTurnId,
+                  requestId,
                 }),
-              );
+                type: "request.opened",
+                payload: {
+                  requestType:
+                    normalizedTool.includes("bash") || normalizedTool.includes("command")
+                      ? "command_execution_approval"
+                      : "file_change_approval",
+                  detail: JSON.stringify(args ?? {}).slice(0, 400),
+                },
+              }),
+            );
 
-              // Wait for the decision
-              const decision = await decisionPromise;
-              pendingApprovals.delete(requestId);
+            const decision = await decisionPromise;
+            pendingApprovals.delete(requestId);
+            return decision;
+          };
 
-              if (decision === "decline" || decision === "cancel") {
-                return { block: true, reason: "User denied" };
-              }
-              return undefined;
-            },
-          });
+          // Create T3-approval-gated Pi tools replacing Pi's built-in tool set
+          const t3PiTools = createT3PiTools(cwd, input.runtimeMode, requestApproval);
+
+          // Create AgentSession via SDK (in-memory session manager — T3 owns persistence)
+          const { session: piSession } = yield* Effect.promise(() =>
+            createAgentSessionFromServices({
+              services,
+              sessionManager: SessionManager.inMemory(),
+              ...(model ? { model } : {}),
+              noTools: "builtin",
+              customTools: t3PiTools,
+            }),
+          );
 
           const session: ProviderSession = {
             provider: PROVIDER,
@@ -324,6 +307,7 @@ export function makePiAdapterLive(options?: PiAdapterLiveOptions) {
             ...(modelSlug ? { model: modelSlug } : {}),
             threadId,
             resumeCursor: {
+              schemaVersion: 2,
               modelSlug: resolvedModelSlug,
               turnCount: resumeState?.turnCount ?? 0,
             },
@@ -333,17 +317,17 @@ export function makePiAdapterLive(options?: PiAdapterLiveOptions) {
 
           const context: PiSessionContext = {
             session,
-            agent,
+            piSession,
             unsubscribe: undefined,
             pendingApprovals,
             turns: [],
             activeTurnId: undefined,
             stopped: stoppedRef,
-            sessionScope: sessionScope,
+            sessionScope,
           };
 
-          // Subscribe to agent events
-          const unsub = agent.subscribe((event: any) => {
+          // Subscribe to AgentSession events and map to T3 runtime events
+          const unsub = piSession.subscribe((event) => {
             if (Ref.getUnsafe(context.stopped)) return;
 
             Effect.runPromise(
@@ -351,7 +335,7 @@ export function makePiAdapterLive(options?: PiAdapterLiveOptions) {
                 const turnId = context.activeTurnId;
                 switch (event.type) {
                   case "message_update": {
-                    const ame = event.assistantMessageEvent;
+                    const ame = (event as any).assistantMessageEvent;
                     if (ame?.type === "text_delta" && ame.delta) {
                       yield* emit({
                         ...buildEventBase({ threadId, turnId }),
@@ -374,64 +358,77 @@ export function makePiAdapterLive(options?: PiAdapterLiveOptions) {
                     break;
                   }
                   case "tool_execution_start": {
-                    const itemType = toToolLifecycleItemType(event.toolName);
+                    const ev = event as any;
+                    const itemType = toToolLifecycleItemType(ev.toolName);
                     yield* emit({
                       ...buildEventBase({
                         threadId,
                         turnId,
-                        itemId: event.toolCallId,
+                        itemId: ev.toolCallId,
                       }),
                       type: "item.started",
                       payload: {
                         itemType,
-                        title: event.toolName,
-                        detail: JSON.stringify(event.args ?? {}).slice(0, 400),
+                        title: ev.toolName,
+                        detail: JSON.stringify(ev.args ?? {}).slice(0, 400),
                       },
                     });
                     break;
                   }
                   case "tool_execution_end": {
-                    const itemType = toToolLifecycleItemType(event.toolName);
+                    const ev = event as any;
+                    const itemType = toToolLifecycleItemType(ev.toolName);
                     yield* emit({
                       ...buildEventBase({
                         threadId,
                         turnId,
-                        itemId: event.toolCallId,
+                        itemId: ev.toolCallId,
                       }),
                       type: "item.completed",
                       payload: {
                         itemType,
-                        status: event.isError ? "failed" : "completed",
-                        title: event.toolName,
+                        status: ev.isError ? "failed" : "completed",
+                        title: ev.toolName,
                         detail:
-                          typeof event.result === "string"
-                            ? event.result.slice(0, 1000)
-                            : JSON.stringify(event.result ?? "").slice(0, 1000),
+                          typeof ev.result === "string"
+                            ? ev.result.slice(0, 1000)
+                            : JSON.stringify(ev.result ?? "").slice(0, 1000),
                       },
                     });
                     break;
                   }
                   case "turn_end": {
                     if (turnId) {
+                      const ev = event as any;
                       context.turns.push({
                         id: turnId,
-                        items: event.toolResults ?? [],
+                        items: ev.toolResults ?? [],
+                        leafId: context.piSession.sessionManager.getLeafId(),
                       });
                     }
                     break;
                   }
                   case "agent_end": {
-                    // Update resume state with final messages
+                    // Save messages and model into resume cursor for future sessions
+                    const currentModel = context.piSession.model;
+                    const currentModelSlug = currentModel
+                      ? `${currentModel.provider}/${currentModel.id}`
+                      : resolvedModelSlug;
                     updateProviderSession(context, {
                       status: "ready",
                       resumeCursor: {
-                        messages: event.messages,
-                        modelSlug: resolvedModelSlug,
+                        schemaVersion: 2,
+                        messages: context.piSession.messages,
+                        modelSlug: currentModelSlug,
                         turnCount: context.turns.length,
                       },
                     });
                     break;
                   }
+                  default:
+                    // queue_update, compaction_*, auto_retry_*, session_info_changed,
+                    // thinking_level_changed — ignored in v2
+                    break;
                 }
               }).pipe(Effect.ignore),
             );
@@ -469,7 +466,7 @@ export function makePiAdapterLive(options?: PiAdapterLiveOptions) {
           // Run the prompt in a forked fiber
           yield* Effect.promise(async () => {
             try {
-              await context.agent.prompt(input.input?.trim() ?? "");
+              await context.piSession.prompt(input.input?.trim() ?? "");
             } catch (err: any) {
               if (!Ref.getUnsafe(context.stopped)) {
                 await Effect.runPromise(
@@ -506,9 +503,7 @@ export function makePiAdapterLive(options?: PiAdapterLiveOptions) {
       const interruptTurn: PiAdapterShape["interruptTurn"] = (threadId) =>
         Effect.gen(function* () {
           const context = ensureSession(threadId);
-          if (context.agent) {
-            context.agent.abort();
-          }
+          yield* Effect.promise(() => context.piSession.abort().catch(() => {}));
           const turnId = context.activeTurnId;
           context.activeTurnId = undefined;
           updateProviderSession(context, { status: "ready" });
@@ -527,7 +522,7 @@ export function makePiAdapterLive(options?: PiAdapterLiveOptions) {
         requestId,
         decision,
       ) =>
-        Effect.gen(function* () {
+        Effect.sync(() => {
           const context = ensureSession(threadId);
           const pending = context.pendingApprovals.get(requestId);
           if (!pending) {
@@ -538,7 +533,7 @@ export function makePiAdapterLive(options?: PiAdapterLiveOptions) {
         });
 
       const respondToUserInput: PiAdapterShape["respondToUserInput"] = (
-        threadId,
+        _threadId,
         _requestId,
         _answers,
       ) => Effect.void;
@@ -578,16 +573,20 @@ export function makePiAdapterLive(options?: PiAdapterLiveOptions) {
         Effect.sync(() => {
           const context = ensureSession(threadId);
           const removedCount = Math.min(numTurns, context.turns.length);
+          const targetIndex = context.turns.length - removedCount - 1;
+          const targetSnapshot = targetIndex >= 0 ? context.turns[targetIndex] : undefined;
           context.turns.splice(context.turns.length - removedCount, removedCount);
 
-          // Also truncate agent messages if accessible
-          if (context.agent?.state?.messages && numTurns > 0) {
-            const messages = context.agent.state.messages;
-            // Remove last N user+assistant pairs (each turn is roughly 2 messages)
-            const removeMessages = numTurns * 2;
-            if (removeMessages < messages.length) {
-              context.agent.state.messages = messages.slice(0, messages.length - removeMessages);
+          // Move the session leaf pointer back to restore prior conversation state
+          if (removedCount > 0) {
+            if (targetSnapshot?.leafId) {
+              context.piSession.sessionManager.branch(targetSnapshot.leafId);
+            } else {
+              context.piSession.sessionManager.resetLeaf();
             }
+            // Sync agent messages from the restored session context
+            const sessionCtx = context.piSession.sessionManager.buildSessionContext();
+            context.piSession.agent.state.messages = sessionCtx.messages;
           }
 
           return {
