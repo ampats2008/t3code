@@ -1,4 +1,11 @@
-import { memo, useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import { type ServerProviderSkill } from "@t3tools/contracts";
 import {
   CheckIcon,
@@ -53,14 +60,23 @@ export const RichToolCallRow = memo(function RichToolCallRow(props: RichToolCall
     <div className="rounded-lg px-1 py-1">
       <Collapsible open={open} onOpenChange={setOpen}>
         <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-muted/40 text-left">
-          <SummaryLine workEntry={workEntry} displayMode={displayMode} open={open} bashSummaryRef={bashSummaryRef} />
+          <SummaryLine
+            workEntry={workEntry}
+            displayMode={displayMode}
+            open={open}
+            bashSummaryRef={bashSummaryRef}
+          />
         </CollapsibleTrigger>
         <CollapsiblePanel>
           <div className="mt-1 pl-7">
             {displayMode === "rich-agent" && <AgentDetail workEntry={workEntry} />}
-            {displayMode === "rich-bash" && <BashDetail workEntry={workEntry} showCommand={bashCmdTruncated} />}
+            {displayMode === "rich-bash" && (
+              <BashDetail workEntry={workEntry} showCommand={bashCmdTruncated} />
+            )}
             {displayMode === "rich-edit" && <EditDetail workEntry={workEntry} />}
-            {displayMode === "rich-skill" && <SkillDetail workEntry={workEntry} skills={skills} />}
+            {displayMode === "rich-skill" && (
+              <SkillDetail workEntry={workEntry} {...(skills !== undefined ? { skills } : {})} />
+            )}
           </div>
         </CollapsiblePanel>
       </Collapsible>
@@ -89,7 +105,9 @@ function SummaryLine(props: {
       </span>
       <div className="min-w-0 flex-1 overflow-hidden">
         {displayMode === "rich-agent" && <AgentSummary workEntry={workEntry} />}
-        {displayMode === "rich-bash" && <BashSummary workEntry={workEntry} summaryRef={bashSummaryRef} />}
+        {displayMode === "rich-bash" && (
+          <BashSummary workEntry={workEntry} summaryRef={bashSummaryRef} />
+        )}
         {displayMode === "rich-edit" && <EditSummary workEntry={workEntry} />}
         {displayMode === "rich-skill" && <SkillSummary workEntry={workEntry} />}
       </div>
@@ -170,7 +188,9 @@ function AgentDetail(props: { workEntry: WorkLogEntry }) {
       {prompt && <TruncatedBlock label="Prompt" text={prompt} />}
       {output !== undefined && (
         <div>
-          <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/50">Result</p>
+          <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/50">
+            Result
+          </p>
           <pre className="max-h-[300px] overflow-y-auto whitespace-pre-wrap rounded-md border border-border/50 bg-muted/30 p-2 font-mono text-[10px] leading-relaxed text-foreground/75">
             {output}
           </pre>
@@ -195,8 +215,11 @@ function extractToolResultText(result: unknown): string | undefined {
     if (typeof content === "string") return content;
     if (Array.isArray(content)) {
       return content
-        .filter((block): block is { type: string; text: string } =>
-          typeof block === "object" && block !== null && (block as Record<string, unknown>).type === "text",
+        .filter(
+          (block): block is { type: string; text: string } =>
+            typeof block === "object" &&
+            block !== null &&
+            (block as Record<string, unknown>).type === "text",
         )
         .map((block) => block.text)
         .join("\n\n");
@@ -207,7 +230,10 @@ function extractToolResultText(result: unknown): string | undefined {
 
 /* ---------- Bash ---------- */
 
-function BashSummary(props: { workEntry: WorkLogEntry; summaryRef?: React.RefObject<HTMLParagraphElement | null> | undefined }) {
+function BashSummary(props: {
+  workEntry: WorkLogEntry;
+  summaryRef?: React.RefObject<HTMLParagraphElement | null> | undefined;
+}) {
   const { workEntry, summaryRef } = props;
   const command = workEntry.command ?? workEntry.detail ?? workEntry.label;
 
@@ -222,14 +248,19 @@ function BashSummary(props: { workEntry: WorkLogEntry; summaryRef?: React.RefObj
 function BashDetail(props: { workEntry: WorkLogEntry; showCommand?: boolean }) {
   const { workEntry, showCommand } = props;
   // 2AM-Code fork: prefer data.input.command for untruncated source, fall back through rawCommand → command → detail
-  const command = (workEntry.data?.input?.command as string | undefined) ?? workEntry.rawCommand ?? workEntry.command ?? workEntry.detail;
+  const command =
+    (workEntry.data?.input?.command as string | undefined) ??
+    workEntry.rawCommand ??
+    workEntry.command ??
+    workEntry.detail;
   const output = extractToolResultText(workEntry.data?.result);
 
   return (
     <div className="pb-1">
       {showCommand && command && (
         <pre className="mb-1 whitespace-pre-wrap rounded-md border border-border/50 bg-muted/40 p-2 font-mono text-[10px] leading-relaxed text-foreground/80">
-          <span className="text-muted-foreground/50">$ </span>{command}
+          <span className="text-muted-foreground/50">$ </span>
+          {command}
         </pre>
       )}
       {output ? (
@@ -257,7 +288,6 @@ function EditSummary(props: { workEntry: WorkLogEntry }) {
     </p>
   );
 }
-
 
 function EditDetail(props: { workEntry: WorkLogEntry }) {
   const { workEntry } = props;
@@ -315,7 +345,10 @@ function SkillSummary(props: { workEntry: WorkLogEntry }) {
   );
 }
 
-function SkillDetail(props: { workEntry: WorkLogEntry; skills?: ReadonlyArray<ServerProviderSkill> }) {
+function SkillDetail(props: {
+  workEntry: WorkLogEntry;
+  skills?: ReadonlyArray<ServerProviderSkill>;
+}) {
   const { workEntry, skills } = props;
   const input = workEntry.data?.input as SkillInput | undefined;
   const skillName = input?.skill ?? "";

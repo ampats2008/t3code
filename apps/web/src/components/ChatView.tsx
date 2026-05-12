@@ -187,7 +187,10 @@ import { RightPanelSheet } from "./RightPanelSheet";
 const IMAGE_ONLY_BOOTSTRAP_PROMPT =
   "[User attached one or more images without additional text. Respond using the conversation context and the attached image(s).]";
 const EMPTY_ACTIVITIES: OrchestrationThreadActivity[] = [];
-const EMPTY_FORK_SOURCE_MAP: Record<string, { threadId: string; messageId: string } | undefined> = {};
+const EMPTY_FORK_SOURCE_MAP: Record<
+  ThreadId,
+  { threadId: ThreadId; messageId: MessageId } | undefined
+> = {};
 const EMPTY_SHELL_MAP: Record<string, import("../types").ThreadShell> = {};
 const EMPTY_PROPOSED_PLANS: Thread["proposedPlans"] = [];
 const EMPTY_PROVIDERS: ServerProvider[] = [];
@@ -1245,7 +1248,12 @@ export default function ChatView(props: ChatViewProps) {
   // DEBUG: log messages whenever they change
   useEffect(() => {
     if (serverMessages) {
-      forkDebugLog("ChatView", "serverMessages for thread", activeThread?.id, serverMessages.map(m => `${m.role}:${m.id}:${(m.text ?? "").slice(0, 40)}`));
+      forkDebugLog(
+        "ChatView",
+        "serverMessages for thread",
+        activeThread?.id,
+        serverMessages.map((m) => `${m.role}:${m.id}:${(m.text ?? "").slice(0, 40)}`),
+      );
     }
   }, [serverMessages, activeThread?.id]);
   useEffect(() => {
@@ -2430,7 +2438,13 @@ export default function ChatView(props: ChatViewProps) {
       const editMsgIndex = activeThread.messages.findIndex(
         (m) => m.id === editForkSource.messageId,
       );
-      forkDebugLog("edit-fork", "editMsgIndex:", editMsgIndex, "total messages:", activeThread.messages.length);
+      forkDebugLog(
+        "edit-fork",
+        "editMsgIndex:",
+        editMsgIndex,
+        "total messages:",
+        activeThread.messages.length,
+      );
       if (editMsgIndex <= 0) {
         // Can't edit the very first message via fork — no preceding context
         forkDebugLog("edit-fork", "editMsgIndex <= 0, bailing out");
@@ -2439,11 +2453,7 @@ export default function ChatView(props: ChatViewProps) {
       }
       const forkAtId = activeThread.messages[editMsgIndex - 1]!.id;
       forkDebugLog("edit-fork", "forking at message:", forkAtId, "(one before edited message)");
-      const forkedThreadId = await handleForkThread(
-        environmentId,
-        threadId,
-        forkAtId,
-      );
+      const forkedThreadId = await handleForkThread(environmentId, threadId, forkAtId);
       forkDebugLog("edit-fork", "forkedThreadId:", forkedThreadId);
       setEditForkSource(null);
       promptRef.current = "";
@@ -2489,20 +2499,21 @@ export default function ChatView(props: ChatViewProps) {
             },
           };
         });
-        useStore.getState().addPendingEditMessage(
-          environmentId,
-          forkedThreadId,
-          {
-            id: editMessageId,
-            role: "user",
-            text: editedText,
-            turnId: null,
-            createdAt: editCreatedAt,
-            streaming: false,
-            completedAt: editCreatedAt,
-          },
+        useStore.getState().addPendingEditMessage(environmentId, forkedThreadId, {
+          id: editMessageId,
+          role: "user",
+          text: editedText,
+          turnId: null,
+          createdAt: editCreatedAt,
+          streaming: false,
+          completedAt: editCreatedAt,
+        });
+        forkDebugLog(
+          "edit-fork",
+          "pending edit message written to store:",
+          editMessageId,
+          editedText,
         );
-        forkDebugLog("edit-fork", "pending edit message written to store:", editMessageId, editedText);
         await api.orchestration.dispatchCommand({
           type: "thread.turn.start",
           commandId: newCommandId(),
@@ -3483,7 +3494,10 @@ export default function ChatView(props: ChatViewProps) {
           onToggleDiff={onToggleDiff}
           forkAncestry={forkAncestry.length > 1 ? forkAncestry : undefined}
           onNavigateToThread={(targetThreadId) =>
-            void navigate({ to: "/$environmentId/$threadId", params: { environmentId, threadId: targetThreadId } })
+            void navigate({
+              to: "/$environmentId/$threadId",
+              params: { environmentId, threadId: targetThreadId },
+            })
           }
         />
       </header>
@@ -3530,14 +3544,17 @@ export default function ChatView(props: ChatViewProps) {
               }}
               threadForks={activeThread?.forks ?? []}
               onNavigateToThread={(targetThreadId) =>
-                void navigate({ to: "/$environmentId/$threadId", params: { environmentId, threadId: targetThreadId } })
+                void navigate({
+                  to: "/$environmentId/$threadId",
+                  params: { environmentId, threadId: targetThreadId },
+                })
               }
               markdownCwd={gitCwd ?? undefined}
               resolvedTheme={resolvedTheme}
               timestampFormat={timestampFormat}
               workspaceRoot={activeWorkspaceRoot}
               onIsAtEndChange={onIsAtEndChange}
-              skills={activeProviderStatus?.skills}
+              skills={activeProviderStatus?.skills ?? []}
             />
 
             {/* scroll to bottom pill — shown when user has scrolled away from the bottom */}
@@ -3687,17 +3704,17 @@ export default function ChatView(props: ChatViewProps) {
 
         {/* Plan sidebar */}
         {planSidebarOpen && !shouldUsePlanSidebarSheet ? (
-            <PlanSidebar
-              activePlan={activePlan}
-              activeProposedPlan={sidebarProposedPlan}
-              label={planSidebarLabel}
-              environmentId={environmentId}
-              markdownCwd={gitCwd ?? undefined}
-              workspaceRoot={activeWorkspaceRoot}
-              timestampFormat={timestampFormat}
-              mode="sidebar"
-              onClose={closePlanSidebar}
-            />
+          <PlanSidebar
+            activePlan={activePlan}
+            activeProposedPlan={sidebarProposedPlan}
+            label={planSidebarLabel}
+            environmentId={environmentId}
+            markdownCwd={gitCwd ?? undefined}
+            workspaceRoot={activeWorkspaceRoot}
+            timestampFormat={timestampFormat}
+            mode="sidebar"
+            onClose={closePlanSidebar}
+          />
         ) : null}
       </div>
       {/* end horizontal flex container */}
@@ -3721,17 +3738,17 @@ export default function ChatView(props: ChatViewProps) {
       ))}
       {shouldUsePlanSidebarSheet ? (
         <RightPanelSheet open={planSidebarOpen} onClose={closePlanSidebar}>
-            <PlanSidebar
-              activePlan={activePlan}
-              activeProposedPlan={sidebarProposedPlan}
-              label={planSidebarLabel}
-              environmentId={environmentId}
-              markdownCwd={gitCwd ?? undefined}
-              workspaceRoot={activeWorkspaceRoot}
-              timestampFormat={timestampFormat}
-              mode="sheet"
-              onClose={closePlanSidebar}
-            />
+          <PlanSidebar
+            activePlan={activePlan}
+            activeProposedPlan={sidebarProposedPlan}
+            label={planSidebarLabel}
+            environmentId={environmentId}
+            markdownCwd={gitCwd ?? undefined}
+            workspaceRoot={activeWorkspaceRoot}
+            timestampFormat={timestampFormat}
+            mode="sheet"
+            onClose={closePlanSidebar}
+          />
         </RightPanelSheet>
       ) : null}
 

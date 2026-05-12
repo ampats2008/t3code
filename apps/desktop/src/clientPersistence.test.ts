@@ -64,6 +64,9 @@ const clientSettings: ClientSettings = {
   sidebarProjectSortOrder: "manual",
   sidebarThreadSortOrder: "created_at",
   timestampFormat: "24-hour",
+  hideAddActionButton: false,
+  hideOpenButton: false,
+  hideCommitPushPrButton: false,
 };
 
 const savedRegistryRecord: PersistedSavedEnvironmentRecord = {

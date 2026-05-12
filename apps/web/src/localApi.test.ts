@@ -544,6 +544,9 @@ describe("wsApi", () => {
       sidebarProjectSortOrder: "manual" as const,
       sidebarThreadSortOrder: "created_at" as const,
       timestampFormat: "24-hour" as const,
+      hideAddActionButton: false,
+      hideOpenButton: false,
+      hideCommitPushPrButton: false,
     };
     const getClientSettings = vi.fn().mockResolvedValue({
       ...clientSettings,
@@ -606,6 +609,9 @@ describe("wsApi", () => {
       sidebarProjectSortOrder: "manual" as const,
       sidebarThreadSortOrder: "created_at" as const,
       timestampFormat: "24-hour" as const,
+      hideAddActionButton: false,
+      hideOpenButton: false,
+      hideCommitPushPrButton: false,
     };
 
     await api.persistence.setClientSettings(clientSettings);
