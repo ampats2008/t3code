@@ -22,6 +22,7 @@ import {
 import { makeManagedServerProvider } from "../makeManagedServerProvider.ts";
 import { PiProvider } from "../Services/PiProvider.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
+import { createPiServices, getAvailablePiModels } from "../piSdk.ts";
 
 const PROVIDER = "pi" as const;
 const PI_PRESENTATION: ServerProviderPresentation = {
@@ -31,39 +32,10 @@ const PI_PRESENTATION: ServerProviderPresentation = {
 
 const BUILT_IN_MODELS: ReadonlyArray<ServerProviderModel> = [];
 
-let cachedModelsByProvider: ReadonlyMap<string, ReadonlyArray<ServerProviderModel>> | null = null;
-
-// Pre-warm the Pi AI SDK as soon as this module is imported (server startup)
-// so that the heavy transitive deps (anthropic-ai/sdk, openai, etc.) are
-// resolved in the background rather than blocking the event loop the first
-// time the user enables Pi in settings.
-const _piAiModulePromise: Promise<typeof import("@mariozechner/pi-ai") | null> =
-  import("@mariozechner/pi-ai").catch(() => null);
-
 async function loadPiModels(): Promise<ReadonlyArray<ServerProviderModel>> {
   try {
-    const piAi = await _piAiModulePromise;
-    if (!piAi) return BUILT_IN_MODELS;
-    const { getEnvApiKey, getModels, getProviders } = piAi;
-    if (!cachedModelsByProvider) {
-      const nextModelsByProvider = new Map<string, ReadonlyArray<ServerProviderModel>>();
-      for (const provider of getProviders()) {
-        nextModelsByProvider.set(
-          provider,
-          getModels(provider).map((model) => ({
-            slug: `${model.provider}/${model.id}`,
-            name: model.name,
-            isCustom: false,
-            capabilities: null,
-          })),
-        );
-      }
-      cachedModelsByProvider = nextModelsByProvider;
-    }
-
-    return [...cachedModelsByProvider.entries()].flatMap(([provider, models]) =>
-      getEnvApiKey(provider) ? models : [],
-    );
+    const services = await createPiServices(process.cwd());
+    return getAvailablePiModels(services);
   } catch {
     return BUILT_IN_MODELS;
   }

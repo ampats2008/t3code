@@ -1,17 +1,25 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Effect } from "effect";
+import type { AgentSessionServices } from "@mariozechner/pi-coding-agent";
 
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { checkPiProviderStatus } from "./PiProvider.ts";
 
-const ORIGINAL_OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+vi.mock("../piSdk.ts", () => ({
+  createPiServices: vi.fn(),
+  getAvailablePiModels: vi.fn(),
+}));
 
-afterEach(() => {
-  if (ORIGINAL_OPENAI_API_KEY === undefined) {
-    delete process.env.OPENAI_API_KEY;
-  } else {
-    process.env.OPENAI_API_KEY = ORIGINAL_OPENAI_API_KEY;
-  }
+import { createPiServices, getAvailablePiModels } from "../piSdk.ts";
+
+const mockCreatePiServices = vi.mocked(createPiServices);
+const mockGetAvailablePiModels = vi.mocked(getAvailablePiModels);
+
+const FAKE_SERVICES = {} as AgentSessionServices;
+
+beforeEach(() => {
+  mockCreatePiServices.mockResolvedValue(FAKE_SERVICES);
+  mockGetAvailablePiModels.mockReturnValue([]);
 });
 
 describe("checkPiProviderStatus", () => {
@@ -31,7 +39,8 @@ describe("checkPiProviderStatus", () => {
   });
 
   it("returns warning status when Pi is enabled without sub-provider credentials", async () => {
-    delete process.env.OPENAI_API_KEY;
+    mockGetAvailablePiModels.mockReturnValue([]);
+
     const settingsLayer = ServerSettingsService.layerTest({
       providers: { pi: { enabled: true } },
     });
@@ -46,10 +55,26 @@ describe("checkPiProviderStatus", () => {
     expect(provider.auth).toEqual({ status: "unknown" });
     expect(provider.models).toEqual([]);
     expect(provider.message).toContain("no supported Pi sub-provider credentials");
-  }, 30_000);
+  });
 
   it("includes credential-backed Pi SDK models when enabled", async () => {
-    process.env.OPENAI_API_KEY = "test-key";
+    mockGetAvailablePiModels.mockReturnValue([
+      {
+        slug: "openai/gpt-4o",
+        name: "GPT-4o",
+        subProvider: "openai",
+        isCustom: false,
+        capabilities: null,
+      },
+      {
+        slug: "openai/gpt-4o-mini",
+        name: "GPT-4o mini",
+        subProvider: "openai",
+        isCustom: false,
+        capabilities: null,
+      },
+    ]);
+
     const settingsLayer = ServerSettingsService.layerTest({
       providers: { pi: { enabled: true } },
     });
@@ -66,7 +91,7 @@ describe("checkPiProviderStatus", () => {
       expect(model.slug).toContain("/");
       expect(model.isCustom).toBe(false);
     }
-  }, 30_000);
+  });
 
   it("merges custom models with built-in models", async () => {
     const settingsLayer = ServerSettingsService.layerTest({
@@ -82,7 +107,7 @@ describe("checkPiProviderStatus", () => {
     const customModel = provider.models.find((m) => m.slug === "custom/my-model");
     expect(customModel).toBeDefined();
     expect(customModel!.isCustom).toBe(true);
-  }, 30_000);
+  });
 
   it("has displayName and installed fields", async () => {
     const settingsLayer = ServerSettingsService.layerTest({
@@ -95,5 +120,20 @@ describe("checkPiProviderStatus", () => {
 
     expect(provider.displayName).toBe("Pi");
     expect(provider.installed).toBe(true);
-  }, 30_000);
+  });
+
+  it("returns warning status when createPiServices throws", async () => {
+    mockCreatePiServices.mockRejectedValue(new Error("Pi SDK unavailable"));
+
+    const settingsLayer = ServerSettingsService.layerTest({
+      providers: { pi: { enabled: true } },
+    });
+
+    const provider = await Effect.runPromise(
+      checkPiProviderStatus().pipe(Effect.provide(settingsLayer)),
+    );
+
+    expect(provider.status).toBe("warning");
+    expect(provider.models).toEqual([]);
+  });
 });
