@@ -27,13 +27,13 @@ it.layer(PiAdapterTestLayer)("PiAdapterLive", (it) => {
 
       const session = yield* adapter.startSession({
         threadId,
-        runtimeMode: "supervised",
+        runtimeMode: "approval-required",
       });
 
       assert.equal(session.provider, "pi");
       assert.equal(session.threadId, threadId);
       assert.equal(session.status, "ready");
-      assert.equal(session.runtimeMode, "supervised");
+      assert.equal(session.runtimeMode, "approval-required");
     }),
   );
 
@@ -43,7 +43,7 @@ it.layer(PiAdapterTestLayer)("PiAdapterLive", (it) => {
       const threadId = asThreadId("test-has-session");
 
       assert.equal(yield* adapter.hasSession(threadId), false);
-      yield* adapter.startSession({ threadId, runtimeMode: "supervised" });
+      yield* adapter.startSession({ threadId, runtimeMode: "approval-required" });
       assert.equal(yield* adapter.hasSession(threadId), true);
     }),
   );
@@ -54,11 +54,11 @@ it.layer(PiAdapterTestLayer)("PiAdapterLive", (it) => {
 
       yield* adapter.startSession({
         threadId: asThreadId("list-a"),
-        runtimeMode: "supervised",
+        runtimeMode: "approval-required",
       });
       yield* adapter.startSession({
         threadId: asThreadId("list-b"),
-        runtimeMode: "supervised",
+        runtimeMode: "approval-required",
       });
 
       const sessions = yield* adapter.listSessions();
@@ -73,7 +73,7 @@ it.layer(PiAdapterTestLayer)("PiAdapterLive", (it) => {
       const adapter = yield* PiAdapter;
       const threadId = asThreadId("test-stop-session");
 
-      yield* adapter.startSession({ threadId, runtimeMode: "supervised" });
+      yield* adapter.startSession({ threadId, runtimeMode: "approval-required" });
       assert.equal(yield* adapter.hasSession(threadId), true);
 
       yield* adapter.stopSession(threadId);
@@ -87,11 +87,11 @@ it.layer(PiAdapterTestLayer)("PiAdapterLive", (it) => {
 
       yield* adapter.startSession({
         threadId: asThreadId("stopall-1"),
-        runtimeMode: "supervised",
+        runtimeMode: "approval-required",
       });
       yield* adapter.startSession({
         threadId: asThreadId("stopall-2"),
-        runtimeMode: "supervised",
+        runtimeMode: "approval-required",
       });
 
       assert.equal(yield* adapter.hasSession(asThreadId("stopall-1")), true);
@@ -109,7 +109,7 @@ it.layer(PiAdapterTestLayer)("PiAdapterLive", (it) => {
       const adapter = yield* PiAdapter;
       const threadId = asThreadId("test-duplicate");
 
-      yield* adapter.startSession({ threadId, runtimeMode: "supervised" });
+      yield* adapter.startSession({ threadId, runtimeMode: "approval-required" });
       const session2 = yield* adapter.startSession({
         threadId,
         runtimeMode: "full-access",
@@ -133,7 +133,7 @@ it.layer(PiAdapterTestLayer)("PiAdapterLive", (it) => {
       const adapter = yield* PiAdapter;
       const threadId = asThreadId("test-read-thread");
 
-      yield* adapter.startSession({ threadId, runtimeMode: "supervised" });
+      yield* adapter.startSession({ threadId, runtimeMode: "approval-required" });
       const thread = yield* adapter.readThread(threadId);
 
       assert.equal(thread.threadId, threadId);
@@ -146,7 +146,7 @@ it.layer(PiAdapterTestLayer)("PiAdapterLive", (it) => {
       const adapter = yield* PiAdapter;
       const threadId = asThreadId("test-rollback-noop");
 
-      yield* adapter.startSession({ threadId, runtimeMode: "supervised" });
+      yield* adapter.startSession({ threadId, runtimeMode: "approval-required" });
       const thread = yield* adapter.rollbackThread(threadId, 5);
 
       assert.equal(thread.threadId, threadId);
@@ -159,7 +159,7 @@ it.layer(PiAdapterTestLayer)("PiAdapterLive", (it) => {
       const adapter = yield* PiAdapter;
       const threadId = asThreadId("test-user-input");
 
-      yield* adapter.startSession({ threadId, runtimeMode: "supervised" });
+      yield* adapter.startSession({ threadId, runtimeMode: "approval-required" });
       yield* adapter.respondToUserInput(threadId, "req-1" as any, {});
     }),
   );
