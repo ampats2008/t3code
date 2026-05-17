@@ -74,10 +74,7 @@ export class T3CodeClient extends EventEmitter {
     if (this.reconnectTimer) return;
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
-      this.reconnectDelay = Math.min(
-        this.reconnectDelay * 2,
-        MAX_RECONNECT_DELAY,
-      );
+      this.reconnectDelay = Math.min(this.reconnectDelay * 2, MAX_RECONNECT_DELAY);
       this.connect();
     }, this.reconnectDelay);
   }

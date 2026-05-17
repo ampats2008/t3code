@@ -4,10 +4,7 @@ import type { ConnectionState } from "./wsClient";
 let item: vscode.StatusBarItem;
 
 export function createStatusBar(): vscode.StatusBarItem {
-  item = vscode.window.createStatusBarItem(
-    vscode.StatusBarAlignment.Right,
-    100,
-  );
+  item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   update("disconnected");
   item.show();
   return item;

@@ -1,16 +1,23 @@
 {
   "name": "t3code-bridge",
   "displayName": "T3Code Bridge",
-  "description": "Connect VS Code / Cursor to T3Code — send selections, receive file-open commands",
   "version": "0.1.0",
+  "description": "Connect VS Code / Cursor to T3Code — send selections, receive file-open commands",
   "publisher": "t3tools",
-  "engines": {
-    "vscode": "^1.85.0"
-  },
-  "activationEvents": [
-    "onStartupFinished"
-  ],
   "main": "./dist/extension.js",
+  "scripts": {
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
+    "dev": "npm run build -- --watch",
+    "package": "vsce package"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/ws": "^8.5.10",
+    "esbuild": "^0.20.0"
+  },
   "contributes": {
     "commands": [
       {
@@ -82,17 +89,10 @@
       ]
     }
   },
-  "scripts": {
-    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
-    "dev": "npm run build -- --watch",
-    "package": "vsce package"
-  },
-  "devDependencies": {
-    "@types/vscode": "^1.85.0",
-    "@types/ws": "^8.5.10",
-    "esbuild": "^0.20.0"
-  },
-  "dependencies": {
-    "ws": "^8.16.0"
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "engines": {
+    "vscode": "^1.85.0"
   }
 }

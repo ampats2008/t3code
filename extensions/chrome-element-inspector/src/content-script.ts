@@ -16,74 +16,73 @@ if ((window as any)[GUARD_KEY]) {
   // Already loaded — skip re-initialization. The existing message listener
   // will handle toggle-inspect messages from the background script.
 } else {
-(window as any)[GUARD_KEY] = true;
+  (window as any)[GUARD_KEY] = true;
 
-let isActive = false;
-let hostEl: HTMLDivElement | null = null;
-let shadowRoot: ShadowRoot | null = null;
-let overlayEl: HTMLDivElement | null = null;
-let highlightEl: HTMLDivElement | null = null;
-let tooltipEl: HTMLDivElement | null = null;
-let currentTooltipData: TooltipData | null = null;
+  let isActive = false;
+  let hostEl: HTMLDivElement | null = null;
+  let shadowRoot: ShadowRoot | null = null;
+  let overlayEl: HTMLDivElement | null = null;
+  let highlightEl: HTMLDivElement | null = null;
+  let tooltipEl: HTMLDivElement | null = null;
+  let currentTooltipData: TooltipData | null = null;
 
-// ---------------------------------------------------------------------------
-// MAIN world fiber bridge
-// ---------------------------------------------------------------------------
-// Tags the element with a data attribute, dispatches a synchronous custom
-// event that the MAIN world fiber-reader.ts listens for, then reads the
-// JSON result from a shared data attribute on <html>.
+  // ---------------------------------------------------------------------------
+  // MAIN world fiber bridge
+  // ---------------------------------------------------------------------------
+  // Tags the element with a data attribute, dispatches a synchronous custom
+  // event that the MAIN world fiber-reader.ts listens for, then reads the
+  // JSON result from a shared data attribute on <html>.
 
-const FIBER_TARGET_ATTR = "data-t3code-target";
-const FIBER_RESULT_ATTR = "data-t3code-fiber-result";
-const FIBER_EVENT = "__t3code-read-fiber";
+  const FIBER_TARGET_ATTR = "data-t3code-target";
+  const FIBER_RESULT_ATTR = "data-t3code-fiber-result";
+  const FIBER_EVENT = "__t3code-read-fiber";
 
-interface FiberResult {
-  componentName?: string;
-  ancestors: string[];
-  sourceFile?: string;
-}
-
-function readFiberFromMainWorld(el: Element): FiberResult | null {
-  el.setAttribute(FIBER_TARGET_ATTR, "");
-  document.dispatchEvent(new Event(FIBER_EVENT));
-  const raw = document.documentElement.getAttribute(FIBER_RESULT_ATTR);
-  el.removeAttribute(FIBER_TARGET_ATTR);
-  document.documentElement.removeAttribute(FIBER_RESULT_ATTR);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as FiberResult;
-  } catch {
-    return null;
+  interface FiberResult {
+    componentName?: string;
+    ancestors: string[];
+    sourceFile?: string;
   }
-}
 
-// ---------------------------------------------------------------------------
-// Overlay UI
-// ---------------------------------------------------------------------------
+  function readFiberFromMainWorld(el: Element): FiberResult | null {
+    el.setAttribute(FIBER_TARGET_ATTR, "");
+    document.dispatchEvent(new Event(FIBER_EVENT));
+    const raw = document.documentElement.getAttribute(FIBER_RESULT_ATTR);
+    el.removeAttribute(FIBER_TARGET_ATTR);
+    document.documentElement.removeAttribute(FIBER_RESULT_ATTR);
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as FiberResult;
+    } catch {
+      return null;
+    }
+  }
 
-function createOverlay() {
-  // Create shadow DOM host
-  hostEl = document.createElement("div");
-  hostEl.id = "__t3code-inspector-host";
-  hostEl.style.cssText =
-    "all: initial; position: fixed; top: 0; left: 0; width: 0; height: 0; z-index: 2147483647;";
-  document.documentElement.appendChild(hostEl);
+  // ---------------------------------------------------------------------------
+  // Overlay UI
+  // ---------------------------------------------------------------------------
 
-  shadowRoot = hostEl.attachShadow({ mode: "closed" });
+  function createOverlay() {
+    // Create shadow DOM host
+    hostEl = document.createElement("div");
+    hostEl.id = "__t3code-inspector-host";
+    hostEl.style.cssText =
+      "all: initial; position: fixed; top: 0; left: 0; width: 0; height: 0; z-index: 2147483647;";
+    document.documentElement.appendChild(hostEl);
 
-  // Overlay — captures all mouse events
-  overlayEl = document.createElement("div");
-  overlayEl.style.cssText =
-    "position: fixed; inset: 0; z-index: 2147483647; cursor: crosshair;";
+    shadowRoot = hostEl.attachShadow({ mode: "closed" });
 
-  // Highlight box
-  highlightEl = document.createElement("div");
-  highlightEl.style.cssText =
-    "position: fixed; pointer-events: none; outline: 2px solid #60a5fa; background: rgba(96,165,250,0.08); display: none;";
+    // Overlay — captures all mouse events
+    overlayEl = document.createElement("div");
+    overlayEl.style.cssText = "position: fixed; inset: 0; z-index: 2147483647; cursor: crosshair;";
 
-  // Tooltip
-  tooltipEl = document.createElement("div");
-  tooltipEl.style.cssText = `
+    // Highlight box
+    highlightEl = document.createElement("div");
+    highlightEl.style.cssText =
+      "position: fixed; pointer-events: none; outline: 2px solid #60a5fa; background: rgba(96,165,250,0.08); display: none;";
+
+    // Tooltip
+    tooltipEl = document.createElement("div");
+    tooltipEl.style.cssText = `
     position: fixed; pointer-events: none; display: none;
     background: #1e1e2e; color: #cdd6f4; border: 1px solid #45475a;
     border-radius: 6px; padding: 8px 12px; font-size: 12px;
@@ -92,178 +91,162 @@ function createOverlay() {
     line-height: 1.5;
   `;
 
-  overlayEl.addEventListener("mousemove", handleMouseMove);
-  overlayEl.addEventListener("click", handleClick);
+    overlayEl.addEventListener("mousemove", handleMouseMove);
+    overlayEl.addEventListener("click", handleClick);
 
-  shadowRoot.appendChild(highlightEl);
-  shadowRoot.appendChild(tooltipEl);
-  shadowRoot.appendChild(overlayEl);
-}
-
-function destroyOverlay() {
-  if (hostEl) {
-    hostEl.remove();
-    hostEl = null;
-    shadowRoot = null;
-    overlayEl = null;
-    highlightEl = null;
-    tooltipEl = null;
-  }
-  currentTooltipData = null;
-}
-
-function activate() {
-  if (isActive) return;
-  isActive = true;
-  createOverlay();
-}
-
-function deactivate() {
-  if (!isActive) return;
-  isActive = false;
-  destroyOverlay();
-}
-
-function handleMouseMove(e: MouseEvent) {
-  if (!overlayEl || !highlightEl || !tooltipEl) return;
-
-  // Hide overlay AND host briefly to hit-test real element beneath.
-  // document.elementFromPoint can't pierce shadow DOM — it returns the shadow
-  // host (hostEl) if we only hide the overlay inside the shadow. So we must
-  // also hide the host element from hit-testing.
-  overlayEl.style.pointerEvents = "none";
-  if (hostEl) hostEl.style.display = "none";
-  const el = document.elementFromPoint(e.clientX, e.clientY);
-  if (hostEl) hostEl.style.display = "";
-  overlayEl.style.pointerEvents = "all";
-
-  if (
-    !el ||
-    el === document.body ||
-    el === document.documentElement ||
-    el === hostEl
-  ) {
-    highlightEl.style.display = "none";
-    tooltipEl.style.display = "none";
-    currentTooltipData = null;
-    return;
+    shadowRoot.appendChild(highlightEl);
+    shadowRoot.appendChild(tooltipEl);
+    shadowRoot.appendChild(overlayEl);
   }
 
-  // DOM-level tooltip data (works in isolated world)
-  currentTooltipData = extractTooltipData(el);
-
-  // Enrich with React fiber info from the MAIN world helper
-  const fiber = readFiberFromMainWorld(el);
-  if (fiber?.componentName) {
-    currentTooltipData.componentName = fiber.componentName;
-    currentTooltipData.ancestors = fiber.ancestors;
-    if (fiber.sourceFile) currentTooltipData.sourceFile = fiber.sourceFile;
-  }
-
-  const rect = el.getBoundingClientRect();
-
-  // Update highlight
-  highlightEl.style.display = "block";
-  highlightEl.style.top = rect.top + "px";
-  highlightEl.style.left = rect.left + "px";
-  highlightEl.style.width = rect.width + "px";
-  highlightEl.style.height = rect.height + "px";
-
-  // Update tooltip
-  tooltipEl.style.display = "block";
-  tooltipEl.style.top = Math.min(e.clientY + 14, window.innerHeight - 150) + "px";
-  tooltipEl.style.left =
-    Math.min(e.clientX + 14, window.innerWidth - 360) + "px";
-
-  // Render tooltip content
-  renderTooltip(currentTooltipData);
-}
-
-function renderTooltip(data: TooltipData) {
-  if (!tooltipEl) return;
-
-  let html = "";
-
-  // Tag + role
-  html += `<div style="font-weight:600;color:#89b4fa;">&lt;${data.tag}&gt;`;
-  if (data.role)
-    html += `<span style="color:#cba6f7;margin-left:6px;">${data.role}</span>`;
-  html += "</div>";
-
-  // Nearest labeled ancestor
-  if (data.nearestLabeledAncestor) {
-    const a = data.nearestLabeledAncestor;
-    let aLabel = "";
-    if (a.ariaLabel) aLabel = ` "${a.ariaLabel}"`;
-    else if (a.dataSlot) aLabel = ` ${a.dataSlot}`;
-    else if (a.directText) aLabel = ` "${a.directText}"`;
-    html += `<div style="color:rgba(52,211,153,0.8);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">↑ &lt;${a.tag}&gt;${aLabel}</div>`;
-  }
-
-  // Component breadcrumb
-  if (data.componentName) {
-    let crumb = data.componentName;
-    if (data.ancestors.length > 0) {
-      // Render ancestors, styling "…" gap markers dimmer than real names
-      const parts = data.ancestors.map((a) =>
-        a === "…"
-          ? `<span style="opacity:0.3;">…</span>`
-          : a
-      );
-      crumb += ` <span style="opacity:0.5;">← ${parts.join(" ← ")}</span>`;
+  function destroyOverlay() {
+    if (hostEl) {
+      hostEl.remove();
+      hostEl = null;
+      shadowRoot = null;
+      overlayEl = null;
+      highlightEl = null;
+      tooltipEl = null;
     }
-    if (data.sourceFile)
-      crumb += ` <span style="opacity:0.5;">@ ${data.sourceFile}</span>`;
-    html += `<div style="color:#a6adc8;margin-top:2px;">${crumb}</div>`;
+    currentTooltipData = null;
   }
 
-  // Direct text
-  if (data.directText) {
-    html += `<div style="color:rgba(249,226,175,0.8);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">"${data.directText}"</div>`;
+  function activate() {
+    if (isActive) return;
+    isActive = true;
+    createOverlay();
   }
 
-  html += `<div style="color:rgba(166,173,200,0.5);margin-top:4px;font-size:10px;">Click to insert · Esc to cancel</div>`;
+  function deactivate() {
+    if (!isActive) return;
+    isActive = false;
+    destroyOverlay();
+  }
 
-  tooltipEl.innerHTML = html;
-}
+  function handleMouseMove(e: MouseEvent) {
+    if (!overlayEl || !highlightEl || !tooltipEl) return;
 
-function handleClick(e: MouseEvent) {
-  e.preventDefault();
-  e.stopPropagation();
+    // Hide overlay AND host briefly to hit-test real element beneath.
+    // document.elementFromPoint can't pierce shadow DOM — it returns the shadow
+    // host (hostEl) if we only hide the overlay inside the shadow. So we must
+    // also hide the host element from hit-testing.
+    overlayEl.style.pointerEvents = "none";
+    if (hostEl) hostEl.style.display = "none";
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    if (hostEl) hostEl.style.display = "";
+    overlayEl.style.pointerEvents = "all";
 
-  if (currentTooltipData) {
-    const chip = formatText(currentTooltipData);
-    // Send to background script → WS → t3code
-    chrome.runtime.sendMessage(
-      { type: "element-ref", chip },
-      (response) => {
-        if (response && !response.sent) {
-          console.warn(
-            "[t3code Inspector] Not connected to t3code. Make sure t3code is running."
-          );
-        }
+    if (!el || el === document.body || el === document.documentElement || el === hostEl) {
+      highlightEl.style.display = "none";
+      tooltipEl.style.display = "none";
+      currentTooltipData = null;
+      return;
+    }
+
+    // DOM-level tooltip data (works in isolated world)
+    currentTooltipData = extractTooltipData(el);
+
+    // Enrich with React fiber info from the MAIN world helper
+    const fiber = readFiberFromMainWorld(el);
+    if (fiber?.componentName) {
+      currentTooltipData.componentName = fiber.componentName;
+      currentTooltipData.ancestors = fiber.ancestors;
+      if (fiber.sourceFile) currentTooltipData.sourceFile = fiber.sourceFile;
+    }
+
+    const rect = el.getBoundingClientRect();
+
+    // Update highlight
+    highlightEl.style.display = "block";
+    highlightEl.style.top = rect.top + "px";
+    highlightEl.style.left = rect.left + "px";
+    highlightEl.style.width = rect.width + "px";
+    highlightEl.style.height = rect.height + "px";
+
+    // Update tooltip
+    tooltipEl.style.display = "block";
+    tooltipEl.style.top = Math.min(e.clientY + 14, window.innerHeight - 150) + "px";
+    tooltipEl.style.left = Math.min(e.clientX + 14, window.innerWidth - 360) + "px";
+
+    // Render tooltip content
+    renderTooltip(currentTooltipData);
+  }
+
+  function renderTooltip(data: TooltipData) {
+    if (!tooltipEl) return;
+
+    let html = "";
+
+    // Tag + role
+    html += `<div style="font-weight:600;color:#89b4fa;">&lt;${data.tag}&gt;`;
+    if (data.role) html += `<span style="color:#cba6f7;margin-left:6px;">${data.role}</span>`;
+    html += "</div>";
+
+    // Nearest labeled ancestor
+    if (data.nearestLabeledAncestor) {
+      const a = data.nearestLabeledAncestor;
+      let aLabel = "";
+      if (a.ariaLabel) aLabel = ` "${a.ariaLabel}"`;
+      else if (a.dataSlot) aLabel = ` ${a.dataSlot}`;
+      else if (a.directText) aLabel = ` "${a.directText}"`;
+      html += `<div style="color:rgba(52,211,153,0.8);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">↑ &lt;${a.tag}&gt;${aLabel}</div>`;
+    }
+
+    // Component breadcrumb
+    if (data.componentName) {
+      let crumb = data.componentName;
+      if (data.ancestors.length > 0) {
+        // Render ancestors, styling "…" gap markers dimmer than real names
+        const parts = data.ancestors.map((a) =>
+          a === "…" ? `<span style="opacity:0.3;">…</span>` : a,
+        );
+        crumb += ` <span style="opacity:0.5;">← ${parts.join(" ← ")}</span>`;
       }
-    );
+      if (data.sourceFile) crumb += ` <span style="opacity:0.5;">@ ${data.sourceFile}</span>`;
+      html += `<div style="color:#a6adc8;margin-top:2px;">${crumb}</div>`;
+    }
+
+    // Direct text
+    if (data.directText) {
+      html += `<div style="color:rgba(249,226,175,0.8);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">"${data.directText}"</div>`;
+    }
+
+    html += `<div style="color:rgba(166,173,200,0.5);margin-top:4px;font-size:10px;">Click to insert · Esc to cancel</div>`;
+
+    tooltipEl.innerHTML = html;
   }
 
-  deactivate();
-}
+  function handleClick(e: MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
 
-// Listen for keyboard shortcut and toggle messages
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && isActive) {
+    if (currentTooltipData) {
+      const chip = formatText(currentTooltipData);
+      // Send to background script → WS → t3code
+      chrome.runtime.sendMessage({ type: "element-ref", chip }, (response) => {
+        if (response && !response.sent) {
+          console.warn("[t3code Inspector] Not connected to t3code. Make sure t3code is running.");
+        }
+      });
+    }
+
     deactivate();
   }
-});
 
-chrome.runtime.onMessage.addListener((message) => {
-  if (message.type === "toggle-inspect") {
-    if (isActive) {
+  // Listen for keyboard shortcut and toggle messages
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && isActive) {
       deactivate();
-    } else {
-      activate();
     }
-  }
-});
+  });
 
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message.type === "toggle-inspect") {
+      if (isActive) {
+        deactivate();
+      } else {
+        activate();
+      }
+    }
+  });
 } // end double-injection guard

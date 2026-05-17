@@ -13,10 +13,7 @@ const commonOptions = {
   target: "chrome120",
   sourcemap: true,
   alias: {
-    "@t3tools/shared/elementInspectorCore": path.join(
-      sharedDir,
-      "elementInspectorCore.ts"
-    ),
+    "@t3tools/shared/elementInspectorCore": path.join(sharedDir, "elementInspectorCore.ts"),
   },
 };
 

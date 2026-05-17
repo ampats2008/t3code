@@ -13,13 +13,8 @@ export interface ReviewComment {
  * Users can click the gutter "+" icon to add comment threads on files/diffs,
  * then submit all comments as a structured review to T3Code.
  */
-export function createCommentController(
-  context: vscode.ExtensionContext,
-): T3CodeCommentController {
-  const controller = vscode.comments.createCommentController(
-    "t3code-review",
-    "T3Code Review",
-  );
+export function createCommentController(context: vscode.ExtensionContext): T3CodeCommentController {
+  const controller = vscode.comments.createCommentController("t3code-review", "T3Code Review");
 
   // Enable the gutter "+" icon on all files
   controller.commentingRangeProvider = {
@@ -33,20 +28,14 @@ export function createCommentController(
   const threads: vscode.CommentThread[] = [];
 
   function updateContextKey() {
-    vscode.commands.executeCommand(
-      "setContext",
-      "t3code.hasReviewComments",
-      threads.length > 0,
-    );
+    vscode.commands.executeCommand("setContext", "t3code.hasReviewComments", threads.length > 0);
   }
 
   const instance: T3CodeCommentController = {
     controller,
     threads,
 
-    createThread(
-      reply: vscode.CommentReply,
-    ): void {
+    createThread(reply: vscode.CommentReply): void {
       const thread = reply.thread;
       const comment: vscode.Comment = {
         body: reply.text,
@@ -91,9 +80,7 @@ export function createCommentController(
         const isSingleLineSelection =
           range.start.line === range.end.line &&
           (range.start.character !== 0 || range.end.character !== 0);
-        const text = isSingleLineSelection
-          ? await getTextFromUri(uri, range)
-          : "";
+        const text = isSingleLineSelection ? await getTextFromUri(uri, range) : "";
         comments.push({
           file: uri.fsPath,
           startLine: range.start.line + 1,
@@ -133,22 +120,14 @@ export interface T3CodeCommentController {
   dispose(): void;
 }
 
-async function getTextFromUri(
-  uri: vscode.Uri,
-  range: vscode.Range,
-): Promise<string> {
+async function getTextFromUri(uri: vscode.Uri, range: vscode.Range): Promise<string> {
   try {
     // Open the document if not already open
     const doc = await vscode.workspace.openTextDocument(uri);
     // Expand the range to full lines
     const startLine = range.start.line;
     const endLine = range.end.line;
-    const fullRange = new vscode.Range(
-      startLine,
-      0,
-      endLine,
-      doc.lineAt(endLine).text.length,
-    );
+    const fullRange = new vscode.Range(startLine, 0, endLine, doc.lineAt(endLine).text.length);
     return doc.getText(fullRange);
   } catch {
     return "";

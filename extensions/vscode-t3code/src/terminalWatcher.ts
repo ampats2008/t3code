@@ -12,12 +12,11 @@ import type { T3CodeClient } from "./wsClient";
  * execution ends the read() stream is already drained. The buffered
  * output is then used in onDidEndTerminalShellExecution.
  */
-export function registerTerminalWatcher(
-  context: vscode.ExtensionContext,
-  client: T3CodeClient,
-) {
-  if (!vscode.window.onDidStartTerminalShellExecution ||
-      !vscode.window.onDidEndTerminalShellExecution) {
+export function registerTerminalWatcher(context: vscode.ExtensionContext, client: T3CodeClient) {
+  if (
+    !vscode.window.onDidStartTerminalShellExecution ||
+    !vscode.window.onDidEndTerminalShellExecution
+  ) {
     return;
   }
 
@@ -76,8 +75,7 @@ export function registerTerminalWatcher(
         output = outputLines.slice(-100).join("\n");
       }
 
-      const commandLine =
-        execution.commandLine.value || "(unknown command)";
+      const commandLine = execution.commandLine.value || "(unknown command)";
 
       const action = await vscode.window.showInformationMessage(
         `Command failed (exit ${event.exitCode}) — Send to T3Code?`,
@@ -98,9 +96,7 @@ export function registerTerminalWatcher(
       });
 
       if (!sent) {
-        vscode.window.showWarningMessage(
-          "Not connected to T3Code. Make sure T3Code is running.",
-        );
+        vscode.window.showWarningMessage("Not connected to T3Code. Make sure T3Code is running.");
       }
     }),
   );

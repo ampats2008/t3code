@@ -46,9 +46,12 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Delete a comment thread
   context.subscriptions.push(
-    vscode.commands.registerCommand("t3code.deleteReviewComment", (thread: vscode.CommentThread) => {
-      reviewController.deleteThread(thread);
-    }),
+    vscode.commands.registerCommand(
+      "t3code.deleteReviewComment",
+      (thread: vscode.CommentThread) => {
+        reviewController.deleteThread(thread);
+      },
+    ),
   );
 
   // Submit all review comments to T3Code
@@ -64,15 +67,11 @@ export function activate(context: vscode.ExtensionContext) {
         comments,
       });
       if (!sent) {
-        vscode.window.showWarningMessage(
-          "Not connected to T3Code. Make sure T3Code is running.",
-        );
+        vscode.window.showWarningMessage("Not connected to T3Code. Make sure T3Code is running.");
         return;
       }
       reviewController.clearAll();
-      vscode.window.showInformationMessage(
-        `Sent ${comments.length} review comment(s) to T3Code`,
-      );
+      vscode.window.showInformationMessage(`Sent ${comments.length} review comment(s) to T3Code`);
     }),
   );
 
@@ -98,38 +97,31 @@ export function activate(context: vscode.ExtensionContext) {
         language: editor.document.languageId,
       });
       if (!sent) {
-        vscode.window.showWarningMessage(
-          "Not connected to T3Code. Make sure T3Code is running.",
-        );
+        vscode.window.showWarningMessage("Not connected to T3Code. Make sure T3Code is running.");
       }
     }),
   );
 
   // Handle open-file messages from T3Code
-  client.on("message", async (msg: { type: string; file?: string; line?: number; column?: number }) => {
-    if (msg.type === "open-file" && msg.file) {
-      try {
-        const uri = vscode.Uri.file(msg.file);
-        const doc = await vscode.workspace.openTextDocument(uri);
-        const editor = await vscode.window.showTextDocument(doc);
-        if (msg.line) {
-          const pos = new vscode.Position(
-            (msg.line ?? 1) - 1,
-            (msg.column ?? 1) - 1,
-          );
-          editor.selection = new vscode.Selection(pos, pos);
-          editor.revealRange(
-            new vscode.Range(pos, pos),
-            vscode.TextEditorRevealType.InCenter,
-          );
+  client.on(
+    "message",
+    async (msg: { type: string; file?: string; line?: number; column?: number }) => {
+      if (msg.type === "open-file" && msg.file) {
+        try {
+          const uri = vscode.Uri.file(msg.file);
+          const doc = await vscode.workspace.openTextDocument(uri);
+          const editor = await vscode.window.showTextDocument(doc);
+          if (msg.line) {
+            const pos = new vscode.Position((msg.line ?? 1) - 1, (msg.column ?? 1) - 1);
+            editor.selection = new vscode.Selection(pos, pos);
+            editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
+          }
+        } catch (err) {
+          vscode.window.showWarningMessage(`Failed to open file: ${msg.file}`);
         }
-      } catch (err) {
-        vscode.window.showWarningMessage(
-          `Failed to open file: ${msg.file}`,
-        );
       }
-    }
-  });
+    },
+  );
 }
 
 export function deactivate() {

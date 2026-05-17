@@ -22,9 +22,6 @@ if (!(window as any)[GUARD]) {
       return;
     }
     const info = getReactFiberInfo(el);
-    document.documentElement.setAttribute(
-      "data-t3code-fiber-result",
-      JSON.stringify(info)
-    );
+    document.documentElement.setAttribute("data-t3code-fiber-result", JSON.stringify(info));
   });
 }

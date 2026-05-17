@@ -6,19 +6,13 @@ import type { T3CodeClient } from "./wsClient";
  * Collects diagnostic message, severity, source, file, line range, and surrounding
  * code context, then sends as a diagnostic-ref message over WS.
  */
-export function registerDiagnosticAction(
-  context: vscode.ExtensionContext,
-  client: T3CodeClient,
-) {
+export function registerDiagnosticAction(context: vscode.ExtensionContext, client: T3CodeClient) {
   const provider: vscode.CodeActionProvider = {
     provideCodeActions(document, range, context) {
       const diagnostics = context.diagnostics;
       if (diagnostics.length === 0) return [];
 
-      const action = new vscode.CodeAction(
-        "Fix with T3Code",
-        vscode.CodeActionKind.QuickFix,
-      );
+      const action = new vscode.CodeAction("Fix with T3Code", vscode.CodeActionKind.QuickFix);
       action.command = {
         command: "t3code.fixDiagnostic",
         title: "Fix with T3Code",
@@ -62,14 +56,14 @@ export function registerDiagnosticAction(
           diagnostics: diagnostics.map((d) => ({
             message: d.message,
             severity: severityMap[d.severity] ?? "error",
-            source: d.source ? `${d.source}${d.code ? `(${typeof d.code === "object" ? d.code.value : d.code})` : ""}` : "",
+            source: d.source
+              ? `${d.source}${d.code ? `(${typeof d.code === "object" ? d.code.value : d.code})` : ""}`
+              : "",
           })),
         });
 
         if (!sent) {
-          vscode.window.showWarningMessage(
-            "Not connected to T3Code. Make sure T3Code is running.",
-          );
+          vscode.window.showWarningMessage("Not connected to T3Code. Make sure T3Code is running.");
         }
       },
     ),
