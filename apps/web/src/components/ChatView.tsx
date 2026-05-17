@@ -39,6 +39,7 @@ import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useShallow } from "zustand/react/shallow";
 import { useGitStatus } from "~/lib/gitStatusState";
 import { usePrimaryEnvironmentId } from "../environments/primary";
+import { logPiModelPickerDebug } from "./chat/piModelPickerDebug";
 import { readEnvironmentApi } from "../environmentApi";
 import { isElectron } from "../env";
 import { readLocalApi } from "../localApi";
@@ -3306,8 +3307,25 @@ export default function ChatView(props: ChatViewProps) {
 
   const onProviderModelSelect = useCallback(
     (provider: ProviderKind, model: string) => {
+      logPiModelPickerDebug("ChatView.onProviderModelSelect.received", {
+        provider,
+        model,
+        hasActiveThread: Boolean(activeThread),
+        activeThreadId: activeThread?.id,
+        lockedProvider,
+        providerStatuses: providerStatuses.map((status) => ({
+          provider: status.provider,
+          enabled: status.enabled,
+          status: status.status,
+          modelCount: status.models.length,
+        })),
+      });
       if (!activeThread) return;
       if (lockedProvider !== null && provider !== lockedProvider) {
+        logPiModelPickerDebug("ChatView.onProviderModelSelect.ignoredLockedProvider", {
+          provider,
+          lockedProvider,
+        });
         scheduleComposerFocus();
         return;
       }
@@ -3322,6 +3340,13 @@ export default function ChatView(props: ChatViewProps) {
         provider: resolvedProvider,
         model: resolvedModel,
       };
+      logPiModelPickerDebug("ChatView.onProviderModelSelect.resolved", {
+        requestedProvider: provider,
+        requestedModel: model,
+        resolvedProvider,
+        resolvedModel,
+        nextModelSelection,
+      });
       setComposerDraftModelSelection(
         scopeThreadRef(activeThread.environmentId, activeThread.id),
         nextModelSelection,

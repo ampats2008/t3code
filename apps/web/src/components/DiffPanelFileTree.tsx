@@ -3,10 +3,7 @@ import { ChevronRightIcon, ExternalLinkIcon, FolderIcon, FolderClosedIcon } from
 import { cn } from "~/lib/utils";
 import { VscodeEntryIcon } from "./chat/VscodeEntryIcon";
 import { DiffStatLabel, hasNonZeroStat } from "./chat/DiffStatLabel";
-import {
-  buildTurnDiffTree,
-  type TurnDiffTreeNode,
-} from "../lib/turnDiffTree";
+import { buildTurnDiffTree, type TurnDiffTreeNode } from "../lib/turnDiffTree";
 
 interface FileEntry {
   path: string;
@@ -29,29 +26,15 @@ interface DiffPanelFileTreeProps {
   onOpenFile?: (filePath: string) => void;
 }
 
-export const DiffPanelFileTree = memo(function DiffPanelFileTree(
-  props: DiffPanelFileTreeProps,
-) {
-  const {
-    files,
-    collapsedFiles,
-    resolvedTheme,
-    onToggleFile,
-    renderFileDiff,
-    onOpenFile,
-  } = props;
+export const DiffPanelFileTree = memo(function DiffPanelFileTree(props: DiffPanelFileTreeProps) {
+  const { files, collapsedFiles, resolvedTheme, onToggleFile, renderFileDiff, onOpenFile } = props;
 
   const treeNodes = useMemo(
-    () =>
-      buildTurnDiffTree(
-        files as { path: string; additions?: number; deletions?: number }[],
-      ),
+    () => buildTurnDiffTree(files as { path: string; additions?: number; deletions?: number }[]),
     [files],
   );
 
-  const [expandedDirs, setExpandedDirs] = useState<Record<string, boolean>>(
-    {},
-  );
+  const [expandedDirs, setExpandedDirs] = useState<Record<string, boolean>>({});
 
   const toggleDir = useCallback((dirPath: string) => {
     setExpandedDirs((prev) => ({
@@ -60,10 +43,7 @@ export const DiffPanelFileTree = memo(function DiffPanelFileTree(
     }));
   }, []);
 
-  const renderNode = (
-    node: TurnDiffTreeNode,
-    depth: number,
-  ): ReactNode => {
+  const renderNode = (node: TurnDiffTreeNode, depth: number): ReactNode => {
     const indent = 6 + depth * 14;
 
     if (node.kind === "directory") {
@@ -92,15 +72,11 @@ export const DiffPanelFileTree = memo(function DiffPanelFileTree(
             </span>
             {hasNonZeroStat(node.stat) && (
               <span className="ml-auto shrink-0 font-mono text-[10px] tabular-nums">
-                <DiffStatLabel
-                  additions={node.stat.additions}
-                  deletions={node.stat.deletions}
-                />
+                <DiffStatLabel additions={node.stat.additions} deletions={node.stat.deletions} />
               </span>
             )}
           </button>
-          {isExpanded &&
-            node.children.map((child) => renderNode(child, depth + 1))}
+          {isExpanded && node.children.map((child) => renderNode(child, depth + 1))}
         </div>
       );
     }
@@ -120,7 +96,10 @@ export const DiffPanelFileTree = memo(function DiffPanelFileTree(
           <button
             type="button"
             className="flex min-w-0 overflow-hidden items-center gap-1.5 py-[3px] text-left"
-            style={{ paddingLeft: `${hasInlineDiff ? indent : indent + 17}px`, paddingRight: "4px" }}
+            style={{
+              paddingLeft: `${hasInlineDiff ? indent : indent + 17}px`,
+              paddingRight: "4px",
+            }}
             onClick={() => onToggleFile(node.path)}
             title={node.path}
           >
@@ -165,25 +144,16 @@ export const DiffPanelFileTree = memo(function DiffPanelFileTree(
           )}
           {node.stat && hasNonZeroStat(node.stat) && (
             <span className="ml-auto shrink-0 pl-1 pr-2 font-mono text-[10px] tabular-nums">
-              <DiffStatLabel
-                additions={node.stat.additions}
-                deletions={node.stat.deletions}
-              />
+              <DiffStatLabel additions={node.stat.additions} deletions={node.stat.deletions} />
             </span>
           )}
         </div>
         {hasInlineDiff && !isCollapsed && (
-          <div className="mt-1 mb-2 rounded-md">
-            {renderFileDiff(node.path)}
-          </div>
+          <div className="mt-1 mb-2 rounded-md">{renderFileDiff(node.path)}</div>
         )}
       </div>
     );
   };
 
-  return (
-    <div className="py-0.5">
-      {treeNodes.map((node) => renderNode(node, 0))}
-    </div>
-  );
+  return <div className="py-0.5">{treeNodes.map((node) => renderNode(node, 0))}</div>;
 });

@@ -24,9 +24,7 @@ export function buildDiffReviewSubmissionPrompt(
   const sections: string[] = [];
   for (const [filePath, fileAnnotations] of byFile) {
     const sorted = fileAnnotations.toSorted((a, b) => a.lineNumber - b.lineNumber);
-    const lines = sorted.map(
-      (a) => `  Line ${a.lineNumber} (${a.side}): ${a.text}`,
-    );
+    const lines = sorted.map((a) => `  Line ${a.lineNumber} (${a.side}): ${a.text}`);
     sections.push(`File: ${filePath}\n${lines.join("\n")}`);
   }
 

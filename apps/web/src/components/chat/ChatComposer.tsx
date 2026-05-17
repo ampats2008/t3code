@@ -61,6 +61,7 @@ import {
 } from "../composerFooterLayout";
 import { type ComposerPromptEditorHandle, ComposerPromptEditor } from "../ComposerPromptEditor";
 import { ProviderModelPicker } from "./ProviderModelPicker";
+import { logPiModelPickerDebug } from "./piModelPickerDebug";
 import { type ComposerCommandItem, ComposerCommandMenu } from "./ComposerCommandMenu";
 import { ComposerPendingApprovalActions } from "./ComposerPendingApprovalActions";
 import { CompactComposerControlsMenu } from "./CompactComposerControlsMenu";
@@ -660,10 +661,29 @@ export const ChatComposer = memo(
     );
     const selectedModelForPickerWithCustomFallback = useMemo(() => {
       const currentOptions = modelOptionsByProvider[selectedProvider];
-      return currentOptions.some((option) => option.slug === selectedModelForPicker)
+      const nextModel = currentOptions.some((option) => option.slug === selectedModelForPicker)
         ? selectedModelForPicker
         : (normalizeModelSlug(selectedModelForPicker, selectedProvider) ?? selectedModelForPicker);
-    }, [modelOptionsByProvider, selectedModelForPicker, selectedProvider]);
+      if (selectedProvider === "pi" || selectedModelForPicker !== nextModel) {
+        logPiModelPickerDebug("ChatComposer.selectedModelForPicker", {
+          selectedProvider,
+          selectedModel,
+          selectedModelForPicker,
+          nextModel,
+          optionCount: currentOptions.length,
+          activeProvider: composerDraft.activeProvider,
+          draftSelection: composerDraft.modelSelectionByProvider?.[selectedProvider],
+        });
+      }
+      return nextModel;
+    }, [
+      composerDraft.activeProvider,
+      composerDraft.modelSelectionByProvider,
+      modelOptionsByProvider,
+      selectedModel,
+      selectedModelForPicker,
+      selectedProvider,
+    ]);
 
     // ------------------------------------------------------------------
     // Context window
@@ -682,11 +702,11 @@ export const ChatComposer = memo(
     const threadId = activeThread?.id ?? null;
     const [guardrails, setGuardrailsState] = useState<
       import("./ContextWindowMeter").TurnGuardrails
-    >(() => (threadId ? guardrailsByThreadRef.current.get(threadId) ?? {} : {}));
+    >(() => (threadId ? (guardrailsByThreadRef.current.get(threadId) ?? {}) : {}));
     const prevThreadIdRef = useRef(threadId);
     if (prevThreadIdRef.current !== threadId) {
       prevThreadIdRef.current = threadId;
-      setGuardrailsState(threadId ? guardrailsByThreadRef.current.get(threadId) ?? {} : {});
+      setGuardrailsState(threadId ? (guardrailsByThreadRef.current.get(threadId) ?? {}) : {});
     }
     const setGuardrails = useCallback(
       (next: import("./ContextWindowMeter").TurnGuardrails) => {
@@ -968,7 +988,10 @@ export const ChatComposer = memo(
       diffReviewComposer.showDiffReviewPrompt ||
       (showPlanFollowUpPrompt && activeProposedPlan !== null);
 
-    const composerFooterHasWideActions = showPlanFollowUpPrompt || diffReviewComposer.showDiffReviewPrompt || activePendingProgress !== null;
+    const composerFooterHasWideActions =
+      showPlanFollowUpPrompt ||
+      diffReviewComposer.showDiffReviewPrompt ||
+      activePendingProgress !== null;
     const showPlanSidebarToggle = Boolean(activePlan || sidebarProposedPlan || planSidebarOpen);
     const composerFooterActionLayoutKey = useMemo(() => {
       if (activePendingProgress) {
@@ -1570,7 +1593,12 @@ export const ChatComposer = memo(
           return;
         }
       },
-      [applyPromptReplacement, handleInteractionModeChange, onRenameThread, resolveActiveComposerTrigger],
+      [
+        applyPromptReplacement,
+        handleInteractionModeChange,
+        onRenameThread,
+        resolveActiveComposerTrigger,
+      ],
     );
 
     const onComposerMenuItemHighlighted = useCallback(

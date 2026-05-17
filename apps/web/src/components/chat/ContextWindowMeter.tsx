@@ -181,7 +181,8 @@ export function ContextWindowMeter(props: {
                   <span>{formatContextWindowTokens(usage.cachedInputTokens ?? null)} cached</span>
                   <span>
                     {formatContextWindowTokens(
-                      ((usage.inputTokens ?? 0) as number) - ((usage.cachedInputTokens ?? 0) as number),
+                      ((usage.inputTokens ?? 0) as number) -
+                        ((usage.cachedInputTokens ?? 0) as number),
                     )}{" "}
                     fresh
                   </span>

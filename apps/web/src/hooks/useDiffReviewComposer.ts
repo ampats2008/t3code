@@ -1,9 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
-import {
-  useDiffReviewStore,
-  selectNonOrphanedAnnotations,
-} from "../diffReviewStore";
+import { useDiffReviewStore, selectNonOrphanedAnnotations } from "../diffReviewStore";
 import { buildDiffReviewSubmissionPrompt } from "../diffReview";
 
 interface UseDiffReviewComposerOptions {
@@ -29,12 +26,8 @@ interface DiffReviewComposerResult {
 export function useDiffReviewComposer(
   options: UseDiffReviewComposerOptions,
 ): DiffReviewComposerResult {
-  const {
-    activeThreadId,
-    latestTurnSettled,
-    pendingUserInputsCount,
-    isComposerApprovalState,
-  } = options;
+  const { activeThreadId, latestTurnSettled, pendingUserInputsCount, isComposerApprovalState } =
+    options;
 
   const nonOrphanedAnnotations = useDiffReviewStore(
     useShallow((state) => selectNonOrphanedAnnotations(state, activeThreadId)),

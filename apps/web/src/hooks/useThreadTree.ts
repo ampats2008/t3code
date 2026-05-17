@@ -91,10 +91,7 @@ export function flattenThreadTree(
  * Collect all ancestor IDs for a given thread by walking up the tree.
  * Used to auto-expand the subtree containing the active thread.
  */
-export function collectAncestorIds(
-  roots: ThreadTreeNode[],
-  targetId: ThreadId,
-): ThreadId[] {
+export function collectAncestorIds(roots: ThreadTreeNode[], targetId: ThreadId): ThreadId[] {
   const path: ThreadId[] = [];
   function find(nodes: ThreadTreeNode[]): boolean {
     for (const node of nodes) {
@@ -118,8 +115,5 @@ export function useThreadTree(
   threads: readonly SidebarThreadSummary[],
   forksByThreadId: Record<ThreadId, ThreadForkInfo[]>,
 ): ThreadTreeNode[] {
-  return useMemo(
-    () => buildThreadTree(threads, forksByThreadId),
-    [threads, forksByThreadId],
-  );
+  return useMemo(() => buildThreadTree(threads, forksByThreadId), [threads, forksByThreadId]);
 }

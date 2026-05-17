@@ -74,9 +74,7 @@ describe("diffReviewStore", () => {
       expect(annotation!.createdAt).toBeTruthy();
       expect(typeof annotation!.createdAt).toBe("string");
       // Check that createdAt is a valid ISO string
-      expect(new Date(annotation!.createdAt).toISOString()).toBe(
-        annotation!.createdAt,
-      );
+      expect(new Date(annotation!.createdAt).toISOString()).toBe(annotation!.createdAt);
     });
 
     it("sets orphaned to false", () => {
@@ -121,9 +119,7 @@ describe("diffReviewStore", () => {
         text: "Original text",
       });
 
-      const annotationId =
-        useDiffReviewStore.getState().annotationsByThreadId["thread-1"]?.[0]
-          ?.id;
+      const annotationId = useDiffReviewStore.getState().annotationsByThreadId["thread-1"]?.[0]?.id;
       expect(annotationId).toBeDefined();
       store.updateAnnotationText("thread-1", annotationId!, "Updated text");
 
@@ -135,16 +131,10 @@ describe("diffReviewStore", () => {
 
     it("is a no-op when threadId does not exist", () => {
       const stateBefore = useDiffReviewStore.getState();
-      stateBefore.updateAnnotationText(
-        "nonexistent-thread",
-        "some-id",
-        "New text",
-      );
+      stateBefore.updateAnnotationText("nonexistent-thread", "some-id", "New text");
       const stateAfter = useDiffReviewStore.getState();
 
-      expect(stateAfter.annotationsByThreadId).toEqual(
-        stateBefore.annotationsByThreadId,
-      );
+      expect(stateAfter.annotationsByThreadId).toEqual(stateBefore.annotationsByThreadId);
     });
 
     it("is a no-op when annotationId does not exist", () => {
@@ -161,9 +151,7 @@ describe("diffReviewStore", () => {
       const stateAfter = useDiffReviewStore.getState();
 
       // The annotation text should not change
-      expect(stateAfter.annotationsByThreadId["thread-1"]?.[0]?.text).toBe(
-        "Original text",
-      );
+      expect(stateAfter.annotationsByThreadId["thread-1"]?.[0]?.text).toBe("Original text");
     });
 
     it("does not affect other annotations", () => {
@@ -181,19 +169,13 @@ describe("diffReviewStore", () => {
         text: "Second annotation",
       });
 
-      const firstId =
-        useDiffReviewStore.getState().annotationsByThreadId["thread-1"]?.[0]
-          ?.id;
+      const firstId = useDiffReviewStore.getState().annotationsByThreadId["thread-1"]?.[0]?.id;
       expect(firstId).toBeDefined();
       store.updateAnnotationText("thread-1", firstId!, "Updated first");
 
       const state = useDiffReviewStore.getState();
-      expect(state.annotationsByThreadId["thread-1"]?.[0]?.text).toBe(
-        "Updated first",
-      );
-      expect(state.annotationsByThreadId["thread-1"]?.[1]?.text).toBe(
-        "Second annotation",
-      );
+      expect(state.annotationsByThreadId["thread-1"]?.[0]?.text).toBe("Updated first");
+      expect(state.annotationsByThreadId["thread-1"]?.[1]?.text).toBe("Second annotation");
     });
   });
 
@@ -207,9 +189,7 @@ describe("diffReviewStore", () => {
         text: "Annotation to remove",
       });
 
-      const annotationId =
-        useDiffReviewStore.getState().annotationsByThreadId["thread-1"]?.[0]
-          ?.id;
+      const annotationId = useDiffReviewStore.getState().annotationsByThreadId["thread-1"]?.[0]?.id;
       expect(annotationId).toBeDefined();
       store.removeAnnotation("thread-1", annotationId!);
 
@@ -232,17 +212,13 @@ describe("diffReviewStore", () => {
         text: "Second annotation",
       });
 
-      const firstId =
-        useDiffReviewStore.getState().annotationsByThreadId["thread-1"]?.[0]
-          ?.id;
+      const firstId = useDiffReviewStore.getState().annotationsByThreadId["thread-1"]?.[0]?.id;
       expect(firstId).toBeDefined();
       store.removeAnnotation("thread-1", firstId!);
 
       const state = useDiffReviewStore.getState();
       expect(state.annotationsByThreadId["thread-1"]).toHaveLength(1);
-      expect(state.annotationsByThreadId["thread-1"]?.[0]?.text).toBe(
-        "Second annotation",
-      );
+      expect(state.annotationsByThreadId["thread-1"]?.[0]?.text).toBe("Second annotation");
     });
 
     it("is a no-op when threadId does not exist", () => {
@@ -250,9 +226,7 @@ describe("diffReviewStore", () => {
       stateBefore.removeAnnotation("nonexistent-thread", "some-id");
       const stateAfter = useDiffReviewStore.getState();
 
-      expect(stateAfter.annotationsByThreadId).toEqual(
-        stateBefore.annotationsByThreadId,
-      );
+      expect(stateAfter.annotationsByThreadId).toEqual(stateBefore.annotationsByThreadId);
     });
   });
 
@@ -298,9 +272,7 @@ describe("diffReviewStore", () => {
       const state = useDiffReviewStore.getState();
       expect(state.annotationsByThreadId["thread-1"]).toBeUndefined();
       expect(state.annotationsByThreadId["thread-2"]).toHaveLength(1);
-      expect(state.annotationsByThreadId["thread-2"]?.[0]?.text).toBe(
-        "Annotation in thread-2",
-      );
+      expect(state.annotationsByThreadId["thread-2"]?.[0]?.text).toBe("Annotation in thread-2");
     });
 
     it("resets activeInputKey to null", () => {
@@ -351,20 +323,15 @@ describe("diffReviewStore", () => {
         text: "Annotation 2",
       });
 
-      const annotations = useDiffReviewStore.getState()
-        .annotationsByThreadId["thread-1"];
+      const annotations = useDiffReviewStore.getState().annotationsByThreadId["thread-1"];
       expect(annotations).toBeDefined();
       const ids = annotations!.map((a) => a.id);
 
       store.markOrphaned("thread-1", [ids[0]!]);
 
       const state = useDiffReviewStore.getState();
-      expect(state.annotationsByThreadId["thread-1"]?.[0]?.orphaned).toBe(
-        true,
-      );
-      expect(state.annotationsByThreadId["thread-1"]?.[1]?.orphaned).toBe(
-        false,
-      );
+      expect(state.annotationsByThreadId["thread-1"]?.[0]?.orphaned).toBe(true);
+      expect(state.annotationsByThreadId["thread-1"]?.[1]?.orphaned).toBe(false);
     });
 
     it("does not affect non-specified annotations", () => {
@@ -388,23 +355,16 @@ describe("diffReviewStore", () => {
         text: "Annotation 3",
       });
 
-      const annotations = useDiffReviewStore.getState()
-        .annotationsByThreadId["thread-1"];
+      const annotations = useDiffReviewStore.getState().annotationsByThreadId["thread-1"];
       expect(annotations).toBeDefined();
       const ids = annotations!.map((a) => a.id);
 
       store.markOrphaned("thread-1", [ids[0]!]);
 
       const state = useDiffReviewStore.getState();
-      expect(state.annotationsByThreadId["thread-1"]?.[0]?.orphaned).toBe(
-        true,
-      );
-      expect(state.annotationsByThreadId["thread-1"]?.[1]?.orphaned).toBe(
-        false,
-      );
-      expect(state.annotationsByThreadId["thread-1"]?.[2]?.orphaned).toBe(
-        false,
-      );
+      expect(state.annotationsByThreadId["thread-1"]?.[0]?.orphaned).toBe(true);
+      expect(state.annotationsByThreadId["thread-1"]?.[1]?.orphaned).toBe(false);
+      expect(state.annotationsByThreadId["thread-1"]?.[2]?.orphaned).toBe(false);
     });
 
     it("is a no-op when threadId does not exist", () => {
@@ -412,9 +372,7 @@ describe("diffReviewStore", () => {
       stateBefore.markOrphaned("nonexistent-thread", ["some-id"]);
       const stateAfter = useDiffReviewStore.getState();
 
-      expect(stateAfter.annotationsByThreadId).toEqual(
-        stateBefore.annotationsByThreadId,
-      );
+      expect(stateAfter.annotationsByThreadId).toEqual(stateBefore.annotationsByThreadId);
     });
   });
 
@@ -434,8 +392,7 @@ describe("diffReviewStore", () => {
         text: "Annotation 2",
       });
 
-      const annotations = useDiffReviewStore.getState()
-        .annotationsByThreadId["thread-1"];
+      const annotations = useDiffReviewStore.getState().annotationsByThreadId["thread-1"];
       expect(annotations).toBeDefined();
       const ids = annotations!.map((a) => a.id);
 
@@ -444,9 +401,7 @@ describe("diffReviewStore", () => {
 
       const state = useDiffReviewStore.getState();
       expect(state.annotationsByThreadId["thread-1"]).toHaveLength(1);
-      expect(state.annotationsByThreadId["thread-1"]?.[0]?.text).toBe(
-        "Annotation 2",
-      );
+      expect(state.annotationsByThreadId["thread-1"]?.[0]?.text).toBe("Annotation 2");
     });
 
     it("keeps non-orphaned annotations", () => {
@@ -464,8 +419,7 @@ describe("diffReviewStore", () => {
         text: "Remove this",
       });
 
-      const annotations = useDiffReviewStore.getState()
-        .annotationsByThreadId["thread-1"];
+      const annotations = useDiffReviewStore.getState().annotationsByThreadId["thread-1"];
       expect(annotations).toBeDefined();
       const ids = annotations!.map((a) => a.id);
 
@@ -474,12 +428,8 @@ describe("diffReviewStore", () => {
 
       const state = useDiffReviewStore.getState();
       expect(state.annotationsByThreadId["thread-1"]).toHaveLength(1);
-      expect(state.annotationsByThreadId["thread-1"]?.[0]?.text).toBe(
-        "Keep this",
-      );
-      expect(state.annotationsByThreadId["thread-1"]?.[0]?.orphaned).toBe(
-        false,
-      );
+      expect(state.annotationsByThreadId["thread-1"]?.[0]?.text).toBe("Keep this");
+      expect(state.annotationsByThreadId["thread-1"]?.[0]?.orphaned).toBe(false);
     });
 
     it("is a no-op when threadId does not exist", () => {
@@ -487,9 +437,7 @@ describe("diffReviewStore", () => {
       stateBefore.removeOrphaned("nonexistent-thread");
       const stateAfter = useDiffReviewStore.getState();
 
-      expect(stateAfter.annotationsByThreadId).toEqual(
-        stateBefore.annotationsByThreadId,
-      );
+      expect(stateAfter.annotationsByThreadId).toEqual(stateBefore.annotationsByThreadId);
     });
   });
 
@@ -548,8 +496,7 @@ describe("diffReviewStore", () => {
         text: "Mark as orphaned",
       });
 
-      const annotations = useDiffReviewStore.getState()
-        .annotationsByThreadId["thread-1"];
+      const annotations = useDiffReviewStore.getState().annotationsByThreadId["thread-1"];
       expect(annotations).toBeDefined();
       const ids = annotations!.map((a) => a.id);
 
@@ -579,8 +526,7 @@ describe("diffReviewStore", () => {
         text: "Annotation",
       });
 
-      const annotations = useDiffReviewStore.getState()
-        .annotationsByThreadId["thread-1"];
+      const annotations = useDiffReviewStore.getState().annotationsByThreadId["thread-1"];
       expect(annotations).toBeDefined();
       const ids = annotations!.map((a) => a.id);
 
@@ -595,47 +541,22 @@ describe("diffReviewStore", () => {
 
   describe("buildActiveInputKey", () => {
     it("builds the expected key format", () => {
-      const key = buildActiveInputKey(
-        "thread-1",
-        "src/index.ts",
-        42,
-        "additions",
-      );
+      const key = buildActiveInputKey("thread-1", "src/index.ts", 42, "additions");
 
       expect(key).toBe("thread-1:src/index.ts:42:additions");
     });
 
     it("works with different side values", () => {
-      const keyAdditions = buildActiveInputKey(
-        "thread-1",
-        "src/file.ts",
-        10,
-        "additions",
-      );
-      const keyDeletions = buildActiveInputKey(
-        "thread-1",
-        "src/file.ts",
-        10,
-        "deletions",
-      );
+      const keyAdditions = buildActiveInputKey("thread-1", "src/file.ts", 10, "additions");
+      const keyDeletions = buildActiveInputKey("thread-1", "src/file.ts", 10, "deletions");
 
       expect(keyAdditions).toBe("thread-1:src/file.ts:10:additions");
       expect(keyDeletions).toBe("thread-1:src/file.ts:10:deletions");
     });
 
     it("works with different file paths", () => {
-      const key1 = buildActiveInputKey(
-        "thread-1",
-        "src/utils/helper.ts",
-        5,
-        "additions",
-      );
-      const key2 = buildActiveInputKey(
-        "thread-1",
-        "packages/core/index.ts",
-        20,
-        "deletions",
-      );
+      const key1 = buildActiveInputKey("thread-1", "src/utils/helper.ts", 5, "additions");
+      const key2 = buildActiveInputKey("thread-1", "packages/core/index.ts", 20, "deletions");
 
       expect(key1).toBe("thread-1:src/utils/helper.ts:5:additions");
       expect(key2).toBe("thread-1:packages/core/index.ts:20:deletions");

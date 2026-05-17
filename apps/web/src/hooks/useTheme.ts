@@ -23,11 +23,7 @@ export const NAMED_DARK_THEMES = [
   "2am",
 ] as const;
 
-const ALL_THEMES: readonly Theme[] = [
-  "system",
-  "light",
-  ...NAMED_DARK_THEMES,
-];
+const ALL_THEMES: readonly Theme[] = ["system", "light", ...NAMED_DARK_THEMES];
 
 function isValidTheme(value: string): value is Theme {
   return (ALL_THEMES as readonly string[]).includes(value);

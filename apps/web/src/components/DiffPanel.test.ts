@@ -2,11 +2,7 @@ import { describe, expect, it } from "vitest";
 import { computeDefaultCollapsedFiles } from "./DiffPanel.logic";
 
 describe("computeDefaultCollapsedFiles", () => {
-  const filePaths = [
-    "src/components/Foo.tsx",
-    "src/components/Bar.tsx",
-    "src/lib/utils.ts",
-  ];
+  const filePaths = ["src/components/Foo.tsx", "src/components/Bar.tsx", "src/lib/utils.ts"];
 
   it("returns empty set when diffDefaultCollapsed is false", () => {
     const result = computeDefaultCollapsedFiles(filePaths, false, null);

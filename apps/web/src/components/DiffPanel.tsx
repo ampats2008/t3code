@@ -630,9 +630,7 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
           <ListTreeIcon className="size-3" />
         </Toggle>
         <Toggle
-          aria-label={
-            collapsedFiles.size > 0 ? "Expand all file diffs" : "Collapse all file diffs"
-          }
+          aria-label={collapsedFiles.size > 0 ? "Expand all file diffs" : "Collapse all file diffs"}
           title={collapsedFiles.size > 0 ? "Expand all" : "Collapse all"}
           variant="outline"
           size="xs"
@@ -742,8 +740,7 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
                           className="diff-render-file rounded-md"
                           onClickCapture={(event) => {
                             const nativeEvent = event.nativeEvent as MouseEvent;
-                            const composedPath =
-                              nativeEvent.composedPath?.() ?? [];
+                            const composedPath = nativeEvent.composedPath?.() ?? [];
                             const clickedHeader = composedPath.some((node) => {
                               if (!(node instanceof Element)) return false;
                               return node.hasAttribute("data-title");
@@ -758,8 +755,7 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
                             renderAnnotation={reviewProps.renderAnnotation}
                             renderGutterUtility={reviewProps.renderGutterUtility}
                             options={{
-                              diffStyle:
-                                diffRenderMode === "split" ? "split" : "unified",
+                              diffStyle: diffRenderMode === "split" ? "split" : "unified",
                               lineDiffType: "none",
                               overflow: diffWordWrap ? "wrap" : "scroll",
                               theme: resolveDiffThemeName(resolvedTheme),
@@ -798,12 +794,10 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
                         onClickCapture={(event) => {
                           const nativeEvent = event.nativeEvent as MouseEvent;
                           const composedPath = nativeEvent.composedPath?.() ?? [];
-                          const clickedCollapseToggle = composedPath.some(
-                            (node) => {
-                              if (!(node instanceof Element)) return false;
-                              return node.hasAttribute("data-collapse-toggle");
-                            },
-                          );
+                          const clickedCollapseToggle = composedPath.some((node) => {
+                            if (!(node instanceof Element)) return false;
+                            return node.hasAttribute("data-collapse-toggle");
+                          });
                           if (clickedCollapseToggle) return;
                           const clickedHeader = composedPath.some((node) => {
                             if (!(node instanceof Element)) return false;
@@ -881,8 +875,7 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
                               </>
                             )}
                             options={{
-                              diffStyle:
-                                diffRenderMode === "split" ? "split" : "unified",
+                              diffStyle: diffRenderMode === "split" ? "split" : "unified",
                               lineDiffType: "none",
                               overflow: diffWordWrap ? "wrap" : "scroll",
                               theme: resolveDiffThemeName(resolvedTheme),

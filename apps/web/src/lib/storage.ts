@@ -46,7 +46,11 @@ export function createDebouncedStorage(
   const resolvedStorage = resolveStorage(baseStorage);
   const debouncedSetItem = new Debouncer(
     (name: string, value: string) => {
-      resolvedStorage.setItem(name, value);
+      try {
+        resolvedStorage.setItem(name, value);
+      } catch (error) {
+        console.warn("Failed to persist debounced state storage item", { name, error });
+      }
     },
     { wait: debounceMs },
   );
@@ -58,7 +62,11 @@ export function createDebouncedStorage(
     },
     removeItem: (name) => {
       debouncedSetItem.cancel();
-      resolvedStorage.removeItem(name);
+      try {
+        resolvedStorage.removeItem(name);
+      } catch (error) {
+        console.warn("Failed to remove debounced state storage item", { name, error });
+      }
     },
     flush: () => {
       debouncedSetItem.flush();

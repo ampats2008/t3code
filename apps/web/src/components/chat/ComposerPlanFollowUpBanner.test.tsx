@@ -5,9 +5,7 @@ import { ComposerPlanFollowUpBanner } from "./ComposerPlanFollowUpBanner";
 
 describe("ComposerPlanFollowUpBanner", () => {
   it("renders 'Plan ready' text", () => {
-    const markup = renderToStaticMarkup(
-      <ComposerPlanFollowUpBanner planTitle={null} />,
-    );
+    const markup = renderToStaticMarkup(<ComposerPlanFollowUpBanner planTitle={null} />);
 
     expect(markup.toLowerCase()).toContain("plan ready");
   });
@@ -59,9 +57,7 @@ describe("ComposerPlanFollowUpBanner", () => {
   });
 
   it("preserves existing behavior when annotationCount prop not provided", () => {
-    const markup = renderToStaticMarkup(
-      <ComposerPlanFollowUpBanner planTitle="Update API" />,
-    );
+    const markup = renderToStaticMarkup(<ComposerPlanFollowUpBanner planTitle="Update API" />);
 
     expect(markup.toLowerCase()).toContain("plan ready");
     expect(markup).toContain("Update API");

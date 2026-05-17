@@ -14,10 +14,7 @@ export function ForkBadge({ forks, onNavigate }: ForkBadgeProps) {
   return (
     <Popover>
       <PopoverTrigger className="inline-flex">
-        <Badge
-          variant="outline"
-          className="cursor-pointer gap-1 text-[10px] hover:bg-accent"
-        >
+        <Badge variant="outline" className="cursor-pointer gap-1 text-[10px] hover:bg-accent">
           <GitForkIcon className="size-3" />
           Forked{forks.length > 1 ? ` (${forks.length})` : ""}
         </Badge>

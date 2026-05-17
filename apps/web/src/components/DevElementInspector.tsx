@@ -112,9 +112,7 @@ export function DevElementInspector() {
           {/* Tag + role */}
           <div className="font-semibold text-blue-400">
             {`<${tooltipData.tag}>`}
-            {tooltipData.role && (
-              <span className="text-purple-400 ml-1.5">{tooltipData.role}</span>
-            )}
+            {tooltipData.role && <span className="text-purple-400 ml-1.5">{tooltipData.role}</span>}
           </div>
           {/* Nearest labeled ancestor — shown for decorative/unlabeled elements */}
           {tooltipData.nearestLabeledAncestor && (
@@ -122,14 +120,23 @@ export function DevElementInspector() {
               ↑&nbsp;
               {`<${tooltipData.nearestLabeledAncestor.tag}>`}
               {tooltipData.nearestLabeledAncestor.ariaLabel && (
-                <span className="opacity-70"> &ldquo;{tooltipData.nearestLabeledAncestor.ariaLabel}&rdquo;</span>
+                <span className="opacity-70">
+                  {" "}
+                  &ldquo;{tooltipData.nearestLabeledAncestor.ariaLabel}&rdquo;
+                </span>
               )}
-              {!tooltipData.nearestLabeledAncestor.ariaLabel && tooltipData.nearestLabeledAncestor.dataSlot && (
-                <span className="opacity-70"> {tooltipData.nearestLabeledAncestor.dataSlot}</span>
-              )}
-              {!tooltipData.nearestLabeledAncestor.ariaLabel && !tooltipData.nearestLabeledAncestor.dataSlot && tooltipData.nearestLabeledAncestor.directText && (
-                <span className="opacity-70"> &ldquo;{tooltipData.nearestLabeledAncestor.directText}&rdquo;</span>
-              )}
+              {!tooltipData.nearestLabeledAncestor.ariaLabel &&
+                tooltipData.nearestLabeledAncestor.dataSlot && (
+                  <span className="opacity-70"> {tooltipData.nearestLabeledAncestor.dataSlot}</span>
+                )}
+              {!tooltipData.nearestLabeledAncestor.ariaLabel &&
+                !tooltipData.nearestLabeledAncestor.dataSlot &&
+                tooltipData.nearestLabeledAncestor.directText && (
+                  <span className="opacity-70">
+                    {" "}
+                    &ldquo;{tooltipData.nearestLabeledAncestor.directText}&rdquo;
+                  </span>
+                )}
             </div>
           )}
           {/* Component breadcrumb */}

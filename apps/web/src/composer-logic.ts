@@ -16,7 +16,7 @@ const isInlineTokenSegment = (
     | { type: "text"; text: string }
     | { type: "mention" }
     | { type: "skill" }
-    | { type: "terminal-context" }
+    | { type: "terminal-context" },
 ): boolean => segment.type !== "text";
 
 function clampCursor(text: string, cursor: number): number {

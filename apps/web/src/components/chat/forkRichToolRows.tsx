@@ -159,9 +159,7 @@ function GrepSummary(props: { workEntry: WorkLogEntry; workspaceRoot: string | u
   return (
     <p className="truncate text-[11px] leading-5">
       <span className="text-foreground/80">Grep</span>
-      <span className="ml-1.5 font-mono text-muted-foreground/70">
-        /{truncate(pattern, 40)}/
-      </span>
+      <span className="ml-1.5 font-mono text-muted-foreground/70">/{truncate(pattern, 40)}/</span>
       {(searchPath || glob) && (
         <span className="text-muted-foreground/50">
           {" "}
@@ -197,9 +195,7 @@ function GlobSummary(props: { workEntry: WorkLogEntry; workspaceRoot: string | u
   return (
     <p className="truncate text-[11px] leading-5">
       <span className="text-foreground/80">Glob</span>
-      <span className="ml-1.5 font-mono text-muted-foreground/70">
-        {truncate(pattern, 50)}
-      </span>
+      <span className="ml-1.5 font-mono text-muted-foreground/70">{truncate(pattern, 50)}</span>
       {searchPath && (
         <span className="text-muted-foreground/50">
           {" "}

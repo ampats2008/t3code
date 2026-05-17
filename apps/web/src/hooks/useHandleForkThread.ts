@@ -11,7 +11,11 @@ export function useHandleForkThread() {
   const navigate = useNavigate();
 
   const handleForkThread = useCallback(
-    async (environmentId: EnvironmentId, sourceThreadId: ThreadId, forkAtMessageId?: MessageId): Promise<ThreadId | undefined> => {
+    async (
+      environmentId: EnvironmentId,
+      sourceThreadId: ThreadId,
+      forkAtMessageId?: MessageId,
+    ): Promise<ThreadId | undefined> => {
       const sourceThread = selectThreadByRef(
         useStore.getState(),
         scopeThreadRef(environmentId, sourceThreadId),
@@ -52,7 +56,15 @@ export function useHandleForkThread() {
           createdAt: new Date().toISOString(),
         });
 
-        forkDebugLog("useHandleForkThread", "fork created, forkedThreadId:", forkedThreadId, "sourceThreadId:", sourceThreadId, "forkAtMessageId:", targetMessageId);
+        forkDebugLog(
+          "useHandleForkThread",
+          "fork created, forkedThreadId:",
+          forkedThreadId,
+          "sourceThreadId:",
+          sourceThreadId,
+          "forkAtMessageId:",
+          targetMessageId,
+        );
         // Optimistically update the source thread's forks in the client store.
         // The server projector does this too, but the detail stream for the
         // source thread won't receive the event (aggregateId is the new

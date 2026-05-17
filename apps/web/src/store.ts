@@ -170,7 +170,10 @@ function mapSession(session: OrchestrationSession): ThreadSession {
 
 function mapMessage(environmentId: EnvironmentId, message: OrchestrationMessage): ChatMessage {
   const attachments = message.attachments
-    ?.filter((attachment): attachment is Extract<typeof attachment, { type: "image" }> => attachment.type === "image")
+    ?.filter(
+      (attachment): attachment is Extract<typeof attachment, { type: "image" }> =>
+        attachment.type === "image",
+    )
     .map((attachment) => ({
       type: "image" as const,
       id: attachment.id,
@@ -638,9 +641,7 @@ function writeThreadState(
     // optimistic user messages written during edit-and-resubmit.
     const pendingMessages = nextState.pendingEditMessagesByThreadId[nextThread.id];
     if (pendingMessages && pendingMessages.length > 0) {
-      const missingPending = pendingMessages.filter(
-        (pm) => !nextMessageSlice.byId[pm.id],
-      );
+      const missingPending = pendingMessages.filter((pm) => !nextMessageSlice.byId[pm.id]);
       if (missingPending.length > 0) {
         for (const pm of missingPending) {
           nextMessageSlice.ids.push(pm.id);
@@ -736,7 +737,15 @@ function writeThreadState(
     // event yet, so the snapshot arrives without fork_source columns set.
     const existingForkSource = nextState.forkSourceByThreadId[nextThread.id];
     if (nextThread.forkSource || !existingForkSource) {
-      forkDebugLog("writeThreadState", "updating forkSource for thread", nextThread.id, "→", nextThread.forkSource, "previous:", previousThread?.forkSource);
+      forkDebugLog(
+        "writeThreadState",
+        "updating forkSource for thread",
+        nextThread.id,
+        "→",
+        nextThread.forkSource,
+        "previous:",
+        previousThread?.forkSource,
+      );
       nextState = {
         ...nextState,
         forkSourceByThreadId: {
@@ -745,7 +754,13 @@ function writeThreadState(
         },
       };
     } else {
-      forkDebugLog("writeThreadState", "preserving optimistic forkSource for thread", nextThread.id, "server sent undefined but optimistic:", existingForkSource);
+      forkDebugLog(
+        "writeThreadState",
+        "preserving optimistic forkSource for thread",
+        nextThread.id,
+        "server sent undefined but optimistic:",
+        existingForkSource,
+      );
     }
   }
 
@@ -1263,7 +1278,17 @@ export function syncServerThreadDetail(
   thread: OrchestrationThread,
   environmentId: EnvironmentId,
 ): AppState {
-  forkDebugLog("syncServerThreadDetail", "thread:", thread.id, "forkSource:", thread.forkSource, "messageCount:", thread.messages.length, "messages:", thread.messages.map(m => `${m.role}:${(m.text ?? "").slice(0, 30)}`));
+  forkDebugLog(
+    "syncServerThreadDetail",
+    "thread:",
+    thread.id,
+    "forkSource:",
+    thread.forkSource,
+    "messageCount:",
+    thread.messages.length,
+    "messages:",
+    thread.messages.map((m) => `${m.role}:${(m.text ?? "").slice(0, 30)}`),
+  );
   const environmentState = getStoredEnvironmentState(state, environmentId);
   const previousThread = getThreadFromEnvironmentState(environmentState, thread.id);
   return commitEnvironmentState(
@@ -1487,10 +1512,24 @@ function applyEnvironmentOrchestrationEvent(
     }
 
     case "thread.message-sent": {
-      const _threadExists = getThreadFromEnvironmentState(state, event.payload.threadId as ThreadId);
-      forkDebugLog("thread.message-sent", "threadId:", event.payload.threadId, "role:", event.payload.role, "text:", (event.payload.text as string)?.slice(0, 80), "threadExists:", !!_threadExists);
+      const _threadExists = getThreadFromEnvironmentState(
+        state,
+        event.payload.threadId as ThreadId,
+      );
+      forkDebugLog(
+        "thread.message-sent",
+        "threadId:",
+        event.payload.threadId,
+        "role:",
+        event.payload.role,
+        "text:",
+        (event.payload.text as string)?.slice(0, 80),
+        "threadExists:",
+        !!_threadExists,
+      );
       // Clean up pending edit message if the server confirmed it
-      const pendingForThread = state.pendingEditMessagesByThreadId[event.payload.threadId as ThreadId];
+      const pendingForThread =
+        state.pendingEditMessagesByThreadId[event.payload.threadId as ThreadId];
       if (pendingForThread?.some((pm) => pm.id === event.payload.messageId)) {
         const filtered = pendingForThread.filter((pm) => pm.id !== event.payload.messageId);
         state = {

@@ -31,7 +31,8 @@ export function buildThreadAncestry(
       title: shell?.title ?? "Unknown thread",
     });
 
-    const src: { threadId: ThreadId; messageId: MessageId } | undefined = forkSourceByThreadId[currentId];
+    const src: { threadId: ThreadId; messageId: MessageId } | undefined =
+      forkSourceByThreadId[currentId];
     if (!src) break;
     currentId = src.threadId;
   }
@@ -52,10 +53,24 @@ export function useThreadAncestry(
     if (!threadId) return [];
     const forkSource = forkSourceByThreadId[threadId];
     if (!forkSource) {
-      forkDebugLog("useThreadAncestry", "no forkSource for thread", threadId, "forkSourceMap keys:", Object.keys(forkSourceByThreadId));
+      forkDebugLog(
+        "useThreadAncestry",
+        "no forkSource for thread",
+        threadId,
+        "forkSourceMap keys:",
+        Object.keys(forkSourceByThreadId),
+      );
       return [];
     }
-    forkDebugLog("useThreadAncestry", "found forkSource for thread", threadId, "→", forkSource, "shellMap keys:", Object.keys(threadShellById));
+    forkDebugLog(
+      "useThreadAncestry",
+      "found forkSource for thread",
+      threadId,
+      "→",
+      forkSource,
+      "shellMap keys:",
+      Object.keys(threadShellById),
+    );
     const result = buildThreadAncestry(threadId, forkSourceByThreadId, threadShellById);
     forkDebugLog("useThreadAncestry", "ancestry result:", result);
     return result;

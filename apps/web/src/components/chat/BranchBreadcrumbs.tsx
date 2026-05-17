@@ -31,9 +31,7 @@ export function BranchBreadcrumbs({ segments, onNavigate }: BranchBreadcrumbsPro
 
         return (
           <span key={segment.threadId} className="flex items-center gap-0.5">
-            {i > 0 && (
-              <ChevronRightIcon className="size-3 shrink-0 text-muted-foreground/30" />
-            )}
+            {i > 0 && <ChevronRightIcon className="size-3 shrink-0 text-muted-foreground/30" />}
             {showEllipsis && isHidden ? (
               <span className="text-muted-foreground/40">...</span>
             ) : isLast ? (

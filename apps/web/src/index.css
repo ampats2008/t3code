@@ -142,7 +142,7 @@
   --foreground: oklch(0.9 0.02 240);
   --card: oklch(0.16 0.03 260);
   --card-foreground: oklch(0.9 0.02 240);
-  --surface-elevated: oklch(0.20 0.03 260);
+  --surface-elevated: oklch(0.2 0.03 260);
   --surface-elevated-foreground: oklch(0.9 0.02 240);
   --popover: oklch(0.16 0.03 260);
   --popover-foreground: oklch(0.9 0.02 240);
@@ -315,7 +315,7 @@
   --foreground: oklch(0.95 0.01 230);
   --card: oklch(0.16 0.035 230);
   --card-foreground: oklch(0.95 0.01 230);
-  --surface-elevated: oklch(0.20 0.035 230);
+  --surface-elevated: oklch(0.2 0.035 230);
   --surface-elevated-foreground: oklch(0.95 0.01 230);
   --popover: oklch(0.16 0.035 230);
   --popover-foreground: oklch(0.95 0.01 230);
@@ -535,7 +535,6 @@ label:has(> select#reasoning-effort) select {
   color: var(--foreground);
   font-size: 0.75rem;
 }
-
 
 .chat-markdown-file-link {
   display: inline-flex;

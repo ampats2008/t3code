@@ -3,6 +3,16 @@
 // or `window.__clearForkDebugLog()` to reset.
 
 const LOG_KEY = "fork-debug-log";
+const MAX_LOG_LINES = 500;
+const MAX_LOG_CHARS = 200_000;
+
+function trimLog(log: string[]): string[] {
+  let trimmed = log.slice(-MAX_LOG_LINES);
+  while (JSON.stringify(trimmed).length > MAX_LOG_CHARS && trimmed.length > 0) {
+    trimmed = trimmed.slice(Math.max(1, Math.floor(trimmed.length / 10)));
+  }
+  return trimmed;
+}
 
 function getLog(): string[] {
   try {
@@ -17,8 +27,7 @@ export function forkDebugLog(tag: string, ...args: unknown[]): void {
   const line = `[${ts}] [${tag}] ${args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" ")}`;
   console.log(line);
   try {
-    const log = getLog();
-    log.push(line);
+    const log = trimLog([...getLog(), line]);
     localStorage.setItem(LOG_KEY, JSON.stringify(log));
   } catch {
     // ignore storage errors

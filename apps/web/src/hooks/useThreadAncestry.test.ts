@@ -23,7 +23,10 @@ function makeShell(id: string, title: string): ThreadShell {
 
 describe("buildThreadAncestry", () => {
   it("returns chain of 3 threads (root → fork1 → fork2)", () => {
-    const forkSourceByThreadId: Record<string, { threadId: string; messageId: string } | undefined> = {
+    const forkSourceByThreadId: Record<
+      string,
+      { threadId: string; messageId: string } | undefined
+    > = {
       fork2: { threadId: "fork1", messageId: "msg-b" },
       fork1: { threadId: "root", messageId: "msg-a" },
     } as any;
@@ -47,7 +50,10 @@ describe("buildThreadAncestry", () => {
   });
 
   it("handles broken chain (missing intermediate)", () => {
-    const forkSourceByThreadId: Record<string, { threadId: string; messageId: string } | undefined> = {
+    const forkSourceByThreadId: Record<
+      string,
+      { threadId: string; messageId: string } | undefined
+    > = {
       fork2: { threadId: "missing", messageId: "msg-b" },
     } as any;
     const threadShellById = {
@@ -78,7 +84,10 @@ describe("buildThreadAncestry", () => {
   });
 
   it("handles circular reference gracefully", () => {
-    const forkSourceByThreadId: Record<string, { threadId: string; messageId: string } | undefined> = {
+    const forkSourceByThreadId: Record<
+      string,
+      { threadId: string; messageId: string } | undefined
+    > = {
       a: { threadId: "b", messageId: "msg-1" },
       b: { threadId: "a", messageId: "msg-2" },
     } as any;

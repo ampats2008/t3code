@@ -22,6 +22,7 @@ import {
 import { useSettings, useUpdateSettings } from "~/hooks/useSettings";
 import { cn } from "~/lib/utils";
 import { TooltipProvider } from "../ui/tooltip";
+import { logPiModelPickerDebug } from "./piModelPickerDebug";
 
 type ModelPickerItem = {
   slug: string;
@@ -228,6 +229,12 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
         modelSlug,
         modelOptionsByProvider[provider],
       );
+      logPiModelPickerDebug("ModelPickerContent.handleModelSelect", {
+        provider,
+        modelSlug,
+        resolvedModel,
+        optionCount: modelOptionsByProvider[provider]?.length ?? 0,
+      });
       if (resolvedModel) {
         onProviderModelChange(provider, resolvedModel);
       }
@@ -244,7 +251,11 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
       } else {
         newFavorites.push({ provider, model });
       }
-      updateSettings({ favorites: newFavorites });
+      try {
+        updateSettings({ favorites: newFavorites });
+      } catch (error) {
+        console.warn("Failed to update favorite model", { provider, model, error });
+      }
     },
     [favorites, updateSettings],
   );
@@ -427,6 +438,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
             highlightedModelKeyRef.current = typeof modelKey === "string" ? modelKey : null;
           }}
           onValueChange={(modelKey) => {
+            logPiModelPickerDebug("Combobox.onValueChange", { modelKey });
             if (typeof modelKey !== "string") {
               return;
             }

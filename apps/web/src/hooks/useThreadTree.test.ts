@@ -29,10 +29,7 @@ function makeSidebarThread(id: string, title: string): SidebarThreadSummary {
 
 describe("buildThreadTree", () => {
   it("returns flat roots when no forks exist", () => {
-    const threads = [
-      makeSidebarThread("t1", "Thread 1"),
-      makeSidebarThread("t2", "Thread 2"),
-    ];
+    const threads = [makeSidebarThread("t1", "Thread 1"), makeSidebarThread("t2", "Thread 2")];
     const tree = buildThreadTree(threads, {});
     expect(tree).toHaveLength(2);
     expect(tree[0]!.thread.id).toBe("t1");
@@ -50,8 +47,18 @@ describe("buildThreadTree", () => {
     ];
     const forksByThreadId: Record<string, ThreadForkInfo[]> = {
       parent: [
-        { sourceMessageId: "msg-1" as any, forkedThreadId: ThreadId.make("fork1"), forkedThreadTitle: "Fork 1", forkNumber: 1 },
-        { sourceMessageId: "msg-1" as any, forkedThreadId: ThreadId.make("fork2"), forkedThreadTitle: "Fork 2", forkNumber: 2 },
+        {
+          sourceMessageId: "msg-1" as any,
+          forkedThreadId: ThreadId.make("fork1"),
+          forkedThreadTitle: "Fork 1",
+          forkNumber: 1,
+        },
+        {
+          sourceMessageId: "msg-1" as any,
+          forkedThreadId: ThreadId.make("fork2"),
+          forkedThreadTitle: "Fork 2",
+          forkNumber: 2,
+        },
       ],
     };
     const tree = buildThreadTree(threads, forksByThreadId);
@@ -73,10 +80,20 @@ describe("buildThreadTree", () => {
     ];
     const forksByThreadId: Record<string, ThreadForkInfo[]> = {
       root: [
-        { sourceMessageId: "msg-1" as any, forkedThreadId: ThreadId.make("child"), forkedThreadTitle: "Child", forkNumber: 1 },
+        {
+          sourceMessageId: "msg-1" as any,
+          forkedThreadId: ThreadId.make("child"),
+          forkedThreadTitle: "Child",
+          forkNumber: 1,
+        },
       ],
       child: [
-        { sourceMessageId: "msg-2" as any, forkedThreadId: ThreadId.make("grandchild"), forkedThreadTitle: "Grandchild", forkNumber: 1 },
+        {
+          sourceMessageId: "msg-2" as any,
+          forkedThreadId: ThreadId.make("grandchild"),
+          forkedThreadTitle: "Grandchild",
+          forkNumber: 1,
+        },
       ],
     };
     const tree = buildThreadTree(threads, forksByThreadId);
@@ -88,12 +105,15 @@ describe("buildThreadTree", () => {
   });
 
   it("handles fork referencing a thread not in the list", () => {
-    const threads = [
-      makeSidebarThread("parent", "Parent"),
-    ];
+    const threads = [makeSidebarThread("parent", "Parent")];
     const forksByThreadId: Record<string, ThreadForkInfo[]> = {
       parent: [
-        { sourceMessageId: "msg-1" as any, forkedThreadId: ThreadId.make("missing"), forkedThreadTitle: "Missing", forkNumber: 1 },
+        {
+          sourceMessageId: "msg-1" as any,
+          forkedThreadId: ThreadId.make("missing"),
+          forkedThreadTitle: "Missing",
+          forkNumber: 1,
+        },
       ],
     };
     const tree = buildThreadTree(threads, forksByThreadId);
@@ -111,7 +131,12 @@ describe("flattenThreadTree", () => {
     ];
     const forksByThreadId: Record<string, ThreadForkInfo[]> = {
       root: [
-        { sourceMessageId: "msg-1" as any, forkedThreadId: ThreadId.make("child"), forkedThreadTitle: "Child", forkNumber: 1 },
+        {
+          sourceMessageId: "msg-1" as any,
+          forkedThreadId: ThreadId.make("child"),
+          forkedThreadTitle: "Child",
+          forkNumber: 1,
+        },
       ],
     };
     const tree = buildThreadTree(threads, forksByThreadId);
@@ -121,13 +146,15 @@ describe("flattenThreadTree", () => {
   });
 
   it("hides children when parent is collapsed", () => {
-    const threads = [
-      makeSidebarThread("root", "Root"),
-      makeSidebarThread("child", "Child"),
-    ];
+    const threads = [makeSidebarThread("root", "Root"), makeSidebarThread("child", "Child")];
     const forksByThreadId: Record<string, ThreadForkInfo[]> = {
       root: [
-        { sourceMessageId: "msg-1" as any, forkedThreadId: ThreadId.make("child"), forkedThreadTitle: "Child", forkNumber: 1 },
+        {
+          sourceMessageId: "msg-1" as any,
+          forkedThreadId: ThreadId.make("child"),
+          forkedThreadTitle: "Child",
+          forkNumber: 1,
+        },
       ],
     };
     const tree = buildThreadTree(threads, forksByThreadId);
@@ -145,10 +172,20 @@ describe("collectAncestorIds", () => {
     ];
     const forksByThreadId: Record<string, ThreadForkInfo[]> = {
       root: [
-        { sourceMessageId: "msg-1" as any, forkedThreadId: ThreadId.make("child"), forkedThreadTitle: "Child", forkNumber: 1 },
+        {
+          sourceMessageId: "msg-1" as any,
+          forkedThreadId: ThreadId.make("child"),
+          forkedThreadTitle: "Child",
+          forkNumber: 1,
+        },
       ],
       child: [
-        { sourceMessageId: "msg-2" as any, forkedThreadId: ThreadId.make("grandchild"), forkedThreadTitle: "Grandchild", forkNumber: 1 },
+        {
+          sourceMessageId: "msg-2" as any,
+          forkedThreadId: ThreadId.make("grandchild"),
+          forkedThreadTitle: "Grandchild",
+          forkNumber: 1,
+        },
       ],
     };
     const tree = buildThreadTree(threads, forksByThreadId);

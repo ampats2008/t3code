@@ -18,6 +18,7 @@ import {
   getTriggerDisplayModelName,
 } from "./providerIconUtils";
 import { setModelPickerOpen } from "../../modelPickerOpenState";
+import { logPiModelPickerDebug } from "./piModelPickerDebug";
 
 export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   provider: ProviderKind;
@@ -48,7 +49,6 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
     selectedProviderOptions[0];
   const ProviderIcon = PROVIDER_ICON_BY_PROVIDER[activeProvider];
   const triggerTitle = selectedModel ? getTriggerDisplayModelName(selectedModel) : props.model;
-  const triggerSubtitle = selectedModel?.subProvider;
   const triggerLabel = selectedModel ? getTriggerDisplayModelLabel(selectedModel) : props.model;
 
   const setIsMenuOpen = (open: boolean) => {
@@ -66,6 +66,14 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   }, [isMenuOpen]);
 
   const handleProviderModelChange = (provider: ProviderKind, model: string) => {
+    logPiModelPickerDebug("ProviderModelPicker.handleProviderModelChange", {
+      provider,
+      model,
+      disabled: props.disabled,
+      currentProvider: props.provider,
+      currentModel: props.model,
+      lockedProvider: props.lockedProvider,
+    });
     if (props.disabled) return;
     props.onProviderModelChange(provider, model);
     setIsMenuOpen(false);
@@ -112,25 +120,12 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
               render={
                 <span
                   className={cn(
-                    "min-w-0 flex-1 overflow-hidden",
-                    triggerSubtitle
-                      ? "grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1"
-                      : "truncate",
+                    "min-w-0 flex-1 overflow-hidden truncate",
                   )}
                 />
               }
             >
-              {triggerSubtitle ? (
-                <>
-                  <span className="min-w-0 truncate">{triggerSubtitle}</span>
-                  <span aria-hidden="true" className="shrink-0 opacity-60">
-                    ·
-                  </span>
-                  <span className="min-w-0 truncate">{triggerTitle}</span>
-                </>
-              ) : (
-                triggerTitle
-              )}
+              {triggerTitle}
             </TooltipTrigger>
             <TooltipPopup side="top">{triggerLabel}</TooltipPopup>
           </Tooltip>

@@ -76,7 +76,11 @@ export const ChatHeader = memo(function ChatHeader({
 }: ChatHeaderProps) {
   const { state } = useSidebar();
   const selectHidden = useCallback(
-    (s: { hideAddActionButton: boolean; hideOpenButton: boolean; hideCommitPushPrButton: boolean }) => ({
+    (s: {
+      hideAddActionButton: boolean;
+      hideOpenButton: boolean;
+      hideCommitPushPrButton: boolean;
+    }) => ({
       hideAddAction: s.hideAddActionButton,
       hideOpen: s.hideOpenButton,
       hideCommitPushPr: s.hideCommitPushPrButton,

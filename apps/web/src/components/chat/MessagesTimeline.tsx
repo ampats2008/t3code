@@ -1,4 +1,11 @@
-import { type EnvironmentId, type MessageId, type ServerProviderSkill, type ThreadForkInfo, type ThreadId, type TurnId } from "@t3tools/contracts";
+import {
+  type EnvironmentId,
+  type MessageId,
+  type ServerProviderSkill,
+  type ThreadForkInfo,
+  type ThreadId,
+  type TurnId,
+} from "@t3tools/contracts";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -413,7 +420,9 @@ function TimelineRowContent({ row }: { row: TimelineRow }) {
                         size="xs"
                         variant="outline"
                         title="Edit & branch from here"
-                        onClick={() => ctx.onEditMessage!(row.message.id, displayedUserMessage.visibleText)}
+                        onClick={() =>
+                          ctx.onEditMessage!(row.message.id, displayedUserMessage.visibleText)
+                        }
                       >
                         <PenLineIcon className="size-3" />
                       </Button>
@@ -426,7 +435,21 @@ function TimelineRowContent({ row }: { row: TimelineRow }) {
                       if (!ctx.onForkAtMessage && !hasForks) return null;
                       return (
                         <DropdownMenu>
-                          <DropdownMenuTrigger render={<Button type="button" size="xs" variant={hasForks ? "outline" : "outline"} title={hasForks ? `${messageForks.length} fork${messageForks.length > 1 ? "s" : ""}` : "More actions"} className={hasForks ? "relative" : ""} />}>
+                          <DropdownMenuTrigger
+                            render={
+                              <Button
+                                type="button"
+                                size="xs"
+                                variant={hasForks ? "outline" : "outline"}
+                                title={
+                                  hasForks
+                                    ? `${messageForks.length} fork${messageForks.length > 1 ? "s" : ""}`
+                                    : "More actions"
+                                }
+                                className={hasForks ? "relative" : ""}
+                              />
+                            }
+                          >
                             <MoreVerticalIcon className="size-3" />
                             {hasForks && (
                               <span className="absolute -top-0.5 -right-0.5 flex size-2.5 items-center justify-center rounded-full bg-accent-foreground/70 text-[7px] font-bold leading-none text-background">
@@ -435,15 +458,23 @@ function TimelineRowContent({ row }: { row: TimelineRow }) {
                             )}
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            {hasForks && messageForks.toSorted((a, b) => a.forkNumber - b.forkNumber).map((fork) => (
-                              <DropdownMenuItem key={fork.forkedThreadId} onClick={() => ctx.onNavigateToThread!(fork.forkedThreadId)}>
-                                <GitBranchIcon className="size-3.5" />
-                                {fork.forkedThreadTitle}
-                              </DropdownMenuItem>
-                            ))}
+                            {hasForks &&
+                              messageForks
+                                .toSorted((a, b) => a.forkNumber - b.forkNumber)
+                                .map((fork) => (
+                                  <DropdownMenuItem
+                                    key={fork.forkedThreadId}
+                                    onClick={() => ctx.onNavigateToThread!(fork.forkedThreadId)}
+                                  >
+                                    <GitBranchIcon className="size-3.5" />
+                                    {fork.forkedThreadTitle}
+                                  </DropdownMenuItem>
+                                ))}
                             {hasForks && ctx.onForkAtMessage && <DropdownMenuSeparator />}
                             {ctx.onForkAtMessage && (
-                              <DropdownMenuItem onClick={() => ctx.onForkAtMessage!(row.message.id)}>
+                              <DropdownMenuItem
+                                onClick={() => ctx.onForkAtMessage!(row.message.id)}
+                              >
                                 <GitForkIcon className="size-3.5" />
                                 Fork here
                               </DropdownMenuItem>
@@ -532,9 +563,29 @@ function TimelineRowContent({ row }: { row: TimelineRow }) {
                     const hasForks = messageForks.length > 0 && ctx.onNavigateToThread;
                     if (!ctx.onForkAtMessage && !hasForks) return null;
                     return (
-                      <div className={hasForks ? "" : "opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover/assistant:opacity-100"}>
+                      <div
+                        className={
+                          hasForks
+                            ? ""
+                            : "opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover/assistant:opacity-100"
+                        }
+                      >
                         <DropdownMenu>
-                          <DropdownMenuTrigger render={<Button type="button" size="xs" variant="ghost" title={hasForks ? `${messageForks.length} fork${messageForks.length > 1 ? "s" : ""}` : "More actions"} className={hasForks ? "relative" : ""} />}>
+                          <DropdownMenuTrigger
+                            render={
+                              <Button
+                                type="button"
+                                size="xs"
+                                variant="ghost"
+                                title={
+                                  hasForks
+                                    ? `${messageForks.length} fork${messageForks.length > 1 ? "s" : ""}`
+                                    : "More actions"
+                                }
+                                className={hasForks ? "relative" : ""}
+                              />
+                            }
+                          >
                             <MoreVerticalIcon className="size-3" />
                             {hasForks && (
                               <span className="absolute -top-0.5 -right-0.5 flex size-2.5 items-center justify-center rounded-full bg-accent-foreground/70 text-[7px] font-bold leading-none text-background">
@@ -543,15 +594,23 @@ function TimelineRowContent({ row }: { row: TimelineRow }) {
                             )}
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="start">
-                            {hasForks && messageForks.toSorted((a, b) => a.forkNumber - b.forkNumber).map((fork) => (
-                              <DropdownMenuItem key={fork.forkedThreadId} onClick={() => ctx.onNavigateToThread!(fork.forkedThreadId)}>
-                                <GitBranchIcon className="size-3.5" />
-                                {fork.forkedThreadTitle}
-                              </DropdownMenuItem>
-                            ))}
+                            {hasForks &&
+                              messageForks
+                                .toSorted((a, b) => a.forkNumber - b.forkNumber)
+                                .map((fork) => (
+                                  <DropdownMenuItem
+                                    key={fork.forkedThreadId}
+                                    onClick={() => ctx.onNavigateToThread!(fork.forkedThreadId)}
+                                  >
+                                    <GitBranchIcon className="size-3.5" />
+                                    {fork.forkedThreadTitle}
+                                  </DropdownMenuItem>
+                                ))}
                             {hasForks && ctx.onForkAtMessage && <DropdownMenuSeparator />}
                             {ctx.onForkAtMessage && (
-                              <DropdownMenuItem onClick={() => ctx.onForkAtMessage!(row.message.id)}>
+                              <DropdownMenuItem
+                                onClick={() => ctx.onForkAtMessage!(row.message.id)}
+                              >
                                 <GitForkIcon className="size-3.5" />
                                 Fork here
                               </DropdownMenuItem>
@@ -684,9 +743,20 @@ const WorkGroupSection = memo(function WorkGroupSection({
       <div className="space-y-0.5">
         {visibleEntries.map((workEntry) => {
           const displayMode = forkClassifyToolDisplayMode(workEntry);
-          const isForkRich = displayMode === "rich-grep" || displayMode === "rich-glob" || displayMode === "rich-write" || displayMode === "rich-todo";
+          const isForkRich =
+            displayMode === "rich-grep" ||
+            displayMode === "rich-glob" ||
+            displayMode === "rich-write" ||
+            displayMode === "rich-todo";
           if (isForkRich) {
-            return <ForkRichToolRow key={`work-row:${workEntry.id}`} workEntry={workEntry} displayMode={displayMode} workspaceRoot={workspaceRoot} />;
+            return (
+              <ForkRichToolRow
+                key={`work-row:${workEntry.id}`}
+                workEntry={workEntry}
+                displayMode={displayMode}
+                workspaceRoot={workspaceRoot}
+              />
+            );
           }
           return displayMode === "simple" ? (
             <SimpleWorkEntryRow
@@ -695,7 +765,12 @@ const WorkGroupSection = memo(function WorkGroupSection({
               workspaceRoot={workspaceRoot}
             />
           ) : (
-            <RichToolCallRow key={`work-row:${workEntry.id}`} workEntry={workEntry} displayMode={displayMode} skills={skills} />
+            <RichToolCallRow
+              key={`work-row:${workEntry.id}`}
+              workEntry={workEntry}
+              displayMode={displayMode}
+              skills={skills}
+            />
           );
         })}
       </div>

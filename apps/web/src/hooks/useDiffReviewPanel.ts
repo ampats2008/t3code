@@ -1,17 +1,15 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { ReactNode } from 'react';
-import React from 'react';
-import type { DiffLineAnnotation, FileDiffMetadata } from '@pierre/diffs';
-import { ThreadId } from '@t3tools/contracts';
-import type { AnnotationSide, DiffReviewAnnotation } from '../diffReviewStore';
-import {
-  useDiffReviewStore,
-} from '../diffReviewStore';
-import { DiffReviewGutterButton } from '../components/diff-review/DiffReviewGutterButton';
-import { DiffReviewAnnotationRow } from '../components/diff-review/DiffReviewAnnotationRow';
-import { toastManager } from '../components/ui/toast';
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
+import React from "react";
+import type { DiffLineAnnotation, FileDiffMetadata } from "@pierre/diffs";
+import { ThreadId } from "@t3tools/contracts";
+import type { AnnotationSide, DiffReviewAnnotation } from "../diffReviewStore";
+import { useDiffReviewStore } from "../diffReviewStore";
+import { DiffReviewGutterButton } from "../components/diff-review/DiffReviewGutterButton";
+import { DiffReviewAnnotationRow } from "../components/diff-review/DiffReviewAnnotationRow";
+import { toastManager } from "../components/ui/toast";
 
 interface DiffReviewPanelProps {
   activeThreadId: string | null;
@@ -21,16 +19,14 @@ interface DiffReviewPanelProps {
 
 interface SelectedLineRange {
   start: number;
-  side?: 'deletions' | 'additions';
+  side?: "deletions" | "additions";
   end: number;
-  endSide?: 'deletions' | 'additions';
+  endSide?: "deletions" | "additions";
 }
 
 interface FileDiffReviewProps {
   lineAnnotations: DiffLineAnnotation<string>[];
-  renderAnnotation: (
-    annotation: DiffLineAnnotation<string>,
-  ) => ReactNode;
+  renderAnnotation: (annotation: DiffLineAnnotation<string>) => ReactNode;
   renderGutterUtility: () => ReactNode;
   /** Merge into FileDiff options — handles the click from @pierre/diffs' own gutter button */
   onGutterUtilityClick: (range: SelectedLineRange) => void;
@@ -40,8 +36,8 @@ interface FileDiffReviewProps {
  * Resolve a file path by stripping "a/" or "b/" prefix if present.
  */
 function resolveFileDiffPath(fileDiff: FileDiffMetadata): string {
-  const raw = fileDiff.name ?? fileDiff.prevName ?? '';
-  if (raw.startsWith('a/') || raw.startsWith('b/')) {
+  const raw = fileDiff.name ?? fileDiff.prevName ?? "";
+  if (raw.startsWith("a/") || raw.startsWith("b/")) {
     return raw.slice(2);
   }
   return raw;
@@ -101,9 +97,9 @@ export function useDiffReviewPanel({
     if (orphanedIds.length > 0) {
       markOrphaned(activeThreadId, orphanedIds);
       toastManager.add({
-        title: 'Review comments invalidated',
+        title: "Review comments invalidated",
         description: `${orphanedIds.length} comment(s) are no longer valid due to code changes.`,
-        type: 'warning',
+        type: "warning",
         data: {
           threadId: ThreadId.make(activeThreadId),
           dismissAfterVisibleMs: 5000,
@@ -129,12 +125,12 @@ export function useDiffReviewPanel({
   // Parse activeInputKey
   const parsedInputKey = useMemo(() => {
     if (!activeInputKey) return null;
-    const parts = activeInputKey.split('\0');
+    const parts = activeInputKey.split("\0");
     if (parts.length !== 3) return null;
     const [filePath, lineStr, side] = parts;
     const lineNumber = parseInt(lineStr!, 10);
     if (Number.isNaN(lineNumber)) return null;
-    if (side !== 'deletions' && side !== 'additions') return null;
+    if (side !== "deletions" && side !== "additions") return null;
     return { filePath: filePath!, lineNumber, side: side as AnnotationSide };
   }, [activeInputKey]);
 
@@ -159,23 +155,19 @@ export function useDiffReviewPanel({
       // Active input position (if for this file)
       if (parsedInputKey && parsedInputKey.filePath === filePath) {
         const hasExisting = lineAnnotations.some(
-          (a) =>
-            a.side === parsedInputKey.side &&
-            a.lineNumber === parsedInputKey.lineNumber,
+          (a) => a.side === parsedInputKey.side && a.lineNumber === parsedInputKey.lineNumber,
         );
         if (!hasExisting) {
           lineAnnotations.push({
             side: parsedInputKey.side,
             lineNumber: parsedInputKey.lineNumber,
-            metadata: '__new__',
+            metadata: "__new__",
           });
         }
       }
 
-      const renderAnnotation = (
-        annotation: DiffLineAnnotation<string>,
-      ): ReactNode => {
-        const isNew = annotation.metadata === '__new__';
+      const renderAnnotation = (annotation: DiffLineAnnotation<string>): ReactNode => {
+        const isNew = annotation.metadata === "__new__";
         return React.createElement(DiffReviewAnnotationRow, {
           key: isNew ? `new-${annotation.lineNumber}-${annotation.side}` : annotation.metadata,
           threadId: activeThreadId!,
@@ -195,7 +187,7 @@ export function useDiffReviewPanel({
       // Click handler — called by @pierre/diffs when the gutter utility is clicked
       const onGutterUtilityClick = (range: SelectedLineRange) => {
         const side = range.side;
-        if (side !== 'deletions' && side !== 'additions') return;
+        if (side !== "deletions" && side !== "additions") return;
         onGutterButtonClick(filePath, range.start, side);
       };
 

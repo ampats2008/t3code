@@ -85,10 +85,12 @@ async function hydrateClientSettings(): Promise<void> {
 }
 
 function persistClientSettings(settings: ClientSettings): void {
+  const previousSettings = getClientSettingsSnapshot();
   replaceClientSettingsSnapshot(settings);
   void ensureLocalApi()
     .persistence.setClientSettings(settings)
     .catch((error) => {
+      replaceClientSettingsSnapshot(previousSettings);
       console.error(`${CLIENT_SETTINGS_PERSISTENCE_ERROR_SCOPE} persist failed`, error);
     });
 }

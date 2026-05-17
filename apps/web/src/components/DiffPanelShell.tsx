@@ -36,7 +36,9 @@ export function DiffPanelShell(props: {
       {shouldUseDragRegion ? (
         <div
           className={getDiffPanelHeaderRowClassName(props.mode)}
-          style={{ paddingRight: "calc(max(1.5rem, 100vw - env(titlebar-area-width, 100vw) + 0.75rem))" }}
+          style={{
+            paddingRight: "calc(max(1.5rem, 100vw - env(titlebar-area-width, 100vw) + 0.75rem))",
+          }}
         >
           {props.header}
         </div>

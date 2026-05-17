@@ -325,7 +325,12 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     openPrLink,
     thread,
   } = props;
-  const { forkDepth = 0, hasForkChildren = false, isForkExpanded = false, onToggleForkExpand } = props;
+  const {
+    forkDepth = 0,
+    hasForkChildren = false,
+    isForkExpanded = false,
+    onToggleForkExpand,
+  } = props;
   const threadRef = scopeThreadRef(thread.environmentId, thread.id);
   const threadKey = scopedThreadKey(threadRef);
   const lastVisitedAt = useUiStateStore((state) => state.threadLastVisitedAtById[threadKey]);
@@ -559,10 +564,15 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
             <button
               type="button"
               className="inline-flex size-3.5 shrink-0 items-center justify-center rounded-sm text-muted-foreground/50 hover:text-muted-foreground"
-              onClick={(e) => { e.stopPropagation(); onToggleForkExpand(thread.id); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleForkExpand(thread.id);
+              }}
               aria-label={isForkExpanded ? "Collapse forks" : "Expand forks"}
             >
-              <ChevronRightIcon className={`size-3 transition-transform ${isForkExpanded ? "rotate-90" : ""}`} />
+              <ChevronRightIcon
+                className={`size-3 transition-transform ${isForkExpanded ? "rotate-90" : ""}`}
+              />
             </button>
           )}
           {forkDepth > 0 && !hasForkChildren && (
@@ -814,7 +824,12 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
     expandThreadListForProject,
     collapseThreadListForProject,
   } = props;
-  const { threadDepthById, forksByThreadId: forksByThread, expandedForkParents, toggleForkExpanded } = props;
+  const {
+    threadDepthById,
+    forksByThreadId: forksByThread,
+    expandedForkParents,
+    toggleForkExpanded,
+  } = props;
   const showMoreButtonRender = useMemo(() => <button type="button" />, []);
   const showLessButtonRender = useMemo(() => <button type="button" />, []);
 
@@ -2315,10 +2330,7 @@ function AMWordmark() {
       viewBox="0 0 334.02 185.71"
       xmlns="http://www.w3.org/2000/svg"
     >
-      <polygon
-        fill="#08d49a"
-        points="120.57 103.7 93.85 103.7 107.21 63.62 120.57 103.7"
-      />
+      <polygon fill="#08d49a" points="120.57 103.7 93.85 103.7 107.21 63.62 120.57 103.7" />
       <path
         fill="currentColor"
         d="M271.85,0,226.28,120.65,179.66,0H117.22V55.86l20,60.06h-20v69.79h51.63V82.46l35.3,103.25h43.21l35-102.47V185.71H334V0Z"

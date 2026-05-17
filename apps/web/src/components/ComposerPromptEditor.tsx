@@ -350,7 +350,11 @@ function useEditorIcon(): React.FC<SVGProps<SVGSVGElement>> {
   // Parse the JSON string stored by useLocalStorage, fall back to raw value
   let editorId: string | null = null;
   if (stored) {
-    try { editorId = JSON.parse(stored); } catch { editorId = stored; }
+    try {
+      editorId = JSON.parse(stored);
+    } catch {
+      editorId = stored;
+    }
   }
   if (editorId === "cursor") return CursorIcon;
   return VisualStudioCode;
@@ -359,14 +363,15 @@ function useEditorIcon(): React.FC<SVGProps<SVGSVGElement>> {
 function ComposerCodeRefDecorator({ data }: { data: CodeRefData }) {
   const basename = data.file.split(/[\\/]/).pop() ?? data.file;
   const lineRange =
-    data.startLine === data.endLine
-      ? `:${data.startLine}`
-      : `:${data.startLine}-${data.endLine}`;
+    data.startLine === data.endLine ? `:${data.startLine}` : `:${data.startLine}-${data.endLine}`;
   const EditorIcon = useEditorIcon();
   return (
     <span className={COMPOSER_INLINE_CHIP_CLASS_NAME} contentEditable={false} spellCheck={false}>
       <EditorIcon aria-hidden="true" className={COMPOSER_INLINE_CHIP_ICON_CLASS_NAME} />
-      <span className={COMPOSER_INLINE_CHIP_LABEL_CLASS_NAME}>{basename}{lineRange}</span>
+      <span className={COMPOSER_INLINE_CHIP_LABEL_CLASS_NAME}>
+        {basename}
+        {lineRange}
+      </span>
     </span>
   );
 }
@@ -382,9 +387,7 @@ class ComposerCodeRefNode extends DecoratorNode<ReactElement> {
     return new ComposerCodeRefNode(node.__data, node.__key);
   }
 
-  static override importJSON(
-    serializedNode: SerializedComposerCodeRefNode,
-  ): ComposerCodeRefNode {
+  static override importJSON(serializedNode: SerializedComposerCodeRefNode): ComposerCodeRefNode {
     return $createComposerCodeRefNode(serializedNode.data);
   }
 
@@ -414,8 +417,7 @@ class ComposerCodeRefNode extends DecoratorNode<ReactElement> {
 
   override getTextContent(): string {
     const d = this.__data;
-    const lineRange =
-      d.startLine === d.endLine ? `${d.startLine}` : `${d.startLine}-${d.endLine}`;
+    const lineRange = d.startLine === d.endLine ? `${d.startLine}` : `${d.startLine}-${d.endLine}`;
     return `[${d.file}:${lineRange}]\n\`\`\`${d.language}\n${d.text}\n\`\`\``;
   }
 
@@ -461,7 +463,8 @@ function ComposerReviewDecorator({ data }: { data: ReviewData }) {
     <span className={COMPOSER_INLINE_CHIP_CLASS_NAME} contentEditable={false} spellCheck={false}>
       <EditorIcon aria-hidden="true" className={COMPOSER_INLINE_CHIP_ICON_CLASS_NAME} />
       <span className={COMPOSER_INLINE_CHIP_LABEL_CLASS_NAME}>
-        Review: {count} comment{count !== 1 ? "s" : ""} across {fileCount} file{fileCount !== 1 ? "s" : ""}
+        Review: {count} comment{count !== 1 ? "s" : ""} across {fileCount} file
+        {fileCount !== 1 ? "s" : ""}
       </span>
     </span>
   );
@@ -478,9 +481,7 @@ class ComposerReviewNode extends DecoratorNode<ReactElement> {
     return new ComposerReviewNode(node.__data, node.__key);
   }
 
-  static override importJSON(
-    serializedNode: SerializedComposerReviewNode,
-  ): ComposerReviewNode {
+  static override importJSON(serializedNode: SerializedComposerReviewNode): ComposerReviewNode {
     return $createComposerReviewNode(serializedNode.data);
   }
 
@@ -513,9 +514,7 @@ class ComposerReviewNode extends DecoratorNode<ReactElement> {
       const lineRange =
         c.startLine === c.endLine ? `${c.startLine}` : `${c.startLine}-${c.endLine}`;
       const header = `## ${c.file}:${lineRange}`;
-      const codeBlock = c.text.trim()
-        ? `\n\`\`\`\n${c.text}\n\`\`\``
-        : "";
+      const codeBlock = c.text.trim() ? `\n\`\`\`\n${c.text}\n\`\`\`` : "";
       return `${header}\n${c.body}${codeBlock}`;
     });
     return `[Code Review]\n\n${sections.join("\n\n")}`;
@@ -662,9 +661,7 @@ function ComposerDiagnosticDecorator({ data }: { data: DiagnosticRefData }) {
         className={COMPOSER_INLINE_CHIP_ICON_CLASS_NAME}
         dangerouslySetInnerHTML={{ __html: DIAGNOSTIC_ICON_SVG }}
       />
-      <span className={COMPOSER_INLINE_CHIP_LABEL_CLASS_NAME}>
-        {label}
-      </span>
+      <span className={COMPOSER_INLINE_CHIP_LABEL_CLASS_NAME}>{label}</span>
     </span>
   );
 }
@@ -1399,13 +1396,37 @@ export interface ComposerPromptEditorHandle {
   /** Insert an element inspector chip at the current cursor position. */
   insertElementRef: (text: string) => void;
   /** Insert a code selection chip from VS Code / Cursor at the current cursor position. */
-  insertCodeRef: (data: { file: string; startLine: number; endLine: number; text: string; language: string }) => void;
+  insertCodeRef: (data: {
+    file: string;
+    startLine: number;
+    endLine: number;
+    text: string;
+    language: string;
+  }) => void;
   /** Insert a review comments chip from VS Code / Cursor at the current cursor position. */
-  insertReviewComments: (data: { comments: Array<{ file: string; startLine: number; endLine: number; text: string; body: string }> }) => void;
+  insertReviewComments: (data: {
+    comments: Array<{
+      file: string;
+      startLine: number;
+      endLine: number;
+      text: string;
+      body: string;
+    }>;
+  }) => void;
   /** Insert a terminal error chip from VS Code / Cursor at the current cursor position. */
-  insertTerminalError: (data: { command: string; exitCode: number; output: string; cwd: string }) => void;
+  insertTerminalError: (data: {
+    command: string;
+    exitCode: number;
+    output: string;
+    cwd: string;
+  }) => void;
   /** Insert a diagnostic ref chip from VS Code / Cursor at the current cursor position. */
-  insertDiagnosticRef: (data: { file: string; startLine: number; endLine: number; diagnostics: Array<{ message: string; severity: string; source: string }> }) => void;
+  insertDiagnosticRef: (data: {
+    file: string;
+    startLine: number;
+    endLine: number;
+    diagnostics: Array<{ message: string; severity: string; source: string }>;
+  }) => void;
 }
 
 interface ComposerPromptEditorProps {
@@ -2100,7 +2121,13 @@ function ComposerPromptEditorInner({
   );
 
   const insertCodeRef = useCallback(
-    (data: { file: string; startLine: number; endLine: number; text: string; language: string }) => {
+    (data: {
+      file: string;
+      startLine: number;
+      endLine: number;
+      text: string;
+      language: string;
+    }) => {
       const rootElement = editor.getRootElement();
       if (!rootElement) return;
       rootElement.focus();
@@ -2125,7 +2152,15 @@ function ComposerPromptEditorInner({
   );
 
   const insertReviewComments = useCallback(
-    (data: { comments: Array<{ file: string; startLine: number; endLine: number; text: string; body: string }> }) => {
+    (data: {
+      comments: Array<{
+        file: string;
+        startLine: number;
+        endLine: number;
+        text: string;
+        body: string;
+      }>;
+    }) => {
       const rootElement = editor.getRootElement();
       if (!rootElement) return;
       rootElement.focus();
@@ -2175,7 +2210,12 @@ function ComposerPromptEditorInner({
   );
 
   const insertDiagnosticRef = useCallback(
-    (data: { file: string; startLine: number; endLine: number; diagnostics: Array<{ message: string; severity: string; source: string }> }) => {
+    (data: {
+      file: string;
+      startLine: number;
+      endLine: number;
+      diagnostics: Array<{ message: string; severity: string; source: string }>;
+    }) => {
       const rootElement = editor.getRootElement();
       if (!rootElement) return;
       rootElement.focus();
@@ -2221,7 +2261,15 @@ function ComposerPromptEditorInner({
       insertTerminalError,
       insertDiagnosticRef,
     }),
-    [focusAt, readSnapshot, insertElementRef, insertCodeRef, insertReviewComments, insertTerminalError, insertDiagnosticRef],
+    [
+      focusAt,
+      readSnapshot,
+      insertElementRef,
+      insertCodeRef,
+      insertReviewComments,
+      insertTerminalError,
+      insertDiagnosticRef,
+    ],
   );
 
   const handleEditorChange = useCallback((editorState: EditorState) => {
@@ -2336,7 +2384,16 @@ export const ComposerPromptEditor = forwardRef<
     () => ({
       namespace: "t3tools-composer-editor",
       editable: true,
-      nodes: [ComposerMentionNode, ComposerSkillNode, ComposerTerminalContextNode, ComposerElementRefNode, ComposerCodeRefNode, ComposerReviewNode, ComposerTerminalErrorNode, ComposerDiagnosticNode],
+      nodes: [
+        ComposerMentionNode,
+        ComposerSkillNode,
+        ComposerTerminalContextNode,
+        ComposerElementRefNode,
+        ComposerCodeRefNode,
+        ComposerReviewNode,
+        ComposerTerminalErrorNode,
+        ComposerDiagnosticNode,
+      ],
       editorState: () => {
         $setComposerEditorPrompt(
           initialValueRef.current,

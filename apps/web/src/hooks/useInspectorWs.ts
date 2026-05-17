@@ -56,21 +56,13 @@ function connectSingleton() {
             }),
           );
         } else if (message.type === "code-ref") {
-          window.dispatchEvent(
-            new CustomEvent("vscode:code-ref", { detail: message }),
-          );
+          window.dispatchEvent(new CustomEvent("vscode:code-ref", { detail: message }));
         } else if (message.type === "review-comments") {
-          window.dispatchEvent(
-            new CustomEvent("vscode:review-comments", { detail: message }),
-          );
+          window.dispatchEvent(new CustomEvent("vscode:review-comments", { detail: message }));
         } else if (message.type === "terminal-error") {
-          window.dispatchEvent(
-            new CustomEvent("vscode:terminal-error", { detail: message }),
-          );
+          window.dispatchEvent(new CustomEvent("vscode:terminal-error", { detail: message }));
         } else if (message.type === "diagnostic-ref") {
-          window.dispatchEvent(
-            new CustomEvent("vscode:diagnostic-ref", { detail: message }),
-          );
+          window.dispatchEvent(new CustomEvent("vscode:diagnostic-ref", { detail: message }));
         }
       } catch {
         // Ignore malformed messages

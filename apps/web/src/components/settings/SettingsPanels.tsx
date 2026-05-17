@@ -629,9 +629,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       ...(settings.hideAddActionButton !== DEFAULT_UNIFIED_SETTINGS.hideAddActionButton
         ? ["Hide Add action"]
         : []),
-      ...(settings.hideOpenButton !== DEFAULT_UNIFIED_SETTINGS.hideOpenButton
-        ? ["Hide Open"]
-        : []),
+      ...(settings.hideOpenButton !== DEFAULT_UNIFIED_SETTINGS.hideOpenButton ? ["Hide Open"] : []),
       ...(settings.hideCommitPushPrButton !== DEFAULT_UNIFIED_SETTINGS.hideCommitPushPrButton
         ? ["Hide Commit, push & PR"]
         : []),
@@ -1183,7 +1181,8 @@ export function GeneralSettingsPanel() {
           title="Auto-generate thread title"
           description="Automatically generate a title for new threads after the first message."
           resetAction={
-            settings.autoGenerateThreadTitle !== DEFAULT_UNIFIED_SETTINGS.autoGenerateThreadTitle ? (
+            settings.autoGenerateThreadTitle !==
+            DEFAULT_UNIFIED_SETTINGS.autoGenerateThreadTitle ? (
               <SettingResetButton
                 label="auto-generate thread title"
                 onClick={() =>
@@ -1225,9 +1224,7 @@ export function GeneralSettingsPanel() {
           control={
             <Switch
               checked={settings.hideOpenButton}
-              onCheckedChange={(checked) =>
-                updateSettings({ hideOpenButton: Boolean(checked) })
-              }
+              onCheckedChange={(checked) => updateSettings({ hideOpenButton: Boolean(checked) })}
               aria-label="Hide Open button"
             />
           }
@@ -1583,37 +1580,37 @@ export function GeneralSettingsPanel() {
                 <CollapsibleContent>
                   <div className="space-y-0">
                     {providerCard.binaryPlaceholder ? (
-                    <div className="border-t border-border/60 px-4 py-3 sm:px-5">
-                      <label
-                        htmlFor={`provider-install-${providerCard.provider}-binary-path`}
-                        className="block"
-                      >
-                        <span className="text-xs font-medium text-foreground">
-                          {providerDisplayName} binary path
-                        </span>
-                        <Input
-                          id={`provider-install-${providerCard.provider}-binary-path`}
-                          className="mt-1.5"
-                          value={providerCard.binaryPathValue}
-                          onChange={(event) =>
-                            updateSettings({
-                              providers: {
-                                ...settings.providers,
-                                [providerCard.provider]: {
-                                  ...settings.providers[providerCard.provider],
-                                  binaryPath: event.target.value,
+                      <div className="border-t border-border/60 px-4 py-3 sm:px-5">
+                        <label
+                          htmlFor={`provider-install-${providerCard.provider}-binary-path`}
+                          className="block"
+                        >
+                          <span className="text-xs font-medium text-foreground">
+                            {providerDisplayName} binary path
+                          </span>
+                          <Input
+                            id={`provider-install-${providerCard.provider}-binary-path`}
+                            className="mt-1.5"
+                            value={providerCard.binaryPathValue}
+                            onChange={(event) =>
+                              updateSettings({
+                                providers: {
+                                  ...settings.providers,
+                                  [providerCard.provider]: {
+                                    ...settings.providers[providerCard.provider],
+                                    binaryPath: event.target.value,
+                                  },
                                 },
-                              },
-                            })
-                          }
-                          placeholder={providerCard.binaryPlaceholder}
-                          spellCheck={false}
-                        />
-                        <span className="mt-1 block text-xs text-muted-foreground">
-                          {providerCard.binaryDescription}
-                        </span>
-                      </label>
-                    </div>
+                              })
+                            }
+                            placeholder={providerCard.binaryPlaceholder}
+                            spellCheck={false}
+                          />
+                          <span className="mt-1 block text-xs text-muted-foreground">
+                            {providerCard.binaryDescription}
+                          </span>
+                        </label>
+                      </div>
                     ) : null}
 
                     {providerCard.serverUrlPlaceholder ? (
@@ -1774,7 +1771,9 @@ export function GeneralSettingsPanel() {
                               max={500}
                               step={1}
                               placeholder={String(DEFAULT_CLAUDE_MAX_TURNS)}
-                              value={String(settings.providers.claudeAgent.maxTurns ?? DEFAULT_CLAUDE_MAX_TURNS)}
+                              value={String(
+                                settings.providers.claudeAgent.maxTurns ?? DEFAULT_CLAUDE_MAX_TURNS,
+                              )}
                               onChange={(event) => {
                                 const value = Math.floor(Number(event.target.value));
                                 if (!Number.isFinite(value) || value < 1) return;
@@ -1812,7 +1811,10 @@ export function GeneralSettingsPanel() {
                                 min={0.1}
                                 step={0.5}
                                 placeholder={String(DEFAULT_CLAUDE_MAX_BUDGET_USD)}
-                                value={String(settings.providers.claudeAgent.maxBudgetUsd ?? DEFAULT_CLAUDE_MAX_BUDGET_USD)}
+                                value={String(
+                                  settings.providers.claudeAgent.maxBudgetUsd ??
+                                    DEFAULT_CLAUDE_MAX_BUDGET_USD,
+                                )}
                                 onChange={(event) => {
                                   const value = Number(event.target.value);
                                   if (!Number.isFinite(value) || value <= 0) return;
