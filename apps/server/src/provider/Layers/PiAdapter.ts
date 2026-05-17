@@ -16,6 +16,7 @@ import {
   RuntimeItemId,
   RuntimeRequestId,
   ThreadId,
+  type ThreadTokenUsageSnapshot,
   type ToolLifecycleItemType,
   TurnId,
 } from "@t3tools/contracts";
@@ -93,6 +94,71 @@ function buildEventBase(input: {
     ...(input.turnId ? { turnId: input.turnId } : {}),
     ...(input.itemId ? { itemId: RuntimeItemId.make(input.itemId) } : {}),
     ...(input.requestId ? { requestId: RuntimeRequestId.make(input.requestId) } : {}),
+  };
+}
+
+function toNonNegativeInt(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    return undefined;
+  }
+  return Math.round(value);
+}
+
+function toPositiveInt(value: unknown): number | undefined {
+  const normalized = toNonNegativeInt(value);
+  return normalized !== undefined && normalized > 0 ? normalized : undefined;
+}
+
+function getRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : undefined;
+}
+
+function normalizePiTokenUsage(
+  piSession: AgentSession,
+  assistantMessage: unknown,
+): ThreadTokenUsageSnapshot | undefined {
+  const stats = piSession.getSessionStats();
+  const contextUsage = piSession.getContextUsage();
+  const message = getRecord(assistantMessage);
+  const lastUsage = getRecord(message?.usage);
+
+  const usedTokens =
+    toPositiveInt(contextUsage?.tokens) ?? toPositiveInt(lastUsage?.totalTokens) ?? undefined;
+  if (usedTokens === undefined) {
+    return undefined;
+  }
+
+  const lastUsedTokens = toNonNegativeInt(lastUsage?.totalTokens);
+  const totalProcessedTokens = toNonNegativeInt(stats.tokens.total);
+  const maxTokens = toPositiveInt(contextUsage?.contextWindow);
+  const freshInputTokens = toNonNegativeInt(stats.tokens.input) ?? 0;
+  const cacheReadTokens = toNonNegativeInt(stats.tokens.cacheRead) ?? 0;
+  const cacheWriteTokens = toNonNegativeInt(stats.tokens.cacheWrite) ?? 0;
+  const inputTokens = freshInputTokens + cacheReadTokens + cacheWriteTokens;
+  const cachedInputTokens = cacheReadTokens;
+  const outputTokens = toNonNegativeInt(stats.tokens.output);
+  const lastFreshInputTokens = toNonNegativeInt(lastUsage?.input) ?? 0;
+  const lastCacheReadTokens = toNonNegativeInt(lastUsage?.cacheRead) ?? 0;
+  const lastCacheWriteTokens = toNonNegativeInt(lastUsage?.cacheWrite) ?? 0;
+  const lastInputTokens = lastFreshInputTokens + lastCacheReadTokens + lastCacheWriteTokens;
+  const lastCachedInputTokens = lastCacheReadTokens;
+  const lastOutputTokens = toNonNegativeInt(lastUsage?.output);
+  const totalCostUsd =
+    typeof stats.cost === "number" && Number.isFinite(stats.cost) ? stats.cost : undefined;
+
+  return {
+    usedTokens,
+    ...(totalProcessedTokens !== undefined ? { totalProcessedTokens } : {}),
+    ...(maxTokens !== undefined ? { maxTokens } : {}),
+    ...(inputTokens !== undefined ? { inputTokens } : {}),
+    ...(cachedInputTokens !== undefined ? { cachedInputTokens } : {}),
+    ...(outputTokens !== undefined ? { outputTokens } : {}),
+    ...(lastUsedTokens !== undefined ? { lastUsedTokens } : {}),
+    ...(lastInputTokens !== undefined ? { lastInputTokens } : {}),
+    ...(lastCachedInputTokens !== undefined ? { lastCachedInputTokens } : {}),
+    ...(lastOutputTokens !== undefined ? { lastOutputTokens } : {}),
+    ...(totalCostUsd !== undefined ? { totalCostUsd } : {}),
+    compactsAutomatically: piSession.autoCompactionEnabled,
   };
 }
 
@@ -400,6 +466,14 @@ export function makePiAdapterLive(options?: PiAdapterLiveOptions) {
                   case "turn_end": {
                     if (turnId) {
                       const ev = event as any;
+                      const usage = normalizePiTokenUsage(context.piSession, ev.message);
+                      if (usage) {
+                        yield* emit({
+                          ...buildEventBase({ threadId, turnId }),
+                          type: "thread.token-usage.updated",
+                          payload: { usage },
+                        });
+                      }
                       context.turns.push({
                         id: turnId,
                         items: ev.toolResults ?? [],

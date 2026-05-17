@@ -28,6 +28,25 @@ class FakePiSession {
   public disposeCalled = false;
   public messages: unknown[] = [];
   public model: { provider: string; id: string } | undefined = undefined;
+  public autoCompactionEnabled = true;
+  public sessionStats = {
+    sessionFile: undefined,
+    sessionId: "fake-session",
+    userMessages: 1,
+    assistantMessages: 1,
+    toolCalls: 0,
+    toolResults: 0,
+    totalMessages: 2,
+    tokens: { input: 100, output: 50, cacheRead: 25, cacheWrite: 5, total: 180 },
+    cost: 0.0123,
+  };
+  public contextUsage:
+    | { tokens: number | null; contextWindow: number; percent: number | null }
+    | undefined = {
+    tokens: 150,
+    contextWindow: 200_000,
+    percent: 0.075,
+  };
 
   public readonly sessionManager = {
     getLeafId: vi.fn<() => string | null>(() => null),
@@ -51,6 +70,14 @@ class FakePiSession {
     return new Promise<void>((resolve, reject) => {
       this._promptQueue.push({ resolve, reject });
     });
+  }
+
+  getSessionStats() {
+    return this.sessionStats;
+  }
+
+  getContextUsage() {
+    return this.contextUsage;
   }
 
   async abort(): Promise<void> {
@@ -538,6 +565,111 @@ it.layer(PiAdapterTestLayer)("PiAdapterLive — event mapping", (it) => {
         | undefined;
       assert.ok(completed, "missing item.completed event");
       assert.equal(completed.payload.status, "failed");
+    }),
+  );
+
+  it.effect("turn_end emits thread.token-usage.updated from Pi session stats", () =>
+    Effect.gen(function* () {
+      const adapter = yield* PiAdapter;
+      const threadId = asThreadId("pi-token-usage");
+
+      const { fiber, events } = yield* startDraining(adapter);
+
+      yield* adapter.startSession({ threadId, runtimeMode: "full-access" });
+      yield* adapter.sendTurn({ threadId, input: "count tokens" });
+
+      yield* Effect.yieldNow;
+
+      currentFakeSession.sessionStats = {
+        ...currentFakeSession.sessionStats,
+        tokens: { input: 120, output: 40, cacheRead: 30, cacheWrite: 10, total: 200 },
+        cost: 0.045,
+      };
+      currentFakeSession.contextUsage = { tokens: 175, contextWindow: 200_000, percent: 0.0875 };
+      currentFakeSession.emit({
+        type: "turn_end",
+        message: {
+          role: "assistant",
+          usage: {
+            input: 12,
+            output: 4,
+            cacheRead: 3,
+            cacheWrite: 1,
+            totalTokens: 20,
+            cost: {
+              input: 0.001,
+              output: 0.002,
+              cacheRead: 0.0001,
+              cacheWrite: 0.0002,
+              total: 0.0033,
+            },
+          },
+        },
+        toolResults: [],
+      });
+      currentFakeSession.resolveCurrentPrompt();
+      yield* letAsyncFlush;
+      yield* Fiber.interrupt(fiber);
+
+      const usageEvent = events.find((e) => e.type === "thread.token-usage.updated") as
+        | (ProviderRuntimeEvent & { payload: { usage: Record<string, unknown> } })
+        | undefined;
+      assert.ok(usageEvent, "missing thread.token-usage.updated event");
+      assert.deepEqual(usageEvent.payload.usage, {
+        usedTokens: 175,
+        totalProcessedTokens: 200,
+        maxTokens: 200_000,
+        inputTokens: 160,
+        cachedInputTokens: 30,
+        outputTokens: 40,
+        lastUsedTokens: 20,
+        lastInputTokens: 16,
+        lastCachedInputTokens: 3,
+        lastOutputTokens: 4,
+        totalCostUsd: 0.045,
+        compactsAutomatically: true,
+      });
+    }),
+  );
+
+  it.effect("turn_end falls back to assistant usage when context usage is unknown", () =>
+    Effect.gen(function* () {
+      const adapter = yield* PiAdapter;
+      const threadId = asThreadId("pi-token-usage-fallback");
+
+      const { fiber, events } = yield* startDraining(adapter);
+
+      yield* adapter.startSession({ threadId, runtimeMode: "full-access" });
+      yield* adapter.sendTurn({ threadId, input: "count tokens after compaction" });
+
+      yield* Effect.yieldNow;
+
+      currentFakeSession.contextUsage = { tokens: null, contextWindow: 128_000, percent: null };
+      currentFakeSession.emit({
+        type: "turn_end",
+        message: {
+          role: "assistant",
+          usage: {
+            input: 20,
+            output: 5,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 25,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+        },
+        toolResults: [],
+      });
+      currentFakeSession.resolveCurrentPrompt();
+      yield* letAsyncFlush;
+      yield* Fiber.interrupt(fiber);
+
+      const usageEvent = events.find((e) => e.type === "thread.token-usage.updated") as
+        | (ProviderRuntimeEvent & { payload: { usage: Record<string, unknown> } })
+        | undefined;
+      assert.ok(usageEvent, "missing thread.token-usage.updated event");
+      assert.equal(usageEvent.payload.usage.usedTokens, 25);
+      assert.equal(usageEvent.payload.usage.maxTokens, 128_000);
     }),
   );
 
