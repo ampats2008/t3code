@@ -84,7 +84,9 @@ async function main() {
   }
 
   // ❌ invalid — explain and block
-  const detectedType = VALID_TYPES.find((t) => message.startsWith(t + "(") || message.startsWith(t + ":"));
+  const detectedType = VALID_TYPES.find(
+    (t) => message.startsWith(t + "(") || message.startsWith(t + ":"),
+  );
   const missing2am = !message.startsWith("2AM:");
 
   let hint = "";
@@ -112,7 +114,7 @@ async function main() {
       ``,
       `  Your message: "${message}"${hint}`,
       ``,
-    ].join("\n")
+    ].join("\n"),
   );
 
   process.exit(1);

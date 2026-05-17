@@ -20,10 +20,10 @@ over time.
 
 ## Remotes
 
-| Remote | URL | Purpose |
-|--------|-----|---------|
-| `origin` | `https://github.com/ampats2008/t3code.git` | Your fork — push/pull freely, shared across devices |
-| `upstream` | `https://github.com/pingdotgg/t3code.git` | Original repo — fetch only, for syncing |
+| Remote     | URL                                        | Purpose                                             |
+| ---------- | ------------------------------------------ | --------------------------------------------------- |
+| `origin`   | `https://github.com/ampats2008/t3code.git` | Your fork — push/pull freely, shared across devices |
+| `upstream` | `https://github.com/pingdotgg/t3code.git`  | Original repo — fetch only, for syncing             |
 
 Both remotes are already configured. To verify:
 
@@ -77,12 +77,12 @@ All 2AM-Code commits **must** follow this format — enforced by a pre-tool-use 
 2AM: <type>(<slug>): <message>
 ```
 
-| Part | Rules |
-|------|-------|
-| `2AM:` | Literal prefix — marks the commit as belonging to this fork |
-| `<type>` | One of: `feat`, `fix`, `chore`, `refactor`, `docs`, `test`, `style` |
-| `<slug>` | Short kebab-case identifier for the **feature/area** (e.g. `context-meter`, `diff-panel`) — use the **same slug for all commits belonging to the same feature** so they group together in the log |
-| `<message>` | Imperative, lowercase, no trailing period |
+| Part        | Rules                                                                                                                                                                                             |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `2AM:`      | Literal prefix — marks the commit as belonging to this fork                                                                                                                                       |
+| `<type>`    | One of: `feat`, `fix`, `chore`, `refactor`, `docs`, `test`, `style`                                                                                                                               |
+| `<slug>`    | Short kebab-case identifier for the **feature/area** (e.g. `context-meter`, `diff-panel`) — use the **same slug for all commits belonging to the same feature** so they group together in the log |
+| `<message>` | Imperative, lowercase, no trailing period                                                                                                                                                         |
 
 ### Examples
 
@@ -95,6 +95,7 @@ All 2AM-Code commits **must** follow this format — enforced by a pre-tool-use 
 ```
 
 Scanning all commits for a feature:
+
 ```powershell
 git log --oneline --grep="2AM: .*(<slug>)"
 # e.g.
@@ -192,12 +193,12 @@ git push origin <branch> --force-with-lease
 
 **Common conflict hotspots and how to handle them:**
 
-| File | Strategy |
-|------|----------|
-| `package.json` | Keep **both** sets of changes, then run `pnpm install` |
-| `pnpm-lock.yaml` | Accept upstream's version, re-run `pnpm install` to regenerate |
-| `tsconfig.json` / config files | Merge manually; preserve both upstream changes and ours |
-| Files the feature touches | Resolve line-by-line; keep upstream's refactors + our feature logic |
+| File                           | Strategy                                                            |
+| ------------------------------ | ------------------------------------------------------------------- |
+| `package.json`                 | Keep **both** sets of changes, then run `pnpm install`              |
+| `pnpm-lock.yaml`               | Accept upstream's version, re-run `pnpm install` to regenerate      |
+| `tsconfig.json` / config files | Merge manually; preserve both upstream changes and ours             |
+| Files the feature touches      | Resolve line-by-line; keep upstream's refactors + our feature logic |
 
 After resolving each file:
 

@@ -61,6 +61,7 @@ This repo is a fork of [pingdotgg/t3code](https://github.com/pingdotgg/t3code) h
 **Commit format:** `2AM: <type>(<slug>): <message>` — types: feat/fix/chore/refactor/docs/test/style. Use the same slug for all commits in a feature.
 
 **Branch strategy:**
+
 - `feature/main/2am-code` — long-lived fork branch (our "main")
 - `feat/2am-<name>` — feature branches off the fork branch
 - `feat/<name>` off `upstream/main` — for PRs targeting upstream (no 2AM commits)
