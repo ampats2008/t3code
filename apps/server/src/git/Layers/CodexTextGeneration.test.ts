@@ -368,7 +368,12 @@ it.layer(CodexTextGenerationTestLayer)("CodexTextGenerationLive", (it) => {
 
         const generated = yield* textGeneration.generateThreadTitle({
           cwd: process.cwd(),
-          messages: [{ role: "user", text: "Please investigate websocket reconnect regressions after a worktree restore." }],
+          messages: [
+            {
+              role: "user",
+              text: "Please investigate websocket reconnect regressions after a worktree restore.",
+            },
+          ],
           modelSelection: DEFAULT_TEST_MODEL_SELECTION,
         });
 
@@ -646,7 +651,10 @@ it.layer(CodexTextGenerationTestLayer)("CodexTextGenerationLive", (it) => {
           cwd: process.cwd(),
           messages: [
             { role: "user", text: "How can we improve the authentication system?" },
-            { role: "assistant", text: "We should refactor the auth module for better maintainability." },
+            {
+              role: "assistant",
+              text: "We should refactor the auth module for better maintainability.",
+            },
           ],
           modelSelection: DEFAULT_TEST_MODEL_SELECTION,
         });

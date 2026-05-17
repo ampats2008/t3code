@@ -119,29 +119,25 @@ const makeClaudeTextGeneration = Effect.gen(function* () {
     const runClaudeCommand = Effect.fn("runClaudeJson.runClaudeCommand")(function* () {
       const cliBinary = claudeSettings?.binaryPath || "claude";
       const cliArgs = [
-          "-p",
-          "--output-format",
-          "json",
-          "--json-schema",
-          jsonSchemaStr,
-          "--model",
-          resolveClaudeApiModelId(modelSelection),
-          ...(cliEffort ? ["--effort", cliEffort] : []),
-          ...(Object.keys(settings).length > 0 ? ["--settings", JSON.stringify(settings)] : []),
-          "--dangerously-skip-permissions",
+        "-p",
+        "--output-format",
+        "json",
+        "--json-schema",
+        jsonSchemaStr,
+        "--model",
+        resolveClaudeApiModelId(modelSelection),
+        ...(cliEffort ? ["--effort", cliEffort] : []),
+        ...(Object.keys(settings).length > 0 ? ["--settings", JSON.stringify(settings)] : []),
+        "--dangerously-skip-permissions",
       ];
       // shell:true wraps in cmd.exe on Windows which breaks stdin EOF piping.
       // claude.exe is a real binary so shell:true is unnecessary.
-      const command = ChildProcess.make(
-        cliBinary,
-        cliArgs,
-        {
-          cwd,
-          stdin: {
-            stream: Stream.encodeText(Stream.make(prompt)),
-          },
+      const command = ChildProcess.make(cliBinary, cliArgs, {
+        cwd,
+        stdin: {
+          stream: Stream.encodeText(Stream.make(prompt)),
         },
-      );
+      });
 
       const child = yield* commandSpawner
         .spawn(command)
@@ -321,9 +317,7 @@ const makeClaudeTextGeneration = Effect.gen(function* () {
   const generateThreadTitle: TextGenerationShape["generateThreadTitle"] = Effect.fn(
     "ClaudeTextGeneration.generateThreadTitle",
   )(function* (input) {
-    const concatenatedMessage = input.messages
-      .map((m) => `${m.role}: ${m.text}`)
-      .join("\n");
+    const concatenatedMessage = input.messages.map((m) => `${m.role}: ${m.text}`).join("\n");
     const { prompt, outputSchema } = buildThreadTitlePrompt({
       message: concatenatedMessage,
       attachments: input.attachments,

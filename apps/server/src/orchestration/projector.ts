@@ -324,9 +324,7 @@ export function projectEvent(
           "payload",
         );
 
-        const sourceThread = nextBase.threads.find(
-          (entry) => entry.id === payload.sourceThreadId,
-        );
+        const sourceThread = nextBase.threads.find((entry) => entry.id === payload.sourceThreadId);
 
         const copiedMessageIdSet = new Set(payload.copiedMessageIds as unknown as string[]);
         const copiedMessages: OrchestrationMessage[] = sourceThread

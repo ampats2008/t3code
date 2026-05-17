@@ -338,9 +338,7 @@ export const makeServerRuntimeStartup = Effect.gen(function* () {
     yield* Effect.logDebug("startup phase: auto-installing VS Code extension");
     yield* runStartupPhase(
       "vscode-extension.install",
-      Effect.promise(() => installVscodeExtension()).pipe(
-        Effect.ignore,
-      ),
+      Effect.promise(() => installVscodeExtension()).pipe(Effect.ignore),
     );
 
     yield* Effect.logDebug("startup phase: starting orchestration reactors");

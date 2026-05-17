@@ -96,7 +96,8 @@ function isAppRoot(name: string): boolean {
     name.endsWith("Root") ||
     name.endsWith("Context") ||
     name.endsWith("Boundary")
-  ) return true;
+  )
+    return true;
   return false;
 }
 
@@ -223,7 +224,9 @@ export function getReactFiberInfo(el: Element): {
     ancestors.push("…", farAncestor);
   }
 
-  const result: { componentName?: string; ancestors: string[]; sourceFile?: string } = { ancestors };
+  const result: { componentName?: string; ancestors: string[]; sourceFile?: string } = {
+    ancestors,
+  };
   if (componentName) result.componentName = componentName;
   if (sourceFile) result.sourceFile = sourceFile;
   return result;
@@ -298,6 +301,6 @@ export function formatText(d: TooltipData): string {
 }
 
 export function detectFramework(el: Element): "react" | "unknown" {
-  const hasReactFiber = Object.keys(el).some(k => k.startsWith("__reactFiber$"));
+  const hasReactFiber = Object.keys(el).some((k) => k.startsWith("__reactFiber$"));
   return hasReactFiber ? "react" : "unknown";
 }

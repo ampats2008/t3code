@@ -1453,7 +1453,10 @@ const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
 
   const resolveAttachment = Effect.fn("resolveAttachment")(function* (
     input: ProviderSendTurnInput,
-    attachment: Extract<NonNullable<ProviderSendTurnInput["attachments"]>[number], { type: "image" }>,
+    attachment: Extract<
+      NonNullable<ProviderSendTurnInput["attachments"]>[number],
+      { type: "image" }
+    >,
   ) {
     const attachmentPath = resolveAttachmentPath({
       attachmentsDir: serverConfig.attachmentsDir,

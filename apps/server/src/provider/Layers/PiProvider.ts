@@ -13,6 +13,7 @@ import {
   ServerSettingsError,
 } from "@t3tools/contracts";
 import { Effect, Equal, Layer, Stream } from "effect";
+import { appendFile } from "node:fs/promises";
 
 import {
   buildServerProvider,
@@ -31,12 +32,28 @@ const PI_PRESENTATION: ServerProviderPresentation = {
 };
 
 const BUILT_IN_MODELS: ReadonlyArray<ServerProviderModel> = [];
+const PI_DEBUG_LOG_PATH = process.env.T3CODE_PI_DEBUG_LOG ?? `${process.cwd()}/.t3code-pi-debug.log`;
+
+function appendPiDebugLog(event: string, details: Record<string, unknown>): Promise<void> {
+  return appendFile(
+    PI_DEBUG_LOG_PATH,
+    `${JSON.stringify({ timestamp: new Date().toISOString(), event, ...details })}\n`,
+  );
+}
 
 async function loadPiModels(): Promise<ReadonlyArray<ServerProviderModel>> {
   try {
+    await appendPiDebugLog("pi-provider.model-load.started", { cwd: process.cwd() });
     const services = await createPiServices(process.cwd());
-    return getAvailablePiModels(services);
-  } catch {
+    const models = getAvailablePiModels(services);
+    await appendPiDebugLog("pi-provider.model-load.completed", {
+      modelCount: models.length,
+    });
+    return models;
+  } catch (error) {
+    await appendPiDebugLog("pi-provider.model-load.failed", {
+      error: error instanceof Error ? error.message : String(error),
+    }).catch(() => undefined);
     return BUILT_IN_MODELS;
   }
 }
@@ -50,6 +67,9 @@ export const checkPiProviderStatus = Effect.fn("checkPiProviderStatus")(
     const checkedAt = new Date().toISOString();
 
     if (!piSettings.enabled) {
+      yield* Effect.promise(() =>
+        appendPiDebugLog("pi-provider.status.disabled", { settings: piSettings }),
+      ).pipe(Effect.ignore);
       const result = buildServerProvider({
         provider: PROVIDER,
         presentation: PI_PRESENTATION,
@@ -67,6 +87,9 @@ export const checkPiProviderStatus = Effect.fn("checkPiProviderStatus")(
       return result;
     }
 
+    yield* Effect.promise(() =>
+      appendPiDebugLog("pi-provider.status.enabled", { settings: piSettings }),
+    ).pipe(Effect.ignore);
     const piModels = yield* Effect.promise(loadPiModels);
     const models = providerModelsFromSettings(piModels, PROVIDER, piSettings.customModels, {});
 

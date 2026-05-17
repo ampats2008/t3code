@@ -16,7 +16,14 @@ interface InspectorMessage {
   [key: string]: unknown;
 }
 
-const KNOWN_TYPES = new Set(["element-ref", "code-ref", "open-file", "review-comments", "terminal-error", "diagnostic-ref"]);
+const KNOWN_TYPES = new Set([
+  "element-ref",
+  "code-ref",
+  "open-file",
+  "review-comments",
+  "terminal-error",
+  "diagnostic-ref",
+]);
 
 interface AckMessage {
   type: "ack";
@@ -42,11 +49,14 @@ export function startInspectorWs(): () => void {
 
     ws.on("message", (raw: unknown) => {
       try {
-        const messageText = typeof raw === "string" ? raw : Buffer.from(raw as any).toString("utf8");
+        const messageText =
+          typeof raw === "string" ? raw : Buffer.from(raw as any).toString("utf8");
         const message = JSON.parse(messageText) as InspectorMessage;
 
         if (KNOWN_TYPES.has(message.type)) {
-          const otherClients = [...clients].filter(c => c !== ws && c.readyState === WebSocket.OPEN);
+          const otherClients = [...clients].filter(
+            (c) => c !== ws && c.readyState === WebSocket.OPEN,
+          );
 
           // Send ack to sender
           try {
@@ -78,12 +88,9 @@ export function startInspectorWs(): () => void {
     });
   });
 
-  httpServer.listen(
-    { port: INSPECTOR_PORT, host: INSPECTOR_HOST },
-    () => {
-      console.log(`[inspector-ws] Running on ws://${INSPECTOR_HOST}:${INSPECTOR_PORT}`);
-    },
-  );
+  httpServer.listen({ port: INSPECTOR_PORT, host: INSPECTOR_HOST }, () => {
+    console.log(`[inspector-ws] Running on ws://${INSPECTOR_HOST}:${INSPECTOR_PORT}`);
+  });
 
   wss.on("error", (error: Error) => {
     console.warn(`[inspector-ws] WebSocket server error: ${error.message}`);

@@ -125,10 +125,16 @@ const makeCheckpointStore = Effect.gen(function* () {
           // checkpoint snapshots we only need the pointer file content
           // that is already on disk — no LFS upload is needed.
           args: [
-            "-c", "filter.lfs.process=",
-            "-c", "filter.lfs.clean=",
-            "-c", "filter.lfs.required=false",
-            "add", "-A", "--", ".",
+            "-c",
+            "filter.lfs.process=",
+            "-c",
+            "filter.lfs.clean=",
+            "-c",
+            "filter.lfs.required=false",
+            "add",
+            "-A",
+            "--",
+            ".",
           ],
           env: commitEnv,
           timeoutMs: 120_000,

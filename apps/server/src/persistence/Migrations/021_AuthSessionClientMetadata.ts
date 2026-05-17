@@ -1,8 +1,14 @@
 import * as Effect from "effect/Effect";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
+import Migration0020 from "./020_AuthAccessManagement.ts";
+
 export default Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
+
+  // Some early/dev databases recorded migration 20 without the auth tables
+  // existing. Re-run the idempotent table creation before altering them.
+  yield* Migration0020;
 
   const pairingLinkColumns = yield* sql<{ readonly name: string }>`
     PRAGMA table_info(auth_pairing_links)

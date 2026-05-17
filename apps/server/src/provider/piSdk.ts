@@ -33,9 +33,7 @@ export async function createPiServices(cwd: string): Promise<AgentSessionService
  * Parse a T3 Code Pi model slug (format: "provider/modelId") into its parts.
  * Returns undefined if the slug is not in the expected "provider/modelId" format.
  */
-export function parsePiModelSlug(
-  slug: string,
-): { provider: string; modelId: string } | undefined {
+export function parsePiModelSlug(slug: string): { provider: string; modelId: string } | undefined {
   const slashIndex = slug.indexOf("/");
   if (slashIndex <= 0 || slashIndex === slug.length - 1) {
     return undefined;

@@ -41,7 +41,6 @@ import Migration0025 from "./Migrations/025_CleanupInvalidProjectionPendingAppro
 import Migration0026 from "./Migrations/026_CanonicalizeModelSelectionOptions.ts";
 import Migration0027 from "./Migrations/027_ThreadForks.ts";
 
-
 /**
  * Migration loader with all migrations defined inline.
  *

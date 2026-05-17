@@ -44,6 +44,7 @@ import { ServerConfig } from "./config.ts";
 import { type DeepPartial, deepMerge } from "@t3tools/shared/Struct";
 import { fromLenientJson } from "@t3tools/shared/schemaJson";
 import { applyServerSettingsPatch } from "@t3tools/shared/serverSettings";
+import { appendFile } from "node:fs/promises";
 
 export interface ServerSettingsShape {
   /** Start the settings runtime and attach file watching. */
@@ -106,7 +107,13 @@ export class ServerSettingsService extends Context.Service<
 
 const ServerSettingsJson = fromLenientJson(ServerSettings);
 
-const PROVIDER_ORDER: readonly ProviderKind[] = ["codex", "claudeAgent", "opencode", "cursor"];
+const PROVIDER_ORDER: readonly ProviderKind[] = [
+  "codex",
+  "claudeAgent",
+  "opencode",
+  "cursor",
+  "pi",
+];
 
 /**
  * Ensure the `textGenerationModelSelection` points to an enabled provider.
@@ -173,7 +180,7 @@ function stripDefaultServerSettings(current: unknown, defaults: unknown): unknow
 }
 
 const makeServerSettings = Effect.gen(function* () {
-  const { settingsPath } = yield* ServerConfig;
+  const { settingsPath, logsDir } = yield* ServerConfig;
   const fs = yield* FileSystem.FileSystem;
   const pathService = yield* Path.Path;
   const writeSemaphore = yield* Semaphore.make(1);
@@ -186,6 +193,14 @@ const makeServerSettings = Effect.gen(function* () {
 
   const emitChange = (settings: ServerSettings) =>
     PubSub.publish(changesPubSub, settings).pipe(Effect.asVoid);
+
+  const appendPiDebugLog = (event: string, details: Record<string, unknown>) =>
+    Effect.promise(() =>
+      appendFile(
+        `${logsDir}/pi-debug.log`,
+        `${JSON.stringify({ timestamp: new Date().toISOString(), event, ...details })}\n`,
+      ),
+    ).pipe(Effect.ignore);
 
   const readConfigExists = fs.exists(settingsPath).pipe(
     Effect.mapError(
@@ -329,6 +344,13 @@ const makeServerSettings = Effect.gen(function* () {
       writeSemaphore.withPermits(1)(
         Effect.gen(function* () {
           const current = yield* getSettingsFromCache;
+          if (patch.providers?.pi !== undefined) {
+            yield* appendPiDebugLog("server-settings.pi-patch.received", {
+              patch: patch.providers.pi,
+              current: current.providers.pi,
+            });
+          }
+
           const next = yield* Schema.decodeEffect(ServerSettings)(
             applyServerSettingsPatch(current, patch),
           ).pipe(
@@ -342,6 +364,12 @@ const makeServerSettings = Effect.gen(function* () {
             ),
           );
           yield* writeSettingsAtomically(next);
+          if (patch.providers?.pi !== undefined) {
+            yield* appendPiDebugLog("server-settings.pi-patch.persisted", {
+              next: next.providers.pi,
+              settingsPath,
+            });
+          }
           yield* Cache.set(settingsCache, cacheKey, next);
           yield* emitChange(next);
           return resolveTextGenerationProvider(next);

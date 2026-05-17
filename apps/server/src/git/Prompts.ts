@@ -131,7 +131,8 @@ function buildPromptFromMessage(input: PromptFromMessageInput): string {
   const attachmentLines = (input.attachments ?? [])
     .filter((a): a is Extract<typeof a, { type: "image" }> => a.type === "image")
     .map(
-      (attachment) => `- ${attachment.name} (${attachment.mimeType}, ${attachment.sizeBytes} bytes)`,
+      (attachment) =>
+        `- ${attachment.name} (${attachment.mimeType}, ${attachment.sizeBytes} bytes)`,
     );
 
   const promptSections = [

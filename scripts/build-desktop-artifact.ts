@@ -553,7 +553,10 @@ export function resolveMockUpdateServerUrl(mockUpdateServerPort: number | undefi
 }
 
 export function resolveDesktopProductName(version: string): string {
-  const baseName = (desktopPackageJson.productName ?? "2AM Code (Alpha)").replace(/\s*\([^)]*\)\s*$/, "");
+  const baseName = (desktopPackageJson.productName ?? "2AM Code (Alpha)").replace(
+    /\s*\([^)]*\)\s*$/,
+    "",
+  );
   return resolveDesktopUpdateChannel(version) === "nightly"
     ? `${baseName} (Nightly)`
     : (desktopPackageJson.productName ?? `${baseName} (Alpha)`);
@@ -851,14 +854,8 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
       // Replace cmd-chained .bat invocations (fail in some cmd environments)
       // with static values. (?:call )? tolerates a previously-patched file.
       out = out
-        .replace(
-          /'<!\(cmd \/c "cd shared && (?:call )?GetCommitHash\.bat"\)'/,
-          "'none'",
-        )
-        .replace(
-          /'<!\(cmd \/c "cd shared && (?:call )?UpdateGenVersion\.bat [^"]*"\)'/,
-          "'gen'",
-        );
+        .replace(/'<!\(cmd \/c "cd shared && (?:call )?GetCommitHash\.bat"\)'/, "'none'")
+        .replace(/'<!\(cmd \/c "cd shared && (?:call )?UpdateGenVersion\.bat [^"]*"\)'/, "'gen'");
       return out;
     });
 

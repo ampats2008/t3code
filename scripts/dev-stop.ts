@@ -18,7 +18,12 @@ function killPortWindows(port: number): boolean {
       { encoding: "utf-8", timeout: 5000 },
     ).trim();
     if (!output) return false;
-    for (const pid of new Set(output.split(/\r?\n/).map((s) => s.trim()).filter(Boolean))) {
+    for (const pid of new Set(
+      output
+        .split(/\r?\n/)
+        .map((s) => s.trim())
+        .filter(Boolean),
+    )) {
       try {
         execSync(`taskkill /F /PID ${pid}`, { timeout: 5000, stdio: "ignore" });
         console.log(`  killed PID ${pid} on port ${port}`);

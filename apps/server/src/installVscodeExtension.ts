@@ -62,15 +62,11 @@ export async function installVscodeExtension(): Promise<void> {
     const type = platform() === "win32" ? "junction" : "dir";
     try {
       await symlink(extensionSourceDir, linkPath, type);
-      console.log(
-        `[vscode-ext] Installed extension link: ${linkPath} -> ${extensionSourceDir}`,
-      );
+      console.log(`[vscode-ext] Installed extension link: ${linkPath} -> ${extensionSourceDir}`);
     } catch (err: any) {
       if (err.code === "EEXIST") {
         // Link exists but points somewhere else — don't overwrite
-        console.log(
-          `[vscode-ext] ${linkPath} already exists (pointing elsewhere) — skipping`,
-        );
+        console.log(`[vscode-ext] ${linkPath} already exists (pointing elsewhere) — skipping`);
       } else {
         console.warn(`[vscode-ext] Failed to create link at ${linkPath}: ${err.message}`);
       }

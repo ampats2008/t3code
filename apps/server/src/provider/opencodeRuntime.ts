@@ -186,7 +186,9 @@ export function toOpenCodeFileParts(input: {
 }): Array<FilePartInput> {
   const parts: Array<FilePartInput> = [];
 
-  for (const attachment of (input.attachments ?? []).filter((a): a is Extract<typeof a, { type: "image" }> => a.type === "image")) {
+  for (const attachment of (input.attachments ?? []).filter(
+    (a): a is Extract<typeof a, { type: "image" }> => a.type === "image",
+  )) {
     const attachmentPath = input.resolveAttachmentPath(attachment);
     if (!attachmentPath) {
       continue;

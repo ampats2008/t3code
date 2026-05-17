@@ -273,9 +273,7 @@ const makeCursorTextGeneration = Effect.gen(function* () {
   const generateThreadTitle: TextGenerationShape["generateThreadTitle"] = Effect.fn(
     "CursorTextGeneration.generateThreadTitle",
   )(function* (input) {
-    const concatenatedMessage = input.messages
-      .map((m) => `${m.role}: ${m.text}`)
-      .join("\n");
+    const concatenatedMessage = input.messages.map((m) => `${m.role}: ${m.text}`).join("\n");
     const { prompt, outputSchema } = buildThreadTitlePrompt({
       message: concatenatedMessage,
       attachments: input.attachments,

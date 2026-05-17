@@ -33,6 +33,7 @@ import {
   Layer,
   ManagedRuntime,
   Option,
+  Scope,
   Path,
   Stream,
 } from "effect";
@@ -548,7 +549,7 @@ const buildAppUnderTest = (options?: {
 
     yield* Layer.build(appLayer);
     return config;
-  });
+  }) as Effect.Effect<ServerConfigShape, any, NodeServices.NodeServices | Scope.Scope>;
 
 const parseSessionCookieFromWsUrl = (
   wsUrl: string,

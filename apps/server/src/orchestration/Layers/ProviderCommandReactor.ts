@@ -555,14 +555,16 @@ const make = Effect.gen(function* () {
           threadId: input.threadId,
           title: generated.title,
         });
-
       }).pipe(
         Effect.catchCause((cause) => {
-          return Effect.logWarning("provider command reactor failed to generate or rename thread title", {
-            threadId: input.threadId,
-            cwd: input.cwd,
-            cause: Cause.pretty(cause),
-          });
+          return Effect.logWarning(
+            "provider command reactor failed to generate or rename thread title",
+            {
+              threadId: input.threadId,
+              cwd: input.cwd,
+              cause: Cause.pretty(cause),
+            },
+          );
         }),
       );
     },
@@ -679,8 +681,7 @@ const make = Effect.gen(function* () {
           const text = m.text.length > 2000 ? m.text.slice(0, 2000) + "..." : m.text;
           return `[${m.role}]: ${text}`;
         });
-        const forkContext =
-          `This conversation was forked from a previous thread. Here is the conversation history up to the fork point:\n\n${historyLines.join("\n\n")}`;
+        const forkContext = `This conversation was forked from a previous thread. Here is the conversation history up to the fork point:\n\n${historyLines.join("\n\n")}`;
         resolvedMessageText = `${forkContext}\n\n---\n\n${resolvedMessageText}`;
       }
     }

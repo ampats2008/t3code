@@ -1198,16 +1198,19 @@ const make = Effect.gen(function* () {
                 ? null
                 : (thread.session?.lastError ?? null);
 
-        debugSessionState(shouldApplyThreadLifecycle ? "LIFECYCLE_ACCEPTED" : "LIFECYCLE_REJECTED", {
-          eventType: event.type,
-          eventId: event.eventId,
-          threadId: thread.id,
-          eventTurnId: eventTurnId ?? null,
-          activeTurnId,
-          conflictsWithActiveTurn,
-          missingTurnForActiveTurn,
-          currentSessionStatus: thread.session?.status ?? null,
-        });
+        debugSessionState(
+          shouldApplyThreadLifecycle ? "LIFECYCLE_ACCEPTED" : "LIFECYCLE_REJECTED",
+          {
+            eventType: event.type,
+            eventId: event.eventId,
+            threadId: thread.id,
+            eventTurnId: eventTurnId ?? null,
+            activeTurnId,
+            conflictsWithActiveTurn,
+            missingTurnForActiveTurn,
+            currentSessionStatus: thread.session?.status ?? null,
+          },
+        );
 
         if (shouldApplyThreadLifecycle) {
           if (event.type === "turn.started" && acceptedTurnStartedSourcePlan !== null) {
@@ -1482,13 +1485,16 @@ const make = Effect.gen(function* () {
           ? true
           : activeTurnId === null || eventTurnId === undefined || sameId(activeTurnId, eventTurnId);
 
-        debugSessionState(shouldApplyRuntimeError ? "RUNTIME_ERROR_ACCEPTED" : "RUNTIME_ERROR_REJECTED", {
-          threadId: thread.id,
-          eventTurnId: eventTurnId ?? null,
-          activeTurnId,
-          runtimeErrorMessage,
-          currentSessionStatus: thread.session?.status ?? null,
-        });
+        debugSessionState(
+          shouldApplyRuntimeError ? "RUNTIME_ERROR_ACCEPTED" : "RUNTIME_ERROR_REJECTED",
+          {
+            threadId: thread.id,
+            eventTurnId: eventTurnId ?? null,
+            activeTurnId,
+            runtimeErrorMessage,
+            currentSessionStatus: thread.session?.status ?? null,
+          },
+        );
 
         if (shouldApplyRuntimeError) {
           yield* orchestrationEngine.dispatch({

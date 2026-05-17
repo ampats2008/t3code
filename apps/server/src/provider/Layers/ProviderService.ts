@@ -372,10 +372,10 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         const effectiveResumeCursor =
           input.resumeCursor === null
             ? undefined // caller explicitly wants a fresh session — skip persisted binding
-            : input.resumeCursor ??
+            : (input.resumeCursor ??
               (persistedBinding?.provider === input.provider
                 ? persistedBinding.resumeCursor
-                : undefined);
+                : undefined));
         const effectiveCwd =
           input.cwd ??
           (persistedBinding?.provider === input.provider
@@ -387,7 +387,8 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
               ? "explicit-fresh"
               : input.resumeCursor !== undefined
                 ? "request"
-                : effectiveResumeCursor !== undefined && persistedBinding?.provider === input.provider
+                : effectiveResumeCursor !== undefined &&
+                    persistedBinding?.provider === input.provider
                   ? "persisted"
                   : "none",
           "provider.resume_cursor.present": effectiveResumeCursor !== undefined,

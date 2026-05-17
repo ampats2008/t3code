@@ -1,5 +1,6 @@
 import Mime from "@effect/platform-node/Mime";
 import { Data, Effect, FileSystem, Option, Path } from "effect";
+import { appendFile } from "node:fs/promises";
 import { cast } from "effect/Function";
 import {
   HttpBody,
@@ -29,6 +30,7 @@ const PROJECT_FAVICON_CACHE_CONTROL = "public, max-age=3600";
 const FALLBACK_PROJECT_FAVICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#6b728080" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-fallback="project-favicon"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z"/></svg>`;
 const OTLP_TRACES_PROXY_PATH = "/api/observability/v1/traces";
 const LOOPBACK_HOSTNAMES = new Set(["127.0.0.1", "::1", "localhost"]);
+export const PI_MODEL_PICKER_DEBUG_LOG_PATH = `${process.cwd()}/.t3code-pi-model-picker.log`;
 
 export const browserApiCorsLayer = HttpRouter.cors({
   allowedMethods: ["GET", "POST", "OPTIONS"],
@@ -57,6 +59,22 @@ const requireAuthenticatedRequest = Effect.gen(function* () {
   const serverAuth = yield* ServerAuth;
   yield* serverAuth.authenticateHttpRequest(request);
 });
+
+export const piModelPickerDebugRouteLayer = HttpRouter.add(
+  "POST",
+  "/api/debug/pi-model-picker",
+  Effect.gen(function* () {
+    const request = yield* HttpServerRequest.HttpServerRequest;
+    const body = yield* request.json.pipe(Effect.catch(() => Effect.succeed(null)));
+    yield* Effect.promise(() =>
+      appendFile(
+        PI_MODEL_PICKER_DEBUG_LOG_PATH,
+        `${JSON.stringify({ timestamp: new Date().toISOString(), body })}\n`,
+      ),
+    ).pipe(Effect.ignore);
+    return HttpServerResponse.jsonUnsafe({ ok: true, path: PI_MODEL_PICKER_DEBUG_LOG_PATH });
+  }),
+);
 
 export const serverEnvironmentRouteLayer = HttpRouter.add(
   "GET",

@@ -4,6 +4,7 @@ import { FetchHttpClient, HttpRouter, HttpServer } from "effect/unstable/http";
 import { ServerConfig } from "./config.ts";
 import {
   attachmentsRouteLayer,
+  piModelPickerDebugRouteLayer,
   otlpTracesProxyRouteLayer,
   projectFaviconRouteLayer,
   serverEnvironmentRouteLayer,
@@ -266,6 +267,7 @@ export const makeRoutesLayer = Layer.mergeAll(
   authSessionRouteLayer,
   authWebSocketTokenRouteLayer,
   attachmentsRouteLayer,
+  piModelPickerDebugRouteLayer,
   orchestrationDispatchRouteLayer,
   orchestrationSnapshotRouteLayer,
   otlpTracesProxyRouteLayer,
@@ -326,7 +328,7 @@ export const makeServerLayer = Layer.unwrap(
       Layer.provideMerge(PlatformServicesLive),
     );
   }),
-);
+) as Layer.Layer<never, any, ServerConfig>;
 
 // Important: Only `ServerConfig` should be provided by the CLI layer!!! Don't let other requirements leak into the launch layer.
 export const runServer = Layer.launch(makeServerLayer) satisfies Effect.Effect<

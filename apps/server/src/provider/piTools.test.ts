@@ -44,7 +44,13 @@ describe("withApprovalGate", () => {
     const requestApproval = makeApprovalFn("accept");
     const wrapped = withApprovalGate(base, () => true, requestApproval);
 
-    const result = await wrapped.execute("id2", { command: "ls" }, undefined, undefined, {} as never);
+    const result = await wrapped.execute(
+      "id2",
+      { command: "ls" },
+      undefined,
+      undefined,
+      {} as never,
+    );
 
     assert.equal(requestApproval.mock.calls.length, 1);
     assert.equal(requestApproval.mock.calls[0]![0], "bash");
@@ -153,8 +159,14 @@ describe("createT3PiTools", () => {
     const supervisedTools = createT3PiTools("/tmp", "approval-required", vi.fn<ApprovalFn>());
     const fullAccessTools = createT3PiTools("/tmp", "full-access", vi.fn<ApprovalFn>());
     for (const name of ["bash", "edit", "write"]) {
-      assert.ok(supervisedTools.find((t) => t.name === name), `supervised: '${name}' missing`);
-      assert.ok(fullAccessTools.find((t) => t.name === name), `full-access: '${name}' missing`);
+      assert.ok(
+        supervisedTools.find((t) => t.name === name),
+        `supervised: '${name}' missing`,
+      );
+      assert.ok(
+        fullAccessTools.find((t) => t.name === name),
+        `full-access: '${name}' missing`,
+      );
     }
   });
 });

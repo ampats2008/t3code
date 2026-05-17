@@ -316,16 +316,20 @@ export const OrchestrationThread = Schema.Struct({
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
   archivedAt: Schema.NullOr(IsoDateTime).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
-  forkSource: Schema.optional(Schema.Struct({
-    threadId: ThreadId,
-    messageId: MessageId,
-  })),
-  forks: Schema.Array(Schema.Struct({
-    sourceMessageId: MessageId,
-    forkedThreadId: ThreadId,
-    forkedThreadTitle: TrimmedNonEmptyString,
-    forkNumber: Schema.Number,
-  })).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+  forkSource: Schema.optional(
+    Schema.Struct({
+      threadId: ThreadId,
+      messageId: MessageId,
+    }),
+  ),
+  forks: Schema.Array(
+    Schema.Struct({
+      sourceMessageId: MessageId,
+      forkedThreadId: ThreadId,
+      forkedThreadTitle: TrimmedNonEmptyString,
+      forkNumber: Schema.Number,
+    }),
+  ).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   deletedAt: Schema.NullOr(IsoDateTime),
   messages: Schema.Array(OrchestrationMessage),
   proposedPlans: Schema.Array(OrchestrationProposedPlan).pipe(
@@ -381,10 +385,12 @@ export const OrchestrationThreadShell = Schema.Struct({
   updatedAt: IsoDateTime,
   archivedAt: Schema.NullOr(IsoDateTime).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
   session: Schema.NullOr(OrchestrationSession),
-  forkSource: Schema.optional(Schema.Struct({
-    threadId: ThreadId,
-    messageId: MessageId,
-  })),
+  forkSource: Schema.optional(
+    Schema.Struct({
+      threadId: ThreadId,
+      messageId: MessageId,
+    }),
+  ),
   latestUserMessageAt: Schema.NullOr(IsoDateTime),
   hasPendingApprovals: Schema.Boolean,
   hasPendingUserInput: Schema.Boolean,

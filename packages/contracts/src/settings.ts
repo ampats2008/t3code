@@ -106,8 +106,12 @@ export const ClaudeSettings = Schema.Struct({
   enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   binaryPath: makeBinaryPathSetting("claude"),
   customModels: Schema.Array(Schema.String).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
-  maxTurns: Schema.Number.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_CLAUDE_MAX_TURNS))),
-  maxBudgetUsd: Schema.Number.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_CLAUDE_MAX_BUDGET_USD))),
+  maxTurns: Schema.Number.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_CLAUDE_MAX_TURNS)),
+  ),
+  maxBudgetUsd: Schema.Number.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_CLAUDE_MAX_BUDGET_USD)),
+  ),
   launchArgs: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
 });
 export type ClaudeSettings = typeof ClaudeSettings.Type;

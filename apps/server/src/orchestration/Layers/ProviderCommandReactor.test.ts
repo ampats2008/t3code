@@ -399,7 +399,12 @@ describe("ProviderCommandReactor", () => {
 
     await waitFor(() => harness.generateThreadTitle.mock.calls.length === 1);
     expect(harness.generateThreadTitle.mock.calls[0]?.[0]).toMatchObject({
-      messages: [{ role: "user", text: "Please investigate reconnect failures after restarting the session." }],
+      messages: [
+        {
+          role: "user",
+          text: "Please investigate reconnect failures after restarting the session.",
+        },
+      ],
     });
 
     await waitFor(async () => {
@@ -1747,9 +1752,7 @@ describe("ProviderCommandReactor", () => {
 
     // Verify the forked thread has the copied messages
     const readModelAfterFork = await Effect.runPromise(harness.engine.getReadModel());
-    const forkedThread = readModelAfterFork.threads.find(
-      (entry) => entry.id === forkedThreadId,
-    );
+    const forkedThread = readModelAfterFork.threads.find((entry) => entry.id === forkedThreadId);
     expect(forkedThread).toBeDefined();
     expect(forkedThread?.forkSource).toBeDefined();
     expect(forkedThread?.messages.length).toBe(2); // both source msgs copied
@@ -1780,9 +1783,7 @@ describe("ProviderCommandReactor", () => {
       input?: string;
     };
     expect(sendTurnArg?.input).toBeDefined();
-    expect(sendTurnArg.input).toContain(
-      "This conversation was forked from a previous thread",
-    );
+    expect(sendTurnArg.input).toContain("This conversation was forked from a previous thread");
     expect(sendTurnArg.input).toContain("What is the capital of France?");
     expect(sendTurnArg.input).toContain("The capital of France is Paris.");
     expect(sendTurnArg.input).toContain("Tell me more about Paris.");
